@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 
 /**
@@ -72,7 +73,12 @@ export async function recordAuditLog(entry: AuditLogEntry): Promise<void> {
       action: entry.action,
       entityType: entry.entityType,
       entityId: entry.entityId,
-      metadata: entry.metadata,
+      // `Record<string, unknown>` isn't structurally assignable to Prisma's
+      // `InputJsonValue` (its values must be JSON-compatible, not `unknown`)
+      // even though every value we accept here already is JSON-safe —
+      // `assertSafeMetadata` above has already validated the object by this
+      // point, so the cast just tells the compiler what we've already checked.
+      metadata: entry.metadata as Prisma.InputJsonValue | undefined,
     },
   });
 }
