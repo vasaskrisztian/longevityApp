@@ -1,0 +1,100 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "destructuredArrayIgnorePattern": "^_" }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["*/modules/wearable/providers/oura/*"],
+            "message": "Oura-specific types/clients must not be imported outside modules/wearable/providers/oura. Use the WearableProviderAdapter interface instead."
+          },
+          {
+            "group": ["*/lib/encryption/*"],
+            "message": "Only modules/wearable/* and lib/auth/* may import the encryption service directly."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/modules/wearable/**", "src/lib/auth/**", "tests/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["*/modules/wearable/providers/oura/*"],
+                "message": "Oura-specific types/clients must not be imported outside modules/wearable/providers/oura. Use the WearableProviderAdapter interface instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["tests/unit/oura-*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/app/api/integrations/oura/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["*/lib/encryption/*"],
+                "message": "Only modules/wearable/* and lib/auth/* may import the encryption service directly."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/jobs/oura-*.job.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["*/lib/encryption/*"],
+                "message": "Only modules/wearable/* and lib/auth/* may import the encryption service directly."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/mcp/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["*/modules/wearable/providers/**"],
+                "message": "ARCHITECTURE.md §9: src/mcp/** may import from modules/**/services only. It must never import a wearable provider adapter directly — it only ever reaches provider data through a module's service layer (e.g. modules/dashboard/dashboard.service), never through OuraProviderAdapter or any other provider."
+              },
+              {
+                "group": ["*/lib/encryption/*"],
+                "message": "ARCHITECTURE.md §9: src/mcp/** must never import lib/encryption directly — MCP never receives an OAuth token, encrypted or not."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

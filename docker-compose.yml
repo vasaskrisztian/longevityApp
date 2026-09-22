@@ -1,0 +1,38 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: longevity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: longevity
+      POSTGRES_PASSWORD: longevity
+      POSTGRES_DB: longevity
+    ports:
+      - '5432:5432'
+    volumes:
+      - longevity_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U longevity']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: longevity-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - longevity_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  longevity_postgres_data:
+  longevity_redis_data:

@@ -1,0 +1,46 @@
+name: CI
+
+# Runs on every push and PR against main — the safety net that has to pass
+# before Railway's own git integration deploys anything (see
+# docs/ci-cd-setup.md). Deliberately does NOT filter/ignore the two
+# @prisma/client stub-typing patterns the local sandbox this app was built
+# in has to filter — on real infrastructure (this runner included),
+# `npx prisma generate` has full network access and produces a real client,
+# so typecheck/build should be clean here. If either step below ever fails
+# on that exact "has no exported member" / "does not exist on type
+# 'PrismaClient'" pattern, that's a real signal, not sandbox noise — don't
+# silently reintroduce a filter to make it pass.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit + integration tests (with coverage)
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build

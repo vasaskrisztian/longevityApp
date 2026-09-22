@@ -1,0 +1,26 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+
+.env
+.env.local
+.env.*.local
+
+*.log
+npm-debug.log*
+
+.DS_Store
+Thumbs.db
+
+/coverage
+/test-results
+/playwright-report
+
+prisma/dev.db
+
+# Windows-desktop scratch folder used for Claude-delivered previews/zips —
+# not part of the app, never part of the git history.
+Claude outputs/
+

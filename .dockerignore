@@ -1,0 +1,19 @@
+node_modules
+.next
+.git
+.github
+docs
+tests
+coverage
+test-results
+playwright-report
+*.log
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+.DS_Store
+Thumbs.db
+Claude outputs
+README.md
+ARCHITECTURE.md

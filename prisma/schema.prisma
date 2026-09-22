@@ -1,0 +1,634 @@
+// ==============================================================================
+// Longevity App — Prisma Schema (proposal)
+// Oura-first, multi-wearable-ready health & wellness platform
+// PostgreSQL. See ARCHITECTURE.md for the reasoning behind each model.
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Enums
+// ------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHTLY_ACTIVE
+  MODERATELY_ACTIVE
+  VERY_ACTIVE
+  ATHLETE
+}
+
+enum ActivityType {
+  STRENGTH_TRAINING
+  WALKING
+  RUNNING
+  CYCLING
+  SWIMMING
+  YOGA
+  PILATES
+  HIIT
+  CROSSFIT
+  TEAM_SPORTS
+  OTHER
+}
+
+enum DietType {
+  OMNIVORE
+  VEGETARIAN
+  VEGAN
+  PESCATARIAN
+  KETOGENIC
+  LOW_CARB
+  MEDITERRANEAN
+  OTHER
+}
+
+enum GoalType {
+  SLEEP_IMPROVEMENT
+  STRESS_REDUCTION
+  WEIGHT_LOSS
+  WEIGHT_GAIN
+  MUSCLE_GAIN
+  RECOVERY
+  CARDIOVASCULAR_FITNESS
+  GENERAL_HEALTH
+  ENERGY
+  PERFORMANCE
+  OTHER
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  PAUSED
+  ABANDONED
+}
+
+enum SupplementFrequency {
+  DAILY
+  TWICE_DAILY
+  THREE_TIMES_DAILY
+  WEEKLY
+  AS_NEEDED
+  OTHER
+}
+
+enum SupplementTiming {
+  MORNING
+  AFTERNOON
+  EVENING
+  BEFORE_MEAL
+  AFTER_MEAL
+  BEFORE_SLEEP
+  BEFORE_WORKOUT
+  AFTER_WORKOUT
+  OTHER
+}
+
+// Kept intentionally generic — new providers are additive, never a breaking change.
+enum WearableProvider {
+  OURA
+  GARMIN
+  WHOOP
+  FITBIT
+  APPLE_HEALTH
+  SAMSUNG_HEALTH
+  WITHINGS
+  OTHER
+}
+
+enum WearableConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  AUTH_REQUIRED
+  ERROR
+}
+
+enum SyncJobType {
+  INITIAL
+  DAILY
+  MANUAL
+}
+
+enum SyncJobStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+// dataType discriminator for raw provider payloads
+enum WearableDataType {
+  DAILY_SLEEP
+  DAILY_READINESS
+  DAILY_ACTIVITY
+  HEART_RATE
+  WORKOUT
+  SPO2
+  OTHER
+}
+
+// ------------------------------------------------------------------
+// Identity & auth
+// ------------------------------------------------------------------
+
+model User {
+  id               String     @id @default(uuid())
+  email            String     @unique
+  emailVerifiedAt  DateTime?
+  passwordHash     String?
+
+  role             UserRole   @default(USER)
+  status           UserStatus @default(ACTIVE)
+
+  termsAcceptedAt    DateTime?
+  privacyAcceptedAt  DateTime?
+
+  lastLoginAt      DateTime?
+
+  // Set once the onboarding wizard (Personal → Exercise → Nutrition, Phase 2)
+  // has been completed. Gates dashboard/trends/profile access via
+  // requireOnboardedUserForPage() — see src/lib/auth/page-guards.ts.
+  onboardingCompletedAt DateTime?
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Relations
+  profile            Profile?
+  exerciseProfile     ExerciseProfile?
+  nutritionProfile    NutritionProfile?
+  supplements         Supplement[]
+  goals               Goal[]
+  wearableConnections WearableConnection[]
+  dailyHealthMetrics  DailyHealthMetric[]
+  workouts            Workout[]
+  syncJobs            SyncJob[]
+  oauthStates         OAuthState[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  // Auth.js (NextAuth) linkage — enables Google OAuth later without a schema change.
+  accounts Account[]
+  sessions Session[]
+
+  // Audit trail where this user was the actor or the target
+  auditLogsAsActor  AuditLog[] @relation("AuditActor")
+  auditLogsAsTarget AuditLog[] @relation("AuditTarget")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Profile {
+  id         String    @id @default(uuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName   String
+  birthDate  DateTime  @db.Date
+  gender     Gender?
+  heightCm   Decimal   @db.Decimal(5, 1)
+  weightKg   Decimal   @db.Decimal(5, 1)
+  timezone   String
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("profiles")
+}
+
+model ExerciseProfile {
+  id                    String         @id @default(uuid())
+  userId                String         @unique
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  activityLevel         ActivityLevel
+  weeklyWorkoutCount    Int?
+  avgWorkoutDurationMin Int?
+  activityTypes         ActivityType[]
+  customActivities      String[]       @default([])
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@map("exercise_profiles")
+}
+
+model NutritionProfile {
+  id                String     @id @default(uuid())
+  userId            String     @unique
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dietType          DietType
+  dailyMealCount    Int?
+  dailyCaloriesKcal Int?
+  dailyProteinGrams Int?
+  allergies         String[]   @default([])
+  intolerances      String[]   @default([])
+  avoidedFoods      String[]   @default([])
+  notes             String?
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@map("nutrition_profiles")
+}
+
+model Supplement {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  dosage    Decimal             @db.Decimal(8, 2)
+  unit      String
+  frequency SupplementFrequency
+  timing    SupplementTiming?
+  notes     String?
+  active    Boolean             @default(true)
+
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([userId, active])
+  @@map("supplements")
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        GoalType
+  name        String
+  description String?
+  targetValue Decimal?   @db.Decimal(10, 2)
+  targetUnit  String?
+  targetDate  DateTime?  @db.Date
+  status      GoalStatus @default(ACTIVE)
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("goals")
+}
+
+// ------------------------------------------------------------------
+// Wearable domain (provider-agnostic)
+// ------------------------------------------------------------------
+
+model WearableConnection {
+  id                   String                   @id @default(uuid())
+  userId               String
+  user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider             WearableProvider
+  externalUserId       String?
+
+  status               WearableConnectionStatus @default(DISCONNECTED)
+
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+
+  grantedScopes        String[]                 @default([])
+
+  lastSyncAt           DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastSyncStatus       SyncJobStatus?
+
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  credential           EncryptedCredential?
+  rawRecords           WearableRawRecord[]
+  syncJobs             SyncJob[]
+
+  // A user may reconnect the same provider later (e.g. after a full revoke),
+  // or in the future run two accounts of different providers side by side —
+  // so this is NOT unique on (userId, provider) alone; see ARCHITECTURE.md §11.
+  @@index([userId])
+  @@index([userId, provider])
+  @@index([status])
+  @@map("wearable_connections")
+}
+
+// OAuth credentials live in their own table, encrypted at rest, and are never
+// exposed outside integrations/wearable/*. Never joined into API responses.
+model EncryptedCredential {
+  id                   String             @id @default(uuid())
+  connectionId         String             @unique
+  connection           WearableConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // AES-256-GCM ciphertext + metadata (see EncryptionService in ARCHITECTURE.md §16)
+  accessTokenCipher    String
+  accessTokenIv        String
+  accessTokenAuthTag   String
+  accessTokenExpiresAt DateTime
+
+  refreshTokenCipher   String
+  refreshTokenIv       String
+  refreshTokenAuthTag  String
+
+  // Concurrency control for the rotating-refresh-token race (ARCHITECTURE.md §6)
+  refreshVersion       Int                @default(0)
+  refreshLockedAt       DateTime?
+  refreshLockedBy       String?
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@map("encrypted_credentials")
+}
+
+model WearableRawRecord {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   WearableConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  provider     WearableProvider
+  dataType     WearableDataType
+  externalId   String
+  dataDate     DateTime           @db.Date
+  payload      Json
+  fetchedAt    DateTime           @default(now())
+
+  // Idempotency key: the same provider record fetched twice must upsert, not duplicate.
+  @@unique([connectionId, dataType, externalId], name: "uniq_raw_record")
+  @@index([userId, dataDate])
+  @@index([provider, dataType])
+  @@map("wearable_raw_records")
+}
+
+// ------------------------------------------------------------------
+// Normalized platform data (what the dashboard actually reads)
+// ------------------------------------------------------------------
+
+model DailyHealthMetric {
+  id                    String   @id @default(uuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                  DateTime @db.Date
+
+  sleepScore            Int?
+  readinessScore        Int?
+  activityScore         Int?
+
+  totalSleepMinutes     Int?
+  deepSleepMinutes      Int?
+  remSleepMinutes       Int?
+  lightSleepMinutes     Int?
+  awakeMinutes          Int?
+  sleepEfficiencyPct    Decimal? @db.Decimal(5, 2)
+  sleepLatencyMinutes   Int?
+  bedtimeStart          DateTime?
+  bedtimeEnd            DateTime?
+
+  restingHeartRate      Int?
+  averageHrv            Decimal? @db.Decimal(6, 2)
+  temperatureDeviationC Decimal? @db.Decimal(4, 2)
+
+  steps                 Int?
+  activeCalories        Int?
+  totalCalories         Int?
+  walkingEquivalentMin  Int?
+  sedentaryMinutes      Int?
+
+  spo2Average           Decimal? @db.Decimal(5, 2)
+
+  // Which providers contributed to this row (a day can be a merge of multiple
+  // wearables once more providers are added).
+  sourceProviders       WearableProvider[] @default([])
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_health_metrics")
+}
+
+model Workout {
+  id           String            @id @default(uuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider     WearableProvider
+  externalId   String
+
+  activityType String
+  startedAt    DateTime
+  endedAt      DateTime
+  durationMin  Int
+  calories     Int?
+  distanceM    Decimal?          @db.Decimal(10, 2)
+  intensity    String?
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([provider, externalId])
+  @@index([userId, startedAt])
+  @@map("workouts")
+}
+
+// ------------------------------------------------------------------
+// Sync orchestration
+// ------------------------------------------------------------------
+
+model SyncJob {
+  id              String             @id @default(uuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId    String
+  connection      WearableConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  provider        WearableProvider
+
+  type            SyncJobType
+  status          SyncJobStatus      @default(QUEUED)
+
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  recordsFetched  Int                @default(0)
+  recordsCreated  Int                @default(0)
+  recordsUpdated  Int                @default(0)
+
+  retryCount      Int                @default(0)
+
+  errorCode       String?
+  errorMessage    String?
+
+  createdAt       DateTime           @default(now())
+
+  @@index([userId])
+  @@index([connectionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("sync_jobs")
+}
+
+// ------------------------------------------------------------------
+// OAuth CSRF state (short-lived, single-use)
+// ------------------------------------------------------------------
+
+model OAuthState {
+  id           String            @id @default(uuid())
+  state        String            @unique
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     WearableProvider
+
+  redirectUri  String?
+  codeVerifier String?           // PKCE, if the provider supports/requires it
+
+  usedAt       DateTime?
+  expiresAt    DateTime
+
+  createdAt    DateTime          @default(now())
+
+  @@index([expiresAt])
+  @@map("oauth_states")
+}
+
+// ------------------------------------------------------------------
+// Password reset / email verification (app-managed, separate from Auth.js
+// VerificationToken so we can enforce single-use + hashing explicitly)
+// ------------------------------------------------------------------
+
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash   String    @unique
+  usedAt      DateTime?
+  expiresAt   DateTime
+
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash   String    @unique
+  usedAt      DateTime?
+  expiresAt   DateTime
+
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// ------------------------------------------------------------------
+// Auth.js (NextAuth) — enables Google login later without a data model change.
+// Credentials login uses JWT sessions and never needs these rows; they only
+// populate once an OAuth identity provider (e.g. Google) is enabled.
+// ------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type              String
+  provider          String
+  providerAccountId String
+
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ------------------------------------------------------------------
+// Audit log — admin actions + security-relevant events. Never stores
+// tokens, passwords, or raw health payloads (see ARCHITECTURE.md §10 / §44).
+// ------------------------------------------------------------------
+
+model AuditLog {
+  id           String   @id @default(uuid())
+
+  actorUserId  String?
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUserId String?
+  target       User?    @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  action       String
+  entityType   String?
+  entityId     String?
+
+  metadata     Json?
+
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
