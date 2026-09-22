@@ -191,6 +191,7 @@ model User {
   dailyHealthMetrics  DailyHealthMetric[]
   workouts            Workout[]
   syncJobs            SyncJob[]
+  wearableRawRecords  WearableRawRecord[]
   oauthStates         OAuthState[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
