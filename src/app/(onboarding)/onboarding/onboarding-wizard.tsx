@@ -307,7 +307,7 @@ function NutritionStep({
   );
 }
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ initialFullName }: { initialFullName?: string }) {
   const [step, setStep] = useState(0);
   const [personal, setPersonal] = useState<PersonalInfoInput | null>(null);
   const [exercise, setExercise] = useState<ExerciseProfileInput | null>(null);
@@ -345,7 +345,7 @@ export function OnboardingWizard() {
         <StepProgress step={step} />
         {step === 0 && (
           <PersonalStep
-            defaultValues={personal ?? {}}
+            defaultValues={personal ?? { fullName: initialFullName }}
             onNext={(data) => {
               setPersonal(data);
               setStep(1);
