@@ -36,6 +36,19 @@ const DIET_TYPE_VALUES = [
   'OTHER',
 ] as const;
 
+// `z.coerce.number()` runs BEFORE `.optional()` is checked, and an empty
+// text input submits `''`, which `Number('')` coerces to `0` — not
+// `undefined`. For a field whose minimum is above 0 (dailyMealCount,
+// dailyCaloriesKcal) that made leaving it blank fail validation as "too
+// small" instead of being treated as not provided, so an "(optional)" field
+// was effectively required. This preprocesses blank/null/undefined to
+// `undefined` first, so `.optional()` actually applies.
+const optionalCoercedInt = (min: number, max: number) =>
+  z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.coerce.number().int().min(min).max(max).optional(),
+  );
+
 export const GenderEnum = z.enum(GENDER_VALUES);
 export const ActivityLevelEnum = z.enum(ACTIVITY_LEVEL_VALUES);
 export const ActivityTypeEnum = z.enum(ACTIVITY_TYPE_VALUES);
@@ -62,8 +75,8 @@ export type PersonalInfoInput = z.infer<typeof PersonalInfoSchema>;
 
 export const ExerciseProfileSchema = z.object({
   activityLevel: ActivityLevelEnum,
-  weeklyWorkoutCount: z.coerce.number().int().min(0).max(28).optional(),
-  avgWorkoutDurationMin: z.coerce.number().int().min(0).max(600).optional(),
+  weeklyWorkoutCount: optionalCoercedInt(0, 28),
+  avgWorkoutDurationMin: optionalCoercedInt(0, 600),
   activityTypes: z.array(ActivityTypeEnum).default([]),
   customActivities: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
 });
@@ -72,9 +85,9 @@ export type ExerciseProfileInput = z.infer<typeof ExerciseProfileSchema>;
 
 export const NutritionProfileSchema = z.object({
   dietType: DietTypeEnum,
-  dailyMealCount: z.coerce.number().int().min(1).max(10).optional(),
-  dailyCaloriesKcal: z.coerce.number().int().min(500).max(10000).optional(),
-  dailyProteinGrams: z.coerce.number().int().min(0).max(500).optional(),
+  dailyMealCount: optionalCoercedInt(1, 10),
+  dailyCaloriesKcal: optionalCoercedInt(500, 10000),
+  dailyProteinGrams: optionalCoercedInt(0, 500),
   allergies: z.array(z.string().trim().min(1).max(50)).max(30).default([]),
   intolerances: z.array(z.string().trim().min(1).max(50)).max(30).default([]),
   avoidedFoods: z.array(z.string().trim().min(1).max(50)).max(30).default([]),
