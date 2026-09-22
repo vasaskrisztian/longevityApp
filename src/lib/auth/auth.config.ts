@@ -16,6 +16,12 @@ export const authConfig = {
   pages: {
     signIn: '/login',
   },
+  // Railway (like most non-Vercel hosts) terminates TLS at its edge proxy
+  // and forwards to the container over plain HTTP with an internal Host
+  // header (e.g. `localhost:8080`), which doesn't match the public domain.
+  // Without `trustHost`, Auth.js rejects every request as an "UntrustedHost"
+  // — this must be true for auth to work at all behind that kind of proxy.
+  trustHost: true,
   providers: [],
   callbacks: {
     async jwt({ token, user }) {
