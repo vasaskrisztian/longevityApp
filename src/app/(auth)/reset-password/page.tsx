@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSearchParams } from 'next/navigation';
@@ -133,7 +133,21 @@ function ConfirmResetForm({ token }: { token: string }) {
   );
 }
 
+// `useSearchParams()` opts this page out of static rendering, and Next.js
+// requires a Suspense boundary around any component that calls it (build
+// fails otherwise: "useSearchParams() should be wrapped in a suspense
+// boundary"). The card itself renders instantly client-side, so the
+// fallback is never visible in practice — it only matters during the
+// initial static shell Next.js generates at build time.
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<Card />}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 

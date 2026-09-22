@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signIn } from 'next-auth/react';
@@ -12,7 +12,21 @@ import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+// `useSearchParams()` opts this page out of static rendering, and Next.js
+// requires a Suspense boundary around any component that calls it (build
+// fails otherwise: "useSearchParams() should be wrapped in a suspense
+// boundary"). The card itself renders instantly client-side, so the
+// fallback is never visible in practice — it only matters during the
+// initial static shell Next.js generates at build time.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<Card />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justVerified = searchParams.get('verified') === '1';
