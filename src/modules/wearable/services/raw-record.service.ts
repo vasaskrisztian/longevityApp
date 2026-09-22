@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import type { ProviderRawRecord, WearableProviderId } from '../domain/wearable-provider.types';
 
@@ -58,11 +59,15 @@ export async function storeRawRecords(params: {
         dataType: record.dataType,
         externalId: record.externalId,
         dataDate: record.dataDate,
-        payload: record.payload,
+        // `payload` is deliberately typed `unknown` at this boundary (see
+        // ProviderRawRecord above) — every provider mapper already produces
+        // JSON-serializable data, so this cast just tells Prisma's
+        // InputJsonValue what TypeScript can't infer through `unknown`.
+        payload: record.payload as Prisma.InputJsonValue,
       },
       update: {
         dataDate: record.dataDate,
-        payload: record.payload,
+        payload: record.payload as Prisma.InputJsonValue,
         fetchedAt: new Date(),
       },
     });
