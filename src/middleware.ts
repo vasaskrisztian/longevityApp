@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authConfig } from '@/lib/auth/auth.config';
+import { resolveAppUrl } from '@/lib/http/app-url';
 
 // Deliberately built from the Edge-safe `authConfig`, NOT `@/lib/auth/auth`
 // — that file pulls in argon2 (native Node addon) and Prisma via the
@@ -25,13 +26,16 @@ export default auth((request) => {
   const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   if (isProtected && !isLoggedIn) {
-    const loginUrl = new URL('/login', request.nextUrl.origin);
+    // request.nextUrl.origin is the container's internal localhost:PORT
+    // behind Railway's proxy (see lib/http/app-url.ts) — resolveAppUrl
+    // prefers APP_URL so this actually redirects to the public domain.
+    const loginUrl = resolveAppUrl('/login', request.nextUrl.href);
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (pathname.startsWith('/admin') && request.auth?.user?.role !== 'ADMIN') {
-    return NextResponse.redirect(new URL('/dashboard', request.nextUrl.origin));
+    return NextResponse.redirect(resolveAppUrl('/dashboard', request.nextUrl.href));
   }
 
   return NextResponse.next();

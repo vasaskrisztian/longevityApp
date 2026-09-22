@@ -1,4 +1,5 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
+import { resolveAppUrl } from '@/lib/http/app-url';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import { consumeOAuthState } from '@/modules/wearable/services/oauth-state.service';
@@ -12,7 +13,7 @@ import { getOuraProvider } from '@/modules/wearable/providers/oura/oura-provider
 import { InvalidOAuthStateError } from '@/modules/wearable/domain/errors';
 
 function redirectToDevices(request: Request, ouraError?: string): Response {
-  const url = new URL('/profile/devices', request.url);
+  const url = resolveAppUrl('/profile/devices', request.url);
   if (ouraError) {
     url.searchParams.set('oura_error', ouraError);
   }

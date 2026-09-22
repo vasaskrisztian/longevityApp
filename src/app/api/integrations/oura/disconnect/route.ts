@@ -1,4 +1,5 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
+import { resolveAppUrl } from '@/lib/http/app-url';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import {
@@ -55,5 +56,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return Response.redirect(new URL('/profile/devices', request.url), 303);
+  return Response.redirect(resolveAppUrl('/profile/devices', request.url), 303);
 }
