@@ -19,6 +19,19 @@ import type {
 
 const OURA_API_BASE = 'https://api.ouraring.com/v2/usercollection';
 
+// A plain `fetch()` has no default timeout — if Oura's API (or the network
+// path to it) ever stalls instead of erroring, an unbounded `await fetch(...)`
+// hangs forever, which BullMQ has no way to notice: the SyncJob row sits at
+// RUNNING permanently, the connection's lastSyncStatus is never updated (that
+// only happens once runSyncForConnection returns), and the queue's single
+// concurrency slot for that job type is wedged, silently blocking every sync
+// after it too. Bounding every request lets a stall surface as an ordinary
+// per-endpoint failure instead — `OuraProvider.fetchRawData`'s
+// `Promise.allSettled` already treats that exactly like an HTTP error (see
+// its class doc), and `sync-retry-policy.ts` retries it with backoff like any
+// other transient failure.
+const REQUEST_TIMEOUT_MS = 20_000;
+
 interface OuraCollectionPage<T> {
   data: T[];
   next_token: string | null;
@@ -48,6 +61,12 @@ async function fetchOuraCollection<T>(params: {
     // eslint-disable-next-line no-await-in-loop -- pagination is inherently sequential (each page's next_token depends on the previous response)
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${params.accessToken}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw new Error(`Oura ${params.endpoint} request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      }
+      throw error;
     });
     if (!response.ok) {
       throw new Error(`Oura ${params.endpoint} request failed with status ${response.status}`);

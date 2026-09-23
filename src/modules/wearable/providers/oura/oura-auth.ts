@@ -14,6 +14,12 @@ import type { OuraTokenResponse } from './oura-types';
  * is plain `fetch` — no Oura SDK dependency to keep track of.
  */
 
+// See oura-api-client.ts's REQUEST_TIMEOUT_MS comment — same reasoning
+// applies to the token endpoint: `ensureFreshAccessToken` (refresh-credential
+// .service.ts) awaits this while holding the per-connection credential lock,
+// so an unbounded hang here would wedge that lock, not just one sync job.
+const TOKEN_REQUEST_TIMEOUT_MS = 20_000;
+
 export function buildOuraAuthorizeUrl(params: { state: string; codeChallenge: string }): string {
   const { clientId, redirectUri } = loadOuraCredentials();
   const url = new URL(OURA_AUTHORIZE_URL);
@@ -32,6 +38,16 @@ async function postOuraTokenRequest(body: Record<string, string>): Promise<OuraT
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams(body).toString(),
+    signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new ProviderTokenExchangeError(
+        'OURA',
+        'TIMEOUT',
+        `Request to ${OURA_TOKEN_URL} timed out after ${TOKEN_REQUEST_TIMEOUT_MS}ms`,
+      );
+    }
+    throw error;
   });
 
   if (!response.ok) {
