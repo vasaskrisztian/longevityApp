@@ -1,8 +1,9 @@
 import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
 import { getConnectionForUserAndProvider } from '@/modules/wearable/services/wearable.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { SyncNowButton } from './sync-now-button';
 
 const STATUS_LABEL: Record<string, string> = {
   CONNECTED: 'Connected',
@@ -72,12 +73,10 @@ export default async function DevicesPage({
               {connection.lastSyncStatus ? ` (${connection.lastSyncStatus})` : ''}
             </p>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             {isConnected ? (
               <>
-                <Button variant="outline" disabled title="Wired up in Phase 5/7">
-                  Sync now
-                </Button>
+                <SyncNowButton />
                 <form action="/api/integrations/oura/disconnect" method="POST">
                   <button type="submit" className={cn(buttonVariants({ variant: 'destructive' }))}>
                     Disconnect
@@ -90,11 +89,13 @@ export default async function DevicesPage({
               </a>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Historical import and daily sync (ARCHITECTURE.md §7) ship in
-            Phase 5/7 — connecting today records the connection and queues
-            the initial sync, but nothing processes that queue yet.
-          </p>
+          {isConnected && (
+            <p className="text-xs text-muted-foreground">
+              Daily sync runs automatically in the background; use{' '}
+              <span className="font-medium">Sync now</span> to pull the
+              latest data on demand (limited to once every 5 minutes).
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
