@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const prismaMock = {
   syncJob: {
@@ -14,9 +14,11 @@ vi.mock('@/modules/wearable/services/sync-window.service', () => ({
 
 const markSyncJobRunningMock = vi.fn();
 const completeSyncJobMock = vi.fn();
+const completeSyncJobIfStillRunningMock = vi.fn();
 vi.mock('@/modules/wearable/services/sync-job.service', () => ({
   markSyncJobRunning: markSyncJobRunningMock,
   completeSyncJob: completeSyncJobMock,
+  completeSyncJobIfStillRunning: completeSyncJobIfStillRunningMock,
 }));
 
 const runSyncForConnectionMock = vi.fn();
@@ -24,9 +26,8 @@ vi.mock('@/modules/wearable/services/sync.service', () => ({
   runSyncForConnection: runSyncForConnectionMock,
 }));
 
-const { runQueuedSyncJob, RetryableSyncJobError, SyncJobNotFoundError } = await import(
-  '@/modules/wearable/services/sync-job-runner.service'
-);
+const { runQueuedSyncJob, RetryableSyncJobError, SyncJobNotFoundError, SYNC_JOB_HARD_TIMEOUT_MS } =
+  await import('@/modules/wearable/services/sync-job-runner.service');
 
 const FROM = new Date('2026-06-13T00:00:00Z');
 const TO = new Date('2026-06-15T00:00:00Z');
@@ -209,5 +210,46 @@ describe('runQueuedSyncJob', () => {
     await expect(runQueuedSyncJob({ jobId: 'job-1', adapter: FAKE_ADAPTER })).rejects.toThrow(
       /FETCH_FAILED/,
     );
+  });
+
+  describe('hard timeout', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('records a FAILED/FETCH_FAILED result via completeSyncJobIfStillRunning (never completeSyncJob) and throws RetryableSyncJobError when runSyncForConnection never settles', async () => {
+      prismaMock.syncJob.findUnique.mockResolvedValue(JOB_ROW);
+      // Never resolves/rejects on its own — simulates the stuck-forever `await` this watchdog exists for.
+      runSyncForConnectionMock.mockImplementation(() => new Promise(() => {}));
+
+      const pending = expect(runQueuedSyncJob({ jobId: 'job-1', adapter: FAKE_ADAPTER })).rejects.toThrow(
+        RetryableSyncJobError,
+      );
+
+      await vi.advanceTimersByTimeAsync(SYNC_JOB_HARD_TIMEOUT_MS);
+      await pending;
+
+      expect(completeSyncJobMock).not.toHaveBeenCalled();
+      expect(completeSyncJobIfStillRunningMock).toHaveBeenCalledWith(
+        'job-1',
+        expect.objectContaining({ status: 'FAILED', errorCode: 'FETCH_FAILED' }),
+        0,
+      );
+    });
+
+    it('does not fire the watchdog when runSyncForConnection settles before the hard timeout', async () => {
+      prismaMock.syncJob.findUnique.mockResolvedValue(JOB_ROW);
+      const result = successResult();
+      runSyncForConnectionMock.mockResolvedValue(result);
+
+      await expect(runQueuedSyncJob({ jobId: 'job-1', adapter: FAKE_ADAPTER })).resolves.toEqual(result);
+
+      expect(completeSyncJobMock).toHaveBeenCalledWith('job-1', result, 0);
+      expect(completeSyncJobIfStillRunningMock).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logging/logger';
 import { ensureFreshAccessToken } from './refresh-credential.service';
 import { storeRawRecords } from './raw-record.service';
 import { normalizeAndUpsertDailyMetrics, normalizeAndUpsertWorkouts } from './normalization.service';
@@ -53,23 +54,51 @@ export async function runSyncForConnection(params: {
   from: Date;
   to: Date;
 }): Promise<SyncResult> {
+  // Stage markers only — see sync-job-runner.service.ts's hard-timeout
+  // comment. There was previously almost no visibility into where a sync
+  // attempt actually spends its time, which made a stuck job indistinguishable
+  // from a slow one; these events (plus oura-api-client.ts's per-page ones and
+  // oura-auth.ts's token-request ones) are what the next hang gets diagnosed from.
+  const stageStart = Date.now();
+  logger.info('sync_job_stage', { connectionId: params.connectionId, stage: 'ensure_fresh_token_start' });
+
   let accessToken: string;
   try {
     const fresh = await ensureFreshAccessToken(params.connectionId, params.adapter);
     accessToken = fresh.accessToken;
+    logger.info('sync_job_stage', {
+      connectionId: params.connectionId,
+      stage: 'ensure_fresh_token_done',
+      elapsedMs: Date.now() - stageStart,
+    });
   } catch (error) {
     // ensureFreshAccessToken already marks the connection AUTH_REQUIRED on a
     // rejected refresh (ARCHITECTURE.md §6.2, guarantee #3); recordSyncOutcome
     // separately tracks lastSyncAt/lastSyncStatus, which markConnectionAuthRequired
     // does not touch.
+    logger.warn('sync_job_stage', {
+      connectionId: params.connectionId,
+      stage: 'ensure_fresh_token_failed',
+      elapsedMs: Date.now() - stageStart,
+      error: (error as Error).message,
+    });
     await recordSyncOutcome(params.connectionId, 'FAILED');
     return emptyResult('FAILED', 'AUTH_REQUIRED', (error as Error).message);
   }
 
+  const fetchStart = Date.now();
+  logger.info('sync_job_stage', { connectionId: params.connectionId, stage: 'fetch_raw_data_start' });
   const { records, failures } = await params.adapter.fetchRawData({
     accessToken,
     from: params.from,
     to: params.to,
+  });
+  logger.info('sync_job_stage', {
+    connectionId: params.connectionId,
+    stage: 'fetch_raw_data_done',
+    elapsedMs: Date.now() - fetchStart,
+    recordCount: records.length,
+    failureCount: failures.length,
   });
 
   if (records.length === 0 && failures.length > 0) {
@@ -81,6 +110,8 @@ export async function runSyncForConnection(params: {
     );
   }
 
+  const writeStart = Date.now();
+  logger.info('sync_job_stage', { connectionId: params.connectionId, stage: 'db_write_start' });
   const [{ created, updated }, { datesUpserted }, { workoutsUpserted }] = await Promise.all([
     storeRawRecords({
       userId: params.userId,
@@ -101,6 +132,11 @@ export async function runSyncForConnection(params: {
       adapter: params.adapter,
     }),
   ]);
+  logger.info('sync_job_stage', {
+    connectionId: params.connectionId,
+    stage: 'db_write_done',
+    elapsedMs: Date.now() - writeStart,
+  });
 
   const status = failures.length > 0 ? 'PARTIAL' : 'SUCCESS';
   await recordSyncOutcome(params.connectionId, status);

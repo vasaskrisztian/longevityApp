@@ -121,3 +121,35 @@ export async function completeSyncJob(
     },
   });
 }
+
+/**
+ * Same write as `completeSyncJob`, guarded by `status: 'RUNNING'` so it only
+ * applies while the row is still actually running. `sync-job-runner
+ * .service.ts`'s hard-timeout watchdog uses this (never `completeSyncJob`)
+ * to record a timeout: the original `runSyncForConnection` call is left to
+ * keep running in the background (there is no way to truly cancel it), and
+ * if it eventually settles on its own after the watchdog already gave up,
+ * this guard stops that late, stale write from clobbering whatever the
+ * job row says by then (the watchdog's own FAILED result, or a fresh retry
+ * attempt's RUNNING state). Returns whether the write actually applied.
+ */
+export async function completeSyncJobIfStillRunning(
+  jobId: string,
+  result: SyncResult,
+  retryCount = 0,
+): Promise<boolean> {
+  const { count } = await prisma.syncJob.updateMany({
+    where: { id: jobId, status: 'RUNNING' },
+    data: {
+      status: result.status,
+      finishedAt: new Date(),
+      recordsFetched: result.recordsFetched,
+      recordsCreated: result.recordsCreated,
+      recordsUpdated: result.recordsUpdated,
+      retryCount,
+      errorCode: result.errorCode ?? null,
+      errorMessage: result.errorMessage ?? null,
+    },
+  });
+  return count > 0;
+}

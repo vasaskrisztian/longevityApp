@@ -4,6 +4,7 @@ const prismaMock = {
   syncJob: {
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   wearableConnection: {
     findMany: vi.fn(),
@@ -17,6 +18,7 @@ const {
   enqueueDailySyncJobsForActiveConnections,
   markSyncJobRunning,
   completeSyncJob,
+  completeSyncJobIfStillRunning,
 } = await import('@/modules/wearable/services/sync-job.service');
 
 beforeEach(() => {
@@ -208,5 +210,52 @@ describe('completeSyncJob', () => {
     );
 
     expect(prismaMock.syncJob.update.mock.calls[0]![0].data.retryCount).toBe(2);
+  });
+});
+
+describe('completeSyncJobIfStillRunning', () => {
+  it('guards the write with status: RUNNING and returns true when it applied', async () => {
+    prismaMock.syncJob.updateMany.mockResolvedValue({ count: 1 });
+
+    const applied = await completeSyncJobIfStillRunning('job-1', {
+      status: 'FAILED',
+      recordsFetched: 0,
+      recordsCreated: 0,
+      recordsUpdated: 0,
+      datesUpserted: 0,
+      workoutsUpserted: 0,
+      errorCode: 'FETCH_FAILED',
+      errorMessage: 'hard timeout',
+    });
+
+    expect(applied).toBe(true);
+    expect(prismaMock.syncJob.updateMany).toHaveBeenCalledWith({
+      where: { id: 'job-1', status: 'RUNNING' },
+      data: {
+        status: 'FAILED',
+        finishedAt: expect.any(Date),
+        recordsFetched: 0,
+        recordsCreated: 0,
+        recordsUpdated: 0,
+        retryCount: 0,
+        errorCode: 'FETCH_FAILED',
+        errorMessage: 'hard timeout',
+      },
+    });
+  });
+
+  it('returns false when the row was no longer RUNNING (a later attempt already owns it)', async () => {
+    prismaMock.syncJob.updateMany.mockResolvedValue({ count: 0 });
+
+    const applied = await completeSyncJobIfStillRunning('job-1', {
+      status: 'SUCCESS',
+      recordsFetched: 3,
+      recordsCreated: 3,
+      recordsUpdated: 0,
+      datesUpserted: 3,
+      workoutsUpserted: 0,
+    });
+
+    expect(applied).toBe(false);
   });
 });

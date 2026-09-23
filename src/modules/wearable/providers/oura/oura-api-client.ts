@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logging/logger';
 import type {
   OuraDailyActivityRecord,
   OuraDailyReadinessRecord,
@@ -49,8 +50,10 @@ async function fetchOuraCollection<T>(params: {
 }): Promise<T[]> {
   const results: T[] = [];
   let nextToken: string | undefined;
+  let page = 0;
 
   do {
+    page += 1;
     const url = new URL(`${OURA_API_BASE}/${params.endpoint}`);
     url.searchParams.set('start_date', toDateOnly(params.from));
     url.searchParams.set('end_date', toDateOnly(params.to));
@@ -58,23 +61,48 @@ async function fetchOuraCollection<T>(params: {
       url.searchParams.set('next_token', nextToken);
     }
 
+    const pageStart = Date.now();
+    logger.info('sync_job_stage', { stage: 'oura_page_fetch_start', endpoint: params.endpoint, page });
+
     // eslint-disable-next-line no-await-in-loop -- pagination is inherently sequential (each page's next_token depends on the previous response)
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${params.accessToken}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }).catch((error: unknown) => {
+      logger.warn('sync_job_stage', {
+        stage: 'oura_page_fetch_errored',
+        endpoint: params.endpoint,
+        page,
+        elapsedMs: Date.now() - pageStart,
+        error: error instanceof Error ? error.message : String(error),
+      });
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw new Error(`Oura ${params.endpoint} request timed out after ${REQUEST_TIMEOUT_MS}ms`);
       }
       throw error;
     });
     if (!response.ok) {
+      logger.warn('sync_job_stage', {
+        stage: 'oura_page_fetch_non_ok',
+        endpoint: params.endpoint,
+        page,
+        status: response.status,
+        elapsedMs: Date.now() - pageStart,
+      });
       throw new Error(`Oura ${params.endpoint} request failed with status ${response.status}`);
     }
     // eslint-disable-next-line no-await-in-loop
-    const page = (await response.json()) as OuraCollectionPage<T>;
-    results.push(...page.data);
-    nextToken = page.next_token ?? undefined;
+    const body = (await response.json()) as OuraCollectionPage<T>;
+    logger.info('sync_job_stage', {
+      stage: 'oura_page_fetch_done',
+      endpoint: params.endpoint,
+      page,
+      elapsedMs: Date.now() - pageStart,
+      recordCount: body.data.length,
+      hasNextPage: Boolean(body.next_token),
+    });
+    results.push(...body.data);
+    nextToken = body.next_token ?? undefined;
   } while (nextToken);
 
   return results;

@@ -34,12 +34,21 @@ export function buildOuraAuthorizeUrl(params: { state: string; codeChallenge: st
 }
 
 async function postOuraTokenRequest(body: Record<string, string>): Promise<OuraTokenResponse> {
+  const requestStart = Date.now();
+  logger.info('sync_job_stage', { stage: 'oura_token_request_start', grantType: body.grant_type });
+
   const response = await fetch(OURA_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams(body).toString(),
     signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
   }).catch((error: unknown) => {
+    logger.warn('sync_job_stage', {
+      stage: 'oura_token_request_errored',
+      grantType: body.grant_type,
+      elapsedMs: Date.now() - requestStart,
+      error: error instanceof Error ? error.message : String(error),
+    });
     if (error instanceof Error && error.name === 'TimeoutError') {
       throw new ProviderTokenExchangeError(
         'OURA',
@@ -52,9 +61,20 @@ async function postOuraTokenRequest(body: Record<string, string>): Promise<OuraT
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    logger.warn('sync_job_stage', {
+      stage: 'oura_token_request_non_ok',
+      grantType: body.grant_type,
+      status: response.status,
+      elapsedMs: Date.now() - requestStart,
+    });
     throw new ProviderTokenExchangeError('OURA', `HTTP ${response.status}`, text);
   }
 
+  logger.info('sync_job_stage', {
+    stage: 'oura_token_request_done',
+    grantType: body.grant_type,
+    elapsedMs: Date.now() - requestStart,
+  });
   return (await response.json()) as OuraTokenResponse;
 }
 
