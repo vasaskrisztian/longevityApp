@@ -58,6 +58,18 @@ export async function runQuery<T>(
   values: unknown[],
 ): Promise<{ rows: T[] }> {
   const t0 = Date.now();
+  // Deliberately unconditional, unlike the "slow step" warnings below: the
+  // freeze isolated to the gap between storeRawRecords and
+  // normalizeAndUpsertDailyMetrics never produced a "slow pool checkout"
+  // warning (that log only runs AFTER connect() resolves -- it can't fire
+  // if connect() never resolves at all), and it never produced the 15s
+  // hard-timeout error either, which a plain setTimeout should be
+  // physically incapable of missing unless the event loop itself is
+  // wedged. This line's only job is to prove whether execution reaches
+  // this exact point before the freeze -- one line, once per call in this
+  // batch (a handful of calls per sync, nowhere near log-volume territory).
+  // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+  console.error(`[db] ${label}: calling pool.connect() total=${pool.totalCount} idle=${pool.idleCount} waiting=${pool.waitingCount}`);
   const client = await withQueryTimeout(pool.connect(), `${label} connect()`);
   const connectMs = Date.now() - t0;
   if (connectMs > SLOW_STEP_WARN_MS) {

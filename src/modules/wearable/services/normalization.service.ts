@@ -73,6 +73,14 @@ export async function normalizeAndUpsertDailyMetrics(params: {
   records: ProviderRawRecord[];
   adapter: WearableProviderAdapter;
 }): Promise<{ datesUpserted: number }> {
+  // Diagnostic only, temporary: proves whether execution reaches this
+  // function at all right after storeRawRecords resolves, before the
+  // (synchronous, should-be-instant) mapping loop below runs. See
+  // run-query.ts's matching "calling pool.connect()" line -- between the
+  // two, the next live sync will show exactly which side of that boundary
+  // the freeze is on.
+  // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+  console.error(`[db] normalizeAndUpsertDailyMetrics entry: recordCount=${params.records.length}`);
   const fieldsByDateKey = new Map<string, { date: Date; fields: NormalizedDailyMetricFields }>();
 
   for (const record of params.records) {
