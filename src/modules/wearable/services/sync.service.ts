@@ -112,26 +112,33 @@ export async function runSyncForConnection(params: {
 
   const writeStart = Date.now();
   logger.info('sync_job_stage', { connectionId: params.connectionId, stage: 'db_write_start' });
-  const [{ created, updated }, { datesUpserted }, { workoutsUpserted }] = await Promise.all([
-    storeRawRecords({
-      userId: params.userId,
-      connectionId: params.connectionId,
-      provider: params.provider,
-      records,
-    }),
-    normalizeAndUpsertDailyMetrics({
-      userId: params.userId,
-      provider: params.provider,
-      records,
-      adapter: params.adapter,
-    }),
-    normalizeAndUpsertWorkouts({
-      userId: params.userId,
-      provider: params.provider,
-      records,
-      adapter: params.adapter,
-    }),
-  ]);
+  // These three writes run one after another, not via Promise.all. Running
+  // them concurrently was found in production to hang forever with
+  // @prisma/adapter-pg: pg_stat_activity showed every connection sitting
+  // `idle` with `wait_event: ClientRead` -- Postgres had already answered,
+  // but the response never made it back out of the engine/adapter bridge to
+  // Node. It reproduced reliably with concurrent Prisma calls and never with
+  // sequential ones (see raw-record.service.ts for the fuller writeup).
+  // Until that's fixed upstream, nothing in this write path issues more
+  // than one Prisma query at a time.
+  const { created, updated } = await storeRawRecords({
+    userId: params.userId,
+    connectionId: params.connectionId,
+    provider: params.provider,
+    records,
+  });
+  const { datesUpserted } = await normalizeAndUpsertDailyMetrics({
+    userId: params.userId,
+    provider: params.provider,
+    records,
+    adapter: params.adapter,
+  });
+  const { workoutsUpserted } = await normalizeAndUpsertWorkouts({
+    userId: params.userId,
+    provider: params.provider,
+    records,
+    adapter: params.adapter,
+  });
   logger.info('sync_job_stage', {
     connectionId: params.connectionId,
     stage: 'db_write_done',

@@ -46,55 +46,55 @@ export async function storeRawRecords(params: {
   });
   const existingKeys = new Set(existing.map((row) => `${row.dataType}:${row.externalId}`));
 
-  // Upserts run with bounded concurrency instead of one at a time: a fully
-  // sequential `for` loop over a large batch (again, heart-rate data can be
-  // 700+ records for a single day) pays a full round trip per record and
-  // was the other big contributor to syncs overrunning the hard timeout.
-  // A chunk size of 25 keeps well under the DB pool size while cutting
-  // total wall time by roughly the chunk factor.
-  const CONCURRENCY = 25;
+  // Upserts run strictly one at a time, deliberately NOT concurrently.
+  // Production testing on this app (with @prisma/adapter-pg, the
+  // node-postgres driver adapter) showed that issuing several Prisma
+  // queries at once through this adapter can hang forever: `pg_stat_activity`
+  // during the hang showed each connection sitting `idle` with
+  // `wait_event: ClientRead` — Postgres had already answered every query,
+  // but the responses never made it back out of the engine/adapter bridge
+  // to Node. It reproduced reliably with as few as 10 concurrent upserts
+  // and never happened with sequential ones. Until that adapter bug is
+  // resolved upstream, every Prisma call in the sync write path (here and
+  // in sync.service.ts) is kept strictly sequential — slower per record,
+  // but it actually finishes.
   let created = 0;
   let updated = 0;
-  for (let i = 0; i < params.records.length; i += CONCURRENCY) {
-    const chunk = params.records.slice(i, i + CONCURRENCY);
-    // eslint-disable-next-line no-await-in-loop -- intentional: chunks run concurrently within themselves, but chunks are processed one after another to keep peak DB-connection usage bounded
-    await Promise.all(
-      chunk.map(async (record) => {
-        const key = `${record.dataType}:${record.externalId}`;
-        await prisma.wearableRawRecord.upsert({
-          where: {
-            uniq_raw_record: {
-              connectionId: params.connectionId,
-              dataType: record.dataType,
-              externalId: record.externalId,
-            },
-          },
-          create: {
-            userId: params.userId,
-            connectionId: params.connectionId,
-            provider: params.provider,
-            dataType: record.dataType,
-            externalId: record.externalId,
-            dataDate: record.dataDate,
-            // `payload` is deliberately typed `unknown` at this boundary (see
-            // ProviderRawRecord above) — every provider mapper already produces
-            // JSON-serializable data, so this cast just tells Prisma's
-            // InputJsonValue what TypeScript can't infer through `unknown`.
-            payload: record.payload as Prisma.InputJsonValue,
-          },
-          update: {
-            dataDate: record.dataDate,
-            payload: record.payload as Prisma.InputJsonValue,
-            fetchedAt: new Date(),
-          },
-        });
-        if (existingKeys.has(key)) {
-          updated += 1;
-        } else {
-          created += 1;
-        }
-      }),
-    );
+  for (const record of params.records) {
+    const key = `${record.dataType}:${record.externalId}`;
+    // eslint-disable-next-line no-await-in-loop -- intentionally sequential; see comment above
+    await prisma.wearableRawRecord.upsert({
+      where: {
+        uniq_raw_record: {
+          connectionId: params.connectionId,
+          dataType: record.dataType,
+          externalId: record.externalId,
+        },
+      },
+      create: {
+        userId: params.userId,
+        connectionId: params.connectionId,
+        provider: params.provider,
+        dataType: record.dataType,
+        externalId: record.externalId,
+        dataDate: record.dataDate,
+        // `payload` is deliberately typed `unknown` at this boundary (see
+        // ProviderRawRecord above) — every provider mapper already produces
+        // JSON-serializable data, so this cast just tells Prisma's
+        // InputJsonValue what TypeScript can't infer through `unknown`.
+        payload: record.payload as Prisma.InputJsonValue,
+      },
+      update: {
+        dataDate: record.dataDate,
+        payload: record.payload as Prisma.InputJsonValue,
+        fetchedAt: new Date(),
+      },
+    });
+    if (existingKeys.has(key)) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
   }
 
   return { created, updated };
