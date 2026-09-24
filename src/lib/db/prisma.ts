@@ -48,6 +48,12 @@ const pool: Pool =
 
 const adapter = new PrismaPg(pool);
 
+// Exported so a hot path can bypass Prisma Client / @prisma/adapter-pg
+// entirely and talk to Postgres directly when that's warranted — see
+// raw-record.service.ts's comment for why that turned out to be necessary
+// for the sync write path.
+export const dbPool: Pool = pool;
+
 export const prisma: PrismaClient =
   globalThis.__prisma__ ??
   new PrismaClient({
