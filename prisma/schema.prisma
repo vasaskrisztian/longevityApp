@@ -5,7 +5,22 @@
 // ==============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Driver adapters (node-postgres) hand all socket I/O to the well-tested
+  // `pg` package instead of Prisma's bundled Rust query engine. Switched to
+  // after diagnosing a production hang: sync jobs (and, separately, plain
+  // read queries from the web app) would freeze forever inside a DB write/
+  // read with Postgres itself reporting the connection as idle — i.e. the
+  // response had already arrived, but the engine's own async runtime never
+  // surfaced it back to Node, and critically this appeared to freeze the
+  // whole event loop (even our own 4-minute JS-level watchdog's setTimeout
+  // never fired). Adding `connect_timeout`/`socket_timeout` to DATABASE_URL
+  // did not help, which points at the engine's native (N-API) layer rather
+  // than anything a connection-string parameter can reach. `pg`'s pool
+  // (src/lib/db/prisma.ts) uses plain non-blocking Node sockets with TCP
+  // keepalive and explicit statement/query timeouts, none of which share
+  // that failure mode.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
