@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { dbPool } from '@/lib/db/prisma';
+import { runQuery } from '@/lib/db/run-query';
 import type { ProviderRawRecord, WearableProviderId } from '../domain/wearable-provider.types';
 
 /**
@@ -13,106 +14,30 @@ import type { ProviderRawRecord, WearableProviderId } from '../domain/wearable-p
  * Pool (src/lib/db/prisma.ts — not shared with Prisma Client) instead of
  * through Prisma Client / @prisma/adapter-pg.
  *
- * ROOT CAUSE OF THE "HANG" — FOUND: it was never Postgres, the network,
- * Prisma, or pg Pool bookkeeping. This function's previous diagnostic
- * version logged 4 separate console.error lines per record (connect /
- * query / release / pool-stats). A single day of HEART_RATE data alone is
- * 700+ records — 2800+ log lines emitted in well under a second. Node's
- * stdout/stderr are SYNCHRONOUS, BLOCKING writes when attached to a pipe on
- * Linux, which is exactly what a container's stdout is. Live testing
- * caught it in the act: Railway logged "rate limit of 500 logs/sec
- * reached... Messages dropped: 3101" and the worker's own log stream went
- * completely silent at that exact instant — no more log lines, ever, from
- * a process that had just been emitting hundreds per second. Once the
- * pipe's kernel buffer filled and Railway's collector stopped draining it
- * fast enough, the next console.error() call blocked forever waiting for
- * buffer space that was never coming back. That freezes the ENTIRE Node
- * event loop, not just I/O — including every `setTimeout` this codebase
- * had already added as a backstop (the 15s per-query timeout below, the
- * 4-minute per-job timeout in sync-job-runner.service.ts): a frozen event
- * loop cannot run a timer callback no matter how it's configured, which is
- * exactly why neither backstop had ever fired despite very long real
- * hangs. It also explains every other symptom collected across this
- * investigation: zero CPU (blocked in a syscall, not spinning), zero rows
- * in pg_stat_activity and TCP connections sitting ESTABLISHED-but-idle
- * (correct — the process never got as far as dispatching the next query;
- * it froze mid-write of the *previous* query's own completion log).
+ * WHY RAW SQL HERE AT ALL: see this repo's git history for the long trail,
+ * but the short version is that Prisma Client / @prisma/adapter-pg calls in
+ * this sync write path have repeatedly hung forever with zero trace in
+ * Postgres, and every attempt at bypassing Prisma for a given call has
+ * fixed that specific call. This function's own hang was fixed by moving
+ * it to hand-written SQL through `dbPool`.
  *
- * Fix: never log per record in a loop that can run into the hundreds or
- * thousands of iterations, full stop. storeRawRecords now logs exactly
- * once per call — a single summary line — plus an occasional warning only
- * when an individual connect()/query() step is slow enough to be
- * suspicious. Both are bounded and can never approach a logs/sec cap
- * regardless of batch size.
+ * A SEPARATE bug, also fixed here: this function's previous diagnostic
+ * version logged 4 separate console.error lines per record. A single day
+ * of HEART_RATE data alone is 700+ records — 2800+ log lines emitted in
+ * well under a second. Node's stdout/stderr are synchronous, blocking
+ * writes when attached to a pipe on Linux (exactly what a container's
+ * stdout is), and live testing caught Railway's own collector rate-limiting
+ * and dropping messages at that volume, at the exact moment the worker's
+ * log stream went dead. Once the pipe's kernel buffer fills and isn't being
+ * drained fast enough, the next console.error() call blocks forever — which
+ * freezes the entire Node event loop, including every setTimeout backstop.
+ * That mechanism was real and is fixed (see runQuery in
+ * src/lib/db/run-query.ts, shared with normalization.service.ts), but it
+ * turned out to be a second, independent problem layered on top of the
+ * Prisma one above — fixing it alone was not enough to make a full sync
+ * finish; see normalization.service.ts for where the Prisma hang actually
+ * was hiding all along.
  */
-
-const DB_QUERY_TIMEOUT_MS = 15_000;
-const SLOW_STEP_WARN_MS = 1_000;
-
-// A hard, unconditional backstop: `pg`'s own configured timeouts
-// (statement_timeout, query_timeout, connectionTimeoutMillis in prisma.ts)
-// only start counting once a query is actually dispatched over an
-// established connection, or once the pool has decided to open a new one.
-// They do nothing for a query stuck queued *inside the pool*, waiting for
-// a client to free up. This wraps any dbPool call in a plain setTimeout
-// race so it rejects on its own schedule no matter what layer is stuck —
-// note this itself cannot fire if the event loop is frozen (see the
-// top-of-file comment); it only helps for an actual stuck DB call.
-function withQueryTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(
-        new Error(
-          `storeRawRecords: "${label}" did not complete within ${DB_QUERY_TIMEOUT_MS}ms — ` +
-            `treating this as a hung pg call rather than waiting forever.`,
-        ),
-      );
-    }, DB_QUERY_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      },
-    );
-  });
-}
-
-/**
- * connect() + query() + release(), with logging strictly bounded: a
- * warning line only when a step is slow enough to be worth knowing about,
- * never one per call. See this file's top comment for why per-call logging
- * here was itself the cause of a very real, very confusing production
- * outage.
- */
-async function runQuery<T>(label: string, sql: string, values: unknown[]): Promise<{ rows: T[] }> {
-  const t0 = Date.now();
-  const client = await withQueryTimeout(dbPool.connect(), `${label} connect()`);
-  const connectMs = Date.now() - t0;
-  if (connectMs > SLOW_STEP_WARN_MS) {
-    // eslint-disable-next-line no-console -- deliberately not routed through
-    // the app's structured logger: this can fire outside any request/job
-    // context, and it's rare enough by design not to need one.
-    console.error(
-      `[db] ${label}: slow pool checkout (${connectMs}ms) — total=${dbPool.totalCount} idle=${dbPool.idleCount} waiting=${dbPool.waitingCount}`,
-    );
-  }
-  try {
-    const t1 = Date.now();
-    const result = await withQueryTimeout(client.query(sql, values), `${label} query()`);
-    const queryMs = Date.now() - t1;
-    if (queryMs > SLOW_STEP_WARN_MS) {
-      // eslint-disable-next-line no-console -- see comment above
-      console.error(`[db] ${label}: slow query (${queryMs}ms)`);
-    }
-    return result as { rows: T[] };
-  } finally {
-    client.release();
-  }
-}
 
 export async function storeRawRecords(params: {
   userId: string;
@@ -143,6 +68,7 @@ export async function storeRawRecords(params: {
   // happens in memory below.
   const dataTypes = Array.from(new Set(params.records.map((record) => record.dataType)));
   const { rows: existing } = await runQuery<{ dataType: string; externalId: string }>(
+    dbPool,
     'existence check',
     `select "dataType", "externalId"
        from wearable_raw_records
@@ -162,6 +88,7 @@ export async function storeRawRecords(params: {
     const key = `${record.dataType}:${record.externalId}`;
     // eslint-disable-next-line no-await-in-loop -- intentionally sequential; see comment above
     await runQuery(
+      dbPool,
       `upsert ${record.dataType}:${record.externalId}`,
       `insert into wearable_raw_records
          (id, "userId", "connectionId", provider, "dataType", "externalId", "dataDate", payload, "fetchedAt")

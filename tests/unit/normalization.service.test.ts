@@ -1,16 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WearableProviderAdapter } from '@/modules/wearable/domain/wearable-provider.types';
 
-const prismaMock = {
-  dailyHealthMetric: {
-    findUnique: vi.fn(),
-    upsert: vi.fn(),
-  },
-  workout: {
-    upsert: vi.fn(),
-  },
+// normalizeAndUpsertDailyMetrics/normalizeAndUpsertWorkouts talk to Postgres
+// directly through dbPool's connect()/query()/release() (see this file's
+// own top comment for why Prisma Client was removed from this path
+// entirely), so these tests mock the pool the same way
+// raw-record.service.test.ts does, rather than mocking a Prisma Client
+// shape.
+const clientMock = {
+  query: vi.fn(),
+  release: vi.fn(),
 };
-vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
+const poolMock = {
+  connect: vi.fn(),
+  totalCount: 1,
+  idleCount: 1,
+  waitingCount: 0,
+};
+vi.mock('@/lib/db/prisma', () => ({ dbPool: poolMock }));
 
 const { normalizeAndUpsertDailyMetrics, normalizeAndUpsertWorkouts } = await import(
   '@/modules/wearable/services/normalization.service'
@@ -36,6 +43,8 @@ function fakeAdapter(overrides: Partial<WearableProviderAdapter> = {}): Wearable
 
 beforeEach(() => {
   vi.clearAllMocks();
+  poolMock.connect.mockResolvedValue(clientMock);
+  clientMock.query.mockResolvedValue({ rows: [], rowCount: 0 });
 });
 
 describe('normalizeAndUpsertDailyMetrics', () => {
@@ -49,12 +58,10 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     });
 
     expect(result).toEqual({ datesUpserted: 0 });
-    expect(prismaMock.dailyHealthMetric.upsert).not.toHaveBeenCalled();
+    expect(poolMock.connect).not.toHaveBeenCalled();
   });
 
-  it('merges two records mapping to the same date into one upsert', async () => {
-    prismaMock.dailyHealthMetric.findUnique.mockResolvedValue(null);
-    prismaMock.dailyHealthMetric.upsert.mockResolvedValue({});
+  it('merges two records mapping to the same date into one upsert, carrying both fields', async () => {
     const adapter = fakeAdapter({
       mapToNormalizedFields: (record) => {
         if (record.dataType === 'DAILY_SLEEP') {
@@ -78,14 +85,15 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     });
 
     expect(result).toEqual({ datesUpserted: 1 });
-    expect(prismaMock.dailyHealthMetric.upsert).toHaveBeenCalledTimes(1);
-    const call = prismaMock.dailyHealthMetric.upsert.mock.calls[0]![0];
-    expect(call.create).toMatchObject({ userId: 'u1', date: DAY_1, sleepScore: 80, steps: 5000 });
+    expect(clientMock.query).toHaveBeenCalledTimes(1);
+    const [sql, values] = clientMock.query.mock.calls[0]!;
+    expect(sql).toMatch(/insert into daily_health_metrics/i);
+    expect(sql).toMatch(/"sleepScore"/);
+    expect(sql).toMatch(/"steps"/);
+    expect(values).toEqual([expect.any(String), 'u1', DAY_1, ['OURA'], 80, 5000]);
   });
 
   it('upserts one row per distinct date when records span multiple days', async () => {
-    prismaMock.dailyHealthMetric.findUnique.mockResolvedValue(null);
-    prismaMock.dailyHealthMetric.upsert.mockResolvedValue({});
     const adapter = fakeAdapter({
       mapToNormalizedFields: (record) => ({ date: record.dataDate, fields: { sleepScore: 70 } }),
     });
@@ -101,12 +109,10 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     });
 
     expect(result).toEqual({ datesUpserted: 2 });
-    expect(prismaMock.dailyHealthMetric.upsert).toHaveBeenCalledTimes(2);
+    expect(clientMock.query).toHaveBeenCalledTimes(2);
   });
 
-  it('adds the provider to sourceProviders without dropping providers already recorded for that date', async () => {
-    prismaMock.dailyHealthMetric.findUnique.mockResolvedValue({ sourceProviders: ['GARMIN'] });
-    prismaMock.dailyHealthMetric.upsert.mockResolvedValue({});
+  it('merges sourceProviders in SQL rather than a separate read, keeping providers already recorded for that date', async () => {
     const adapter = fakeAdapter({
       mapToNormalizedFields: () => ({ date: DAY_1, fields: { sleepScore: 80 } }),
     });
@@ -118,31 +124,17 @@ describe('normalizeAndUpsertDailyMetrics', () => {
       adapter,
     });
 
-    const call = prismaMock.dailyHealthMetric.upsert.mock.calls[0]![0];
-    expect(call.create.sourceProviders.sort()).toEqual(['GARMIN', 'OURA']);
-  });
-
-  it('does not duplicate the provider in sourceProviders when it is already present', async () => {
-    prismaMock.dailyHealthMetric.findUnique.mockResolvedValue({ sourceProviders: ['OURA'] });
-    prismaMock.dailyHealthMetric.upsert.mockResolvedValue({});
-    const adapter = fakeAdapter({
-      mapToNormalizedFields: () => ({ date: DAY_1, fields: { sleepScore: 80 } }),
-    });
-
-    await normalizeAndUpsertDailyMetrics({
-      userId: 'u1',
-      provider: 'OURA',
-      records: [{ dataType: 'DAILY_SLEEP', externalId: 's1', dataDate: DAY_1, payload: {} }],
-      adapter,
-    });
-
-    const call = prismaMock.dailyHealthMetric.upsert.mock.calls[0]![0];
-    expect(call.create.sourceProviders).toEqual(['OURA']);
+    // No separate findUnique-style read: exactly one query for the whole date.
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
+    const [sql, values] = clientMock.query.mock.calls[0]!;
+    // The merge (and de-dup) of sourceProviders with whatever the row
+    // already has happens in Postgres itself via ON CONFLICT, not in JS —
+    // this only inserts this call's own contribution.
+    expect(sql).toMatch(/"sourceProviders"\s*=\s*ARRAY\(\s*select distinct unnest/i);
+    expect(values[3]).toEqual(['OURA']);
   });
 
   it('upserts keyed on the (userId, date) compound constraint', async () => {
-    prismaMock.dailyHealthMetric.findUnique.mockResolvedValue(null);
-    prismaMock.dailyHealthMetric.upsert.mockResolvedValue({});
     const adapter = fakeAdapter({
       mapToNormalizedFields: () => ({ date: DAY_1, fields: { sleepScore: 80 } }),
     });
@@ -154,9 +146,28 @@ describe('normalizeAndUpsertDailyMetrics', () => {
       adapter,
     });
 
-    expect(prismaMock.dailyHealthMetric.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId_date: { userId: 'u1', date: DAY_1 } } }),
-    );
+    const [sql, values] = clientMock.query.mock.calls[0]!;
+    expect(sql).toMatch(/on conflict \("userId", date\)/i);
+    expect(values[1]).toBe('u1');
+    expect(values[2]).toBe(DAY_1);
+  });
+
+  it('releases the client even when the query rejects', async () => {
+    clientMock.query.mockRejectedValueOnce(new Error('boom'));
+    const adapter = fakeAdapter({
+      mapToNormalizedFields: () => ({ date: DAY_1, fields: { sleepScore: 80 } }),
+    });
+
+    await expect(
+      normalizeAndUpsertDailyMetrics({
+        userId: 'u1',
+        provider: 'OURA',
+        records: [{ dataType: 'DAILY_SLEEP', externalId: 's1', dataDate: DAY_1, payload: {} }],
+        adapter,
+      }),
+    ).rejects.toThrow('boom');
+
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -171,11 +182,10 @@ describe('normalizeAndUpsertWorkouts', () => {
     });
 
     expect(result).toEqual({ workoutsUpserted: 0 });
-    expect(prismaMock.workout.upsert).not.toHaveBeenCalled();
+    expect(poolMock.connect).not.toHaveBeenCalled();
   });
 
   it('upserts a workout keyed on the (provider, externalId) compound constraint', async () => {
-    prismaMock.workout.upsert.mockResolvedValue({});
     const adapter = fakeAdapter({
       mapToWorkout: () => ({
         externalId: 'w1',
@@ -197,15 +207,25 @@ describe('normalizeAndUpsertWorkouts', () => {
     });
 
     expect(result).toEqual({ workoutsUpserted: 1 });
-    expect(prismaMock.workout.upsert).toHaveBeenCalledWith({
-      where: { provider_externalId: { provider: 'OURA', externalId: 'w1' } },
-      create: expect.objectContaining({ userId: 'u1', provider: 'OURA', externalId: 'w1', activityType: 'running' }),
-      update: expect.objectContaining({ activityType: 'running' }),
-    });
+    const [sql, values] = clientMock.query.mock.calls[0]!;
+    expect(sql).toMatch(/insert into workouts/i);
+    expect(sql).toMatch(/on conflict \(provider, "externalId"\)/i);
+    expect(values).toEqual([
+      expect.any(String),
+      'u1',
+      'OURA',
+      'w1',
+      'running',
+      new Date('2026-01-15T17:00:00Z'),
+      new Date('2026-01-15T17:45:00Z'),
+      45,
+      380,
+      7500,
+      'moderate',
+    ]);
   });
 
   it('counts only the records that actually map to a workout', async () => {
-    prismaMock.workout.upsert.mockResolvedValue({});
     const adapter = fakeAdapter({
       mapToWorkout: (record) =>
         record.dataType === 'WORKOUT'
@@ -230,5 +250,28 @@ describe('normalizeAndUpsertWorkouts', () => {
     });
 
     expect(result).toEqual({ workoutsUpserted: 1 });
+    expect(clientMock.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends null for optional workout fields the adapter did not provide', async () => {
+    const adapter = fakeAdapter({
+      mapToWorkout: () => ({
+        externalId: 'w2',
+        activityType: 'walking',
+        startedAt: DAY_1,
+        endedAt: DAY_1,
+        durationMin: 20,
+      }),
+    });
+
+    await normalizeAndUpsertWorkouts({
+      userId: 'u1',
+      provider: 'OURA',
+      records: [{ dataType: 'WORKOUT', externalId: 'w2', dataDate: DAY_1, payload: {} }],
+      adapter,
+    });
+
+    const [, values] = clientMock.query.mock.calls[0]!;
+    expect(values.slice(-3)).toEqual([null, null, null]);
   });
 });
