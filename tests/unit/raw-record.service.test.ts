@@ -106,25 +106,44 @@ describe('storeRawRecords', () => {
     expect(prismaMock.wearableRawRecord.upsert).toHaveBeenCalledTimes(2);
   });
 
-  it('scopes the existence check to the connectionId and every (dataType, externalId) pair in the batch', async () => {
+  it('scopes the existence check to the connectionId and the distinct data types in the batch', async () => {
+    // Scoped by dataType IN (...) rather than a per-record OR of exact
+    // (dataType, externalId) pairs: a large batch (hundreds of heart-rate
+    // records) turned that OR array into a query slow enough to blow past
+    // the sync job's hard timeout in production. See raw-record.service.ts.
     prismaMock.wearableRawRecord.findMany.mockResolvedValue([]);
     prismaMock.wearableRawRecord.upsert.mockResolvedValue({});
 
     const records = [
       { dataType: 'DAILY_SLEEP' as const, externalId: 's1', dataDate: DAY, payload: {} },
       { dataType: 'SPO2' as const, externalId: 'sp1', dataDate: DAY, payload: {} },
+      { dataType: 'SPO2' as const, externalId: 'sp2', dataDate: DAY, payload: {} },
     ];
     await storeRawRecords({ userId: 'u1', connectionId: 'conn-1', provider: 'OURA', records });
 
     expect(prismaMock.wearableRawRecord.findMany).toHaveBeenCalledWith({
       where: {
         connectionId: 'conn-1',
-        OR: [
-          { dataType: 'DAILY_SLEEP', externalId: 's1' },
-          { dataType: 'SPO2', externalId: 'sp1' },
-        ],
+        dataType: { in: ['DAILY_SLEEP', 'SPO2'] },
       },
       select: { dataType: true, externalId: true },
     });
+  });
+
+  it('processes a large batch (more than one concurrency chunk) without dropping any record', async () => {
+    prismaMock.wearableRawRecord.findMany.mockResolvedValue([]);
+    prismaMock.wearableRawRecord.upsert.mockResolvedValue({});
+
+    const records = Array.from({ length: 63 }, (_, i) => ({
+      dataType: 'HEART_RATE' as const,
+      externalId: `hr-${i}`,
+      dataDate: DAY,
+      payload: {},
+    }));
+
+    const result = await storeRawRecords({ userId: 'u1', connectionId: 'conn-1', provider: 'OURA', records });
+
+    expect(result).toEqual({ created: 63, updated: 0 });
+    expect(prismaMock.wearableRawRecord.upsert).toHaveBeenCalledTimes(63);
   });
 });
