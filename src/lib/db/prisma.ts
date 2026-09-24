@@ -46,6 +46,33 @@ const pool: Pool =
     idleTimeoutMillis: 30_000,
   });
 
+// node-postgres's own docs are explicit about this: "the pool will emit an
+// error event if a client emits an error event unexpectedly... you should
+// register a listener on the pool to catch these errors". Without this
+// listener, a client that errors while sitting idle in the pool (e.g. its
+// TCP connection is silently reset by Railway's internal networking, or
+// Postgres itself closes it) can leave the pool's own bookkeeping thinking
+// a slot is still in use when the underlying connection is already gone.
+// The pool then has no free client to hand out and — critically — `pg`
+// has no default timeout for *waiting for a client to free up* (only for
+// establishing a brand-new one, via connectionTimeoutMillis below): a
+// `pool.query()` call queued behind a phantom slot like that waits
+// forever, with nothing ever reaching Postgres. That failure signature —
+// a hang with zero corresponding rows in pg_stat_activity, no pg-level
+// timeout ever firing, sequential vs. concurrent making no difference,
+// Prisma vs. raw `pg` making no difference — is exactly what was
+// reproduced live, repeatedly, on the sync write path. This listener
+// doesn't change query behavior; it just stops a dead idle client from
+// silently going unaccounted-for (and stops Node from crashing the whole
+// process on the unhandled 'error' event, which pg's docs also warn about).
+pool.on('error', (err) => {
+  // eslint-disable-next-line no-console -- deliberately not routed through
+  // the app's structured logger: this can fire outside any request/job
+  // context, and the point is a bare, always-visible signal in Railway's
+  // logs that the pool just recovered from a dead idle connection.
+  console.error('[pg pool] idle client error (pool continues; see prisma.ts comment)', err);
+});
+
 const adapter = new PrismaPg(pool);
 
 // Exported so a hot path can bypass Prisma Client / @prisma/adapter-pg

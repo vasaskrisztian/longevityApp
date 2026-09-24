@@ -11,28 +11,65 @@ import type { ProviderRawRecord, WearableProviderId } from '../domain/wearable-p
  *
  * This talks to Postgres directly through the shared `pg` Pool
  * (`dbPool`, from src/lib/db/prisma.ts) instead of through Prisma Client /
- * @prisma/adapter-pg. That's not a style choice: every previous attempt at
- * making this table's sync writes work through Prisma -- the bundled Rust
- * query engine, then @prisma/adapter-pg run concurrently, then
- * @prisma/adapter-pg run fully sequentially -- hung forever on the very
- * first query issued against wearable_raw_records, every single time,
- * reproduced across four separate live sync attempts in a row. In the same
- * attempts, sync.service.ts's *other* Prisma call against a different table
- * (ensureFreshAccessToken's read of wearable_connections, still going
- * through the same PrismaClient/adapter/pool) kept succeeding in single-digit
- * milliseconds every time. Live inspection during a hang showed
- * pg_stat_activity had ZERO rows from the app at all -- the freeze happens
- * before any query for this table ever reaches Postgres, i.e. somewhere in
- * Prisma Client's or the adapter's own request-building/dispatch path for
- * this specific query shape (large IN-array parameter and/or the compound
- * upsert), not in Postgres, not on the network, and not from concurrency.
- * Since the underlying `pg` Pool is proven fine -- it's the exact same pool
- * ensureFreshAccessToken's Prisma query uses, successfully, on every
- * attempt -- going straight through it with hand-written SQL sidesteps
- * whatever in Prisma Client / @prisma/adapter-pg was hanging. If this ever
- * needs to move back to Prisma, do it as its own follow-up with a live
- * verified sync, not bundled into an unrelated change.
+ * @prisma/adapter-pg. History, shortest version: the bundled Rust query
+ * engine, then @prisma/adapter-pg run concurrently, then @prisma/adapter-pg
+ * run fully sequentially, ALL hung forever on the very first query issued
+ * against wearable_raw_records — but so did this hand-written raw-`pg`
+ * version, on live re-test, with an identical symptom: pg_stat_activity
+ * showed ZERO rows from the app during the hang, every single time,
+ * regardless of which DB layer issued the query. Zero rows means the
+ * freeze isn't in Prisma, the adapter, Postgres, or the network at all —
+ * it's Node never even reaching the point of dispatching a query. The
+ * leading explanation (see prisma.ts's `pool.on('error', ...)` comment): a
+ * `pg` client that dies while idle in the pool without the pool being told
+ * can leave a phantom "in use" slot with no real connection behind it, and
+ * `pg` has no default timeout for a query that's queued waiting on a pool
+ * slot (only for establishing a brand-new connection) — so it waits
+ * forever. Two layers of defense here, since we can't yet prove which one
+ * actually fixes it without another live sync: prisma.ts's error listener
+ * aims at the suspected cause, and `withQueryTimeout` below is a hard
+ * backstop so that even if some other, still-unknown hang class exists,
+ * this function fails fast and lets BullMQ's existing retry policy take
+ * over instead of leaving the job (and the user) stuck forever. If this
+ * ever needs to move back to Prisma, do it as its own follow-up with a
+ * live verified sync, not bundled into an unrelated change.
  */
+
+const DB_QUERY_TIMEOUT_MS = 15_000;
+
+// A hard, unconditional backstop against exactly the failure class
+// described above: `pg`'s own configured timeouts (statement_timeout,
+// query_timeout, connectionTimeoutMillis in prisma.ts) only start counting
+// once a query is actually dispatched over an established connection, or
+// once the pool has decided to open a new one. They do nothing for a
+// query that's stuck queued *inside the pool*, waiting for a client to
+// free up, which is the state every live hang so far is consistent with.
+// This wraps any dbPool.query() call in a plain setTimeout race so it
+// rejects on its own schedule no matter what layer is actually stuck.
+function withQueryTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `storeRawRecords: "${label}" query did not complete within ${DB_QUERY_TIMEOUT_MS}ms — ` +
+            `treating this as a hung pg Pool checkout (see raw-record.service.ts's top comment) ` +
+            `rather than waiting forever.`,
+        ),
+      );
+    }, DB_QUERY_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
+}
+
 export async function storeRawRecords(params: {
   userId: string;
   connectionId: string;
@@ -59,12 +96,15 @@ export async function storeRawRecords(params: {
   // (cheap: two narrow columns, no payload) and the exact match still
   // happens in memory below.
   const dataTypes = Array.from(new Set(params.records.map((record) => record.dataType)));
-  const { rows: existing } = await dbPool.query<{ dataType: string; externalId: string }>(
-    `select "dataType", "externalId"
-       from wearable_raw_records
-      where "connectionId" = $1
-        and "dataType" = any($2::"WearableDataType"[])`,
-    [params.connectionId, dataTypes],
+  const { rows: existing } = await withQueryTimeout(
+    dbPool.query<{ dataType: string; externalId: string }>(
+      `select "dataType", "externalId"
+         from wearable_raw_records
+        where "connectionId" = $1
+          and "dataType" = any($2::"WearableDataType"[])`,
+      [params.connectionId, dataTypes],
+    ),
+    'existence check',
   );
   const existingKeys = new Set(existing.map((row) => `${row.dataType}:${row.externalId}`));
 
@@ -78,25 +118,28 @@ export async function storeRawRecords(params: {
   for (const record of params.records) {
     const key = `${record.dataType}:${record.externalId}`;
     // eslint-disable-next-line no-await-in-loop -- intentionally sequential; see comment above
-    await dbPool.query(
-      `insert into wearable_raw_records
-         (id, "userId", "connectionId", provider, "dataType", "externalId", "dataDate", payload, "fetchedAt")
-       values ($1, $2, $3, $4::"WearableProvider", $5::"WearableDataType", $6, $7::date, $8::jsonb, now())
-       on conflict ("connectionId", "dataType", "externalId")
-       do update set "dataDate" = excluded."dataDate", payload = excluded.payload, "fetchedAt" = now()`,
-      [
-        randomUUID(),
-        params.userId,
-        params.connectionId,
-        params.provider,
-        record.dataType,
-        record.externalId,
-        record.dataDate,
-        // `payload` is deliberately typed `unknown` at this boundary (see
-        // ProviderRawRecord above) — every provider mapper already produces
-        // JSON-serializable data, so a plain JSON.stringify is safe here.
-        JSON.stringify(record.payload),
-      ],
+    await withQueryTimeout(
+      dbPool.query(
+        `insert into wearable_raw_records
+           (id, "userId", "connectionId", provider, "dataType", "externalId", "dataDate", payload, "fetchedAt")
+         values ($1, $2, $3, $4::"WearableProvider", $5::"WearableDataType", $6, $7::date, $8::jsonb, now())
+         on conflict ("connectionId", "dataType", "externalId")
+         do update set "dataDate" = excluded."dataDate", payload = excluded.payload, "fetchedAt" = now()`,
+        [
+          randomUUID(),
+          params.userId,
+          params.connectionId,
+          params.provider,
+          record.dataType,
+          record.externalId,
+          record.dataDate,
+          // `payload` is deliberately typed `unknown` at this boundary (see
+          // ProviderRawRecord above) — every provider mapper already produces
+          // JSON-serializable data, so a plain JSON.stringify is safe here.
+          JSON.stringify(record.payload),
+        ],
+      ),
+      `upsert ${record.dataType}:${record.externalId}`,
     );
     if (existingKeys.has(key)) {
       updated += 1;
