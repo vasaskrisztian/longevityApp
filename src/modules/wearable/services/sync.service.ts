@@ -121,17 +121,33 @@ export async function runSyncForConnection(params: {
   // sequential ones (see raw-record.service.ts for the fuller writeup).
   // Until that's fixed upstream, nothing in this write path issues more
   // than one Prisma query at a time.
+  // Three checkpoints between the three writes below (in addition to
+  // db_write_start/db_write_done bracketing all of them) — added after a
+  // live sync completed storeRawRecords cleanly (proven fast and reliable
+  // on its own) and then still sat frozen with zero further progress and
+  // zero rows in pg_stat_activity. db_write_start/db_write_done alone
+  // can't say which of the three calls that freeze was in; these can.
   const { created, updated } = await storeRawRecords({
     userId: params.userId,
     connectionId: params.connectionId,
     provider: params.provider,
     records,
   });
+  logger.info('sync_job_stage', {
+    connectionId: params.connectionId,
+    stage: 'store_raw_records_done',
+    elapsedMs: Date.now() - writeStart,
+  });
   const { datesUpserted } = await normalizeAndUpsertDailyMetrics({
     userId: params.userId,
     provider: params.provider,
     records,
     adapter: params.adapter,
+  });
+  logger.info('sync_job_stage', {
+    connectionId: params.connectionId,
+    stage: 'normalize_daily_metrics_done',
+    elapsedMs: Date.now() - writeStart,
   });
   const { workoutsUpserted } = await normalizeAndUpsertWorkouts({
     userId: params.userId,
