@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WearableProviderAdapter } from '@/modules/wearable/domain/wearable-provider.types';
 
 // normalizeAndUpsertDailyMetrics/normalizeAndUpsertWorkouts talk to Postgres
-// directly through dbPool's connect()/query()/release() (see this file's
-// own top comment for why Prisma Client was removed from this path
-// entirely), so these tests mock the pool the same way
-// raw-record.service.test.ts does, rather than mocking a Prisma Client
-// shape.
+// directly through dbPool via withClient's single connect()/query()/
+// release() cycle per call (see this file's own top comment for why Prisma
+// Client, and later per-query checkout, were both removed from this path),
+// so these tests mock the pool the same way raw-record.service.test.ts
+// does, rather than mocking a Prisma Client shape.
 const clientMock = {
   query: vi.fn(),
   release: vi.fn(),
@@ -85,6 +85,7 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     });
 
     expect(result).toEqual({ datesUpserted: 1 });
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(1);
     const [sql, values] = clientMock.query.mock.calls[0]!;
     expect(sql).toMatch(/insert into daily_health_metrics/i);
@@ -93,7 +94,7 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     expect(values).toEqual([expect.any(String), 'u1', DAY_1, ['OURA'], 80, 5000]);
   });
 
-  it('upserts one row per distinct date when records span multiple days', async () => {
+  it('upserts one row per distinct date when records span multiple days, on a single checked-out client', async () => {
     const adapter = fakeAdapter({
       mapToNormalizedFields: (record) => ({ date: record.dataDate, fields: { sleepScore: 70 } }),
     });
@@ -109,7 +110,12 @@ describe('normalizeAndUpsertDailyMetrics', () => {
     });
 
     expect(result).toEqual({ datesUpserted: 2 });
+    // Two dates, two upserts, but only ONE connect()/release() — see
+    // run-query.ts's top comment for why per-query checkout on this shared
+    // pool turned out to be the sync write path's real, final hang.
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(2);
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
   });
 
   it('merges sourceProviders in SQL rather than a separate read, keeping providers already recorded for that date', async () => {
@@ -126,6 +132,7 @@ describe('normalizeAndUpsertDailyMetrics', () => {
 
     // No separate findUnique-style read: exactly one query for the whole date.
     expect(poolMock.connect).toHaveBeenCalledTimes(1);
+    expect(clientMock.query).toHaveBeenCalledTimes(1);
     const [sql, values] = clientMock.query.mock.calls[0]!;
     // The merge (and de-dup) of sourceProviders with whatever the row
     // already has happens in Postgres itself via ON CONFLICT, not in JS —
@@ -207,6 +214,7 @@ describe('normalizeAndUpsertWorkouts', () => {
     });
 
     expect(result).toEqual({ workoutsUpserted: 1 });
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     const [sql, values] = clientMock.query.mock.calls[0]!;
     expect(sql).toMatch(/insert into workouts/i);
     expect(sql).toMatch(/on conflict \(provider, "externalId"\)/i);
@@ -225,7 +233,7 @@ describe('normalizeAndUpsertWorkouts', () => {
     ]);
   });
 
-  it('counts only the records that actually map to a workout', async () => {
+  it('counts only the records that actually map to a workout, on a single checked-out client', async () => {
     const adapter = fakeAdapter({
       mapToWorkout: (record) =>
         record.dataType === 'WORKOUT'
@@ -250,7 +258,9 @@ describe('normalizeAndUpsertWorkouts', () => {
     });
 
     expect(result).toEqual({ workoutsUpserted: 1 });
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(1);
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
   });
 
   it('sends null for optional workout fields the adapter did not provide', async () => {
@@ -273,5 +283,33 @@ describe('normalizeAndUpsertWorkouts', () => {
 
     const [, values] = clientMock.query.mock.calls[0]!;
     expect(values.slice(-3)).toEqual([null, null, null]);
+  });
+
+  it('releases the client even when a query rejects partway through a multi-workout batch', async () => {
+    clientMock.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    clientMock.query.mockRejectedValueOnce(new Error('boom'));
+    const adapter = fakeAdapter({
+      mapToWorkout: (record) => ({
+        externalId: record.externalId,
+        activityType: 'running',
+        startedAt: DAY_1,
+        endedAt: DAY_1,
+        durationMin: 30,
+      }),
+    });
+
+    await expect(
+      normalizeAndUpsertWorkouts({
+        userId: 'u1',
+        provider: 'OURA',
+        records: [
+          { dataType: 'WORKOUT', externalId: 'w1', dataDate: DAY_1, payload: {} },
+          { dataType: 'WORKOUT', externalId: 'w2', dataDate: DAY_1, payload: {} },
+        ],
+        adapter,
+      }),
+    ).rejects.toThrow('boom');
+
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
   });
 });

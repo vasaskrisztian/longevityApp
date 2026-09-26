@@ -45,10 +45,13 @@ describe('storeRawRecords', () => {
       records: [{ dataType: 'DAILY_SLEEP', externalId: 's1', dataDate: DAY, payload: { score: 80 } }],
     });
 
-    // First call is the existence check, second is the upsert. Each
-    // acquires and releases its own client (connect()+query()+release()).
+    // One client checked out for the whole call (see run-query.ts's top
+    // comment for why per-query checkout used to be the real hang) --
+    // first query is the existence check, second is the upsert, both
+    // against that single client.
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(2);
-    expect(clientMock.release).toHaveBeenCalledTimes(2);
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
     const [upsertSql, upsertParams] = clientMock.query.mock.calls[1]!;
     expect(upsertSql).toMatch(/insert into wearable_raw_records/i);
     expect(upsertSql).toMatch(/on conflict \("connectionId", "dataType", "externalId"\)/i);
@@ -106,7 +109,8 @@ describe('storeRawRecords', () => {
     });
 
     expect(result).toEqual({ created: 1, updated: 1 });
-    // 1 existence check + 2 upserts.
+    // 1 existence check + 2 upserts, all against the one checked-out client.
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(3);
   });
 
@@ -130,7 +134,7 @@ describe('storeRawRecords', () => {
     expect(existenceParams).toEqual(['conn-1', ['DAILY_SLEEP', 'SPO2']]);
   });
 
-  it('processes a large batch without dropping any record, one upsert at a time', async () => {
+  it('processes a large batch without dropping any record, one upsert at a time, on a single checked-out client', async () => {
     clientMock.query.mockResolvedValue({ rows: [], rowCount: 0 });
 
     const records = Array.from({ length: 63 }, (_, i) => ({
@@ -143,8 +147,27 @@ describe('storeRawRecords', () => {
     const result = await storeRawRecords({ userId: 'u1', connectionId: 'conn-1', provider: 'OURA', records });
 
     expect(result).toEqual({ created: 63, updated: 0 });
-    // 1 existence check + 63 upserts.
+    // 1 existence check + 63 upserts, but only ONE connect()/release() —
+    // see run-query.ts's top comment for why per-query checkout is exactly
+    // what this test now guards against regressing to.
+    expect(poolMock.connect).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenCalledTimes(64);
-    expect(clientMock.release).toHaveBeenCalledTimes(64);
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the client even when a query rejects partway through the batch', async () => {
+    clientMock.query.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // existence check
+    clientMock.query.mockRejectedValueOnce(new Error('boom')); // first upsert fails
+
+    await expect(
+      storeRawRecords({
+        userId: 'u1',
+        connectionId: 'conn-1',
+        provider: 'OURA',
+        records: [{ dataType: 'DAILY_SLEEP', externalId: 's1', dataDate: DAY, payload: {} }],
+      }),
+    ).rejects.toThrow('boom');
+
+    expect(clientMock.release).toHaveBeenCalledTimes(1);
   });
 });
