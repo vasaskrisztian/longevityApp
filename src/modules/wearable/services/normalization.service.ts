@@ -101,7 +101,19 @@ export async function normalizeAndUpsertDailyMetrics(params: {
   }
 
   return withClient(dbPool, `normalizeAndUpsertDailyMetrics ${params.userId}`, async (query) => {
+    // TEMPORARY, DELIBERATE diagnostic — pool.connect() itself has now been
+    // proven fast (0-24ms) on two separate live sync attempts under this
+    // exact deployment, yet both attempts still froze somewhere after that,
+    // with the sync_jobs row stuck in RUNNING and zero pg_stat_activity rows
+    // for minutes afterward. Nothing has ever logged what happens *inside*
+    // this loop before now, so it's entirely possible the freeze is on one
+    // specific date's query() call, not on entry or on connect(). Bounded:
+    // at most one pair of lines per distinct date in this sync window
+    // (single digits to low tens in practice), never per raw record.
+    const totalDates = fieldsByDateKey.size;
+    let dateIndex = 0;
     for (const { date, fields } of fieldsByDateKey.values()) {
+      dateIndex += 1;
       const presentColumns = DAILY_METRIC_COLUMNS.filter((column) => fields[column] !== undefined);
       const dynamicValues = presentColumns.map((column) => fields[column]);
       const dynamicPlaceholders = presentColumns.map((column, i) => {
@@ -110,6 +122,10 @@ export async function normalizeAndUpsertDailyMetrics(params: {
       });
       const insertColumnsSql = presentColumns.map((column) => `"${column}"`).join(', ');
       const updateSetSql = presentColumns.map((column) => `"${column}" = excluded."${column}"`).join(', ');
+
+      const dateT0 = Date.now();
+      // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output (see comment above)
+      console.error(`[db] normalizeAndUpsertDailyMetrics ${params.userId}: upserting date ${dateIndex}/${totalDates} (${date.toISOString().slice(0, 10)})`);
 
       // eslint-disable-next-line no-await-in-loop -- one upsert per distinct date in this batch (at most the number of days in the sync window), against the single client checked out above; no benefit to parallelizing writes to the same table
       await query(
@@ -124,6 +140,9 @@ export async function normalizeAndUpsertDailyMetrics(params: {
            "updatedAt" = now()`,
         [randomUUID(), params.userId, date, [params.provider], ...dynamicValues],
       );
+
+      // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+      console.error(`[db] normalizeAndUpsertDailyMetrics ${params.userId}: date ${dateIndex}/${totalDates} done in ${Date.now() - dateT0}ms`);
     }
 
     return { datesUpserted: fieldsByDateKey.size };
@@ -146,7 +165,17 @@ export async function normalizeAndUpsertWorkouts(params: {
   }
 
   return withClient(dbPool, `normalizeAndUpsertWorkouts ${params.userId}`, async (query) => {
+    // TEMPORARY, DELIBERATE diagnostic — same rationale as the per-date log
+    // in normalizeAndUpsertDailyMetrics above: bounded to one pair of lines
+    // per workout in this sync window (never per raw record).
+    const totalWorkouts = workouts.length;
+    let workoutIndex = 0;
     for (const workout of workouts) {
+      workoutIndex += 1;
+      const workoutT0 = Date.now();
+      // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+      console.error(`[db] normalizeAndUpsertWorkouts ${params.userId}: upserting workout ${workoutIndex}/${totalWorkouts} (${workout.externalId})`);
+
       // eslint-disable-next-line no-await-in-loop -- same rationale as normalizeAndUpsertDailyMetrics: small batch, sequential, single checked-out client
       await query(
         `insert into workouts
@@ -175,6 +204,9 @@ export async function normalizeAndUpsertWorkouts(params: {
           workout.intensity ?? null,
         ],
       );
+
+      // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+      console.error(`[db] normalizeAndUpsertWorkouts ${params.userId}: workout ${workoutIndex}/${totalWorkouts} done in ${Date.now() - workoutT0}ms`);
     }
 
     return { workoutsUpserted: workouts.length };
