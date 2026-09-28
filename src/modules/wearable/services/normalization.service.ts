@@ -73,6 +73,14 @@ export async function normalizeAndUpsertDailyMetrics(params: {
   records: ProviderRawRecord[];
   adapter: WearableProviderAdapter;
 }): Promise<{ datesUpserted: number }> {
+  // TEMPORARY, DELIBERATE diagnostic — one line per call (not per record), so
+  // this is safe from the log-rate-limit regression that per-record logging
+  // caused earlier. Added to confirm this function is actually being entered
+  // (and see how large its record batch is) at the exact point the sync
+  // write path has repeatedly frozen, right after storeRawRecords finishes.
+  // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+  console.error(`[db] normalizeAndUpsertDailyMetrics: entered with ${params.records.length} records for userId=${params.userId}`);
+
   const fieldsByDateKey = new Map<string, { date: Date; fields: NormalizedDailyMetricFields }>();
 
   for (const record of params.records) {

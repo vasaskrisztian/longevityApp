@@ -92,8 +92,21 @@ export async function withClient<T>(
   fn: (query: BatchQuery) => Promise<T>,
 ): Promise<T> {
   const t0 = Date.now();
+  // TEMPORARY, DELIBERATE diagnostic — safe here because withClient() is
+  // called at most ~2-3 times per sync (once per write function), never once
+  // per record, so this can never approach the log-rate-limit regression
+  // that per-record logging caused earlier. Added specifically to pin down
+  // whether the sync write path's freeze is inside this pool.connect() call
+  // itself or somewhere else entirely — see this file's top comment for the
+  // full history of what's already been ruled out.
+  // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+  console.error(
+    `[db] ${label}: calling pool.connect() total=${pool.totalCount} idle=${pool.idleCount} waiting=${pool.waitingCount}`,
+  );
   const client = await withTimeout(pool.connect(), DB_CONNECT_TIMEOUT_MS, `${label} connect()`);
   const connectMs = Date.now() - t0;
+  // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+  console.error(`[db] ${label}: pool.connect() returned after ${connectMs}ms`);
   if (connectMs > SLOW_STEP_WARN_MS) {
     // eslint-disable-next-line no-console -- deliberately not routed through
     // the app's structured logger: this can fire outside any request/job
