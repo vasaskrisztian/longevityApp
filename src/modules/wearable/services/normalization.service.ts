@@ -211,6 +211,35 @@ export async function normalizeAndUpsertWorkouts(params: {
       // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
       console.error(`[db] normalizeAndUpsertWorkouts ${params.userId}: upserting workout ${workoutIndex}/${totalWorkouts} (${workout.externalId})`);
 
+      // TEMPORARY, DELIBERATE diagnostic — same rationale as
+      // normalizeAndUpsertDailyMetrics's per-date value report: after the
+      // DAILY_SLEEP Invalid Date/NaN fix, a live sync got past every date
+      // for the first time ever, then froze again at this exact point --
+      // "upserting workout 1/48" logs, the query() call after it never
+      // completes, and pg_stat_activity shows no trace of the app (the same
+      // signature as every earlier freeze in this investigation, on data
+      // that turned out this time to look well-formed except for
+      // `calories` being a non-integer float going into an `integer`
+      // column). Reporting every dynamic value here, in the same
+      // try/catch-guarded, one-line-per-workout shape as the dates
+      // diagnostic, in case something else is still hiding in this record.
+      try {
+        const workoutValueReport = [
+          `startedAt=Date(${Number.isNaN(workout.startedAt.getTime()) ? 'INVALID' : workout.startedAt.toISOString()})`,
+          `endedAt=Date(${Number.isNaN(workout.endedAt.getTime()) ? 'INVALID' : workout.endedAt.toISOString()})`,
+          `durationMin=${Number.isNaN(workout.durationMin) ? 'NaN' : workout.durationMin}`,
+          `calories=${workout.calories === undefined ? 'undefined' : Number.isNaN(workout.calories) ? 'NaN' : workout.calories}`,
+          `distanceM=${workout.distanceM === undefined ? 'undefined' : Number.isNaN(workout.distanceM) ? 'NaN' : workout.distanceM}`,
+          `intensity=${JSON.stringify(workout.intensity)}`,
+          `activityType=${JSON.stringify(workout.activityType)}`,
+        ].join(', ');
+        // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+        console.error(`[db] normalizeAndUpsertWorkouts ${params.userId}: workout ${workoutIndex}/${totalWorkouts} values: ${workoutValueReport}`);
+      } catch (reportError) {
+        // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+        console.error(`[db] normalizeAndUpsertWorkouts ${params.userId}: workout ${workoutIndex}/${totalWorkouts} value report itself failed: ${(reportError as Error).message}`);
+      }
+
       // eslint-disable-next-line no-await-in-loop -- same rationale as normalizeAndUpsertDailyMetrics: small batch, sequential, single checked-out client
       await query(
         `insert into workouts

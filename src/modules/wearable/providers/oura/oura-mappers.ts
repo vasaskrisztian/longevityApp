@@ -117,7 +117,13 @@ export function mapOuraRecordToWorkout(record: ProviderRawRecord): NormalizedWor
     startedAt,
     endedAt,
     durationMin: Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000)),
-    calories: payload.calories ?? undefined,
+    // `workouts.calories` is a Postgres `integer` column, but Oura reports
+    // calories as a float (e.g. 101.2193374633789) -- rounding here matches
+    // the same "make the mapper's output actually match the column type"
+    // fix applied to the DAILY_SLEEP case above, instead of letting `pg`
+    // send a non-integer string to an integer column and finding out what
+    // happens on the wire.
+    calories: payload.calories !== undefined ? Math.round(payload.calories) : undefined,
     distanceM: payload.distance ?? undefined,
     intensity: payload.intensity ?? undefined,
   };
