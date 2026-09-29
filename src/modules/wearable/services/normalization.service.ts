@@ -127,6 +127,41 @@ export async function normalizeAndUpsertDailyMetrics(params: {
       // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output (see comment above)
       console.error(`[db] normalizeAndUpsertDailyMetrics ${params.userId}: upserting date ${dateIndex}/${totalDates} (${date.toISOString().slice(0, 10)})`);
 
+      // TEMPORARY, DELIBERATE diagnostic — every prior diagnostic bracketed
+      // this query() call from the outside (before/after) and always showed
+      // the exact same result: the "before" line above logs fine, the
+      // "after" line (below) never does, no matter what's been rewritten in
+      // the surrounding pool/connection code. That points at the *value*
+      // being sent, not the mechanics of sending it. bedtimeStart/bedtimeEnd
+      // are the only two columns in this insert built from `new Date(...)`
+      // (oura-mappers.ts's DAILY_SLEEP case) rather than a plain number, and
+      // an Oura payload missing bedtime_start/bedtime_end (confirmed present
+      // in this exact user's raw DAILY_SLEEP data for one specific date)
+      // silently produces a JS Invalid Date, not a thrown error. Logging
+      // each dynamic value's type/validity here, in a try/catch so this
+      // diagnostic itself can never crash the loop, is a single bounded line
+      // per date -- the same safety guarantee as every other diagnostic in
+      // this file.
+      try {
+        const valueReport = presentColumns
+          .map((column, i) => {
+            const value = dynamicValues[i];
+            if (value instanceof Date) {
+              return `${column}=Date(${Number.isNaN(value.getTime()) ? 'INVALID' : value.toISOString()})`;
+            }
+            if (typeof value === 'number' && Number.isNaN(value)) {
+              return `${column}=NaN`;
+            }
+            return `${column}=${JSON.stringify(value)}`;
+          })
+          .join(', ');
+        // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+        console.error(`[db] normalizeAndUpsertDailyMetrics ${params.userId}: date ${dateIndex}/${totalDates} values: ${valueReport}`);
+      } catch (reportError) {
+        // eslint-disable-next-line no-console -- deliberate, bounded diagnostic output
+        console.error(`[db] normalizeAndUpsertDailyMetrics ${params.userId}: date ${dateIndex}/${totalDates} value report itself failed: ${(reportError as Error).message}`);
+      }
+
       // eslint-disable-next-line no-await-in-loop -- one upsert per distinct date in this batch (at most the number of days in the sync window), against the single client checked out above; no benefit to parallelizing writes to the same table
       await query(
         `insert into daily_health_metrics
