@@ -18,8 +18,25 @@ import type {
  * upsert the result without ever knowing what an Oura payload looks like.
  */
 
-function secondsToMinutes(seconds: number): number {
-  return Math.round(seconds / 60);
+// Oura payloads for this dataType are not always shaped the way the type
+// declares: a live-confirmed production case had a record tagged
+// DAILY_SLEEP whose payload was actually shaped like a DAILY_READINESS
+// record (contributors.*, no bedtime_start/bedtime_end/total_sleep_duration
+// at all). `new Date(undefined)` silently builds an Invalid Date (no
+// throw), and `Math.round(undefined / 60)` silently builds NaN — both sail
+// straight through normalization.service.ts's `!== undefined` filter and
+// out to the database, and were confirmed (via a temporary diagnostic) to
+// be the values sent right before the sync write path's long-standing
+// freeze. Every field below is therefore built to fall back to `undefined`
+// on a missing source value, not to a computed placeholder, so a
+// malformed/partial payload just contributes fewer fields to this date's
+// merge instead of poisoning it with Invalid Date/NaN.
+function secondsToMinutes(seconds: number | undefined): number | undefined {
+  return seconds === undefined ? undefined : Math.round(seconds / 60);
+}
+
+function toDateOrUndefined(value: string | undefined): Date | undefined {
+  return value ? new Date(value) : undefined;
 }
 
 export function mapOuraRecordToDailyMetric(record: ProviderRawRecord): NormalizedDailyMetric | null {
@@ -37,8 +54,8 @@ export function mapOuraRecordToDailyMetric(record: ProviderRawRecord): Normalize
           awakeMinutes: secondsToMinutes(payload.awake_time),
           sleepEfficiencyPct: payload.efficiency,
           sleepLatencyMinutes: secondsToMinutes(payload.latency),
-          bedtimeStart: new Date(payload.bedtime_start),
-          bedtimeEnd: new Date(payload.bedtime_end),
+          bedtimeStart: toDateOrUndefined(payload.bedtime_start),
+          bedtimeEnd: toDateOrUndefined(payload.bedtime_end),
           restingHeartRate: payload.lowest_heart_rate,
           averageHrv: payload.average_hrv,
         },
