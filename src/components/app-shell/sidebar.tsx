@@ -52,21 +52,22 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1.5">
         {NAV_ITEMS.filter((item) => !item.hidden && (!item.adminOnly || isAdmin)).map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'group relative flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                 active
                   ? 'bg-gradient-to-r from-primary to-primary-dark text-primary-foreground shadow-glow'
                   : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent/10 hover:text-primary',
               )}
             >
-              <span
+              <Icon
                 className={cn(
-                  'h-1.5 w-1.5 shrink-0 rounded-full transition-colors',
-                  active ? 'bg-accent-light' : 'bg-transparent group-hover:bg-accent/60',
+                  'h-[18px] w-[18px] shrink-0 transition-colors',
+                  active ? 'text-accent-light' : 'text-muted-foreground/70 group-hover:text-accent',
                 )}
                 aria-hidden="true"
               />
