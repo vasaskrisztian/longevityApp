@@ -1,19 +1,6 @@
 import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
-import { getTrend } from '@/modules/dashboard/dashboard.service';
-import { TrendCharts, type TrendPointDTO } from './trend-charts';
-
-function toDTO(point: Awaited<ReturnType<typeof getTrend>>[number]): TrendPointDTO {
-  return {
-    date: point.date.toISOString().slice(0, 10),
-    sleepScore: point.sleepScore,
-    readinessScore: point.readinessScore,
-    activityScore: point.activityScore,
-    totalSleepMinutes: point.totalSleepMinutes,
-    restingHeartRate: point.restingHeartRate,
-    averageHrv: point.averageHrv,
-    steps: point.steps,
-  };
-}
+import { getTrend, toTrendPointDTO } from '@/modules/dashboard/dashboard.service';
+import { TrendCharts } from './trend-charts';
 
 export default async function TrendsPage() {
   const user = await requireAuthenticatedUserForPage();
@@ -28,7 +15,7 @@ export default async function TrendsPage() {
           steps over the last 7 or 30 days.
         </p>
       </div>
-      <TrendCharts initialRange={7} initialPoints={initialTrend.map(toDTO)} />
+      <TrendCharts initialRange={7} initialPoints={initialTrend.map(toTrendPointDTO)} />
     </div>
   );
 }

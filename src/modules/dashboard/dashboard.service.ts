@@ -34,6 +34,25 @@ export interface TrendPoint extends DailyMetricFields {
   date: Date;
 }
 
+/** `TrendPoint` with `date` serialized to a plain `yyyy-mm-dd` string, the
+ * shape the trends UI (trend-charts.tsx's TrendPointDTO) expects over the
+ * wire. Both the server-rendered trends page and the client-side
+ * /api/dashboard/trends route (used when switching the 7/30-day toggle)
+ * must produce this same shape -- the route used to hand back raw `Date`
+ * objects, which `Response.json` serializes to a full ISO *datetime*
+ * string (e.g. "2026-09-23T00:00:00.000Z"). trend-charts.tsx's
+ * formatDateLabel appended its own "T00:00:00Z" suffix assuming a
+ * date-only string, so a full datetime string became a malformed
+ * double-suffixed one and silently parsed as Invalid Date on every chart
+ * x-axis after a range switch. */
+export interface TrendPointDTO extends DailyMetricFields {
+  date: string;
+}
+
+export function toTrendPointDTO(point: TrendPoint): TrendPointDTO {
+  return { ...point, date: point.date.toISOString().slice(0, 10) };
+}
+
 function utcMidnight(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }

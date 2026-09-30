@@ -18,8 +18,15 @@ vi.mock('@/lib/auth/authorization', () => ({
 }));
 
 const getTrendMock = vi.fn();
+// Mirrors the real toTrendPointDTO (dashboard.service.ts): serializes `date`
+// to a plain yyyy-mm-dd string, the exact behavior the "Invalid Date" trend
+// chart bug fix depends on (see that file's comment on toTrendPointDTO).
+function toTrendPointDTOMock(point: { date: Date; [key: string]: unknown }) {
+  return { ...point, date: point.date.toISOString().slice(0, 10) };
+}
 vi.mock('@/modules/dashboard/dashboard.service', () => ({
   getTrend: getTrendMock,
+  toTrendPointDTO: toTrendPointDTOMock,
 }));
 
 const { GET } = await import('@/app/api/dashboard/trends/route');
@@ -89,5 +96,21 @@ describe('GET /api/dashboard/trends', () => {
     const body = await response.json();
     expect(body).toHaveLength(1);
     expect(getTrendMock.mock.calls[0]![0]).toBe('u1');
+  });
+
+  it('serializes each point\'s date as a plain yyyy-mm-dd string, not a full ISO datetime', async () => {
+    // Regression test: this route used to return raw Date objects, which
+    // Response.json serializes to a full ISO *datetime* string
+    // ("2026-06-15T00:00:00.000Z") -- trend-charts.tsx's formatDateLabel
+    // assumed a date-only string and appended its own "T00:00:00Z" suffix,
+    // producing a malformed, doubly-suffixed string that silently parsed as
+    // Invalid Date on every chart's x-axis after a 7/30-day range switch.
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getTrendMock.mockResolvedValue([{ date: new Date('2026-06-15T00:00:00.000Z'), sleepScore: 80 }]);
+
+    const response = await GET(req('?range=7'));
+
+    const body = await response.json();
+    expect(body[0].date).toBe('2026-06-15');
   });
 });

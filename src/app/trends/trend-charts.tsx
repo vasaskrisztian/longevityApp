@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 const SLEEP_COLOR = '#2a78d6';
 const READINESS_COLOR = '#eb6834';
 const ACTIVITY_COLOR = '#1baf7a';
-const METRIC_COLOR = '#0F4C42'; // Tailwind `primary` (tailwind.config.ts)
+const METRIC_COLOR = '#2F4A38'; // Tailwind `primary` (tailwind.config.ts) — brand forest green
 
 export interface TrendPointDTO {
   date: string; // ISO yyyy-mm-dd
@@ -45,7 +45,14 @@ const RANGES = [7, 30] as const;
 type Range = (typeof RANGES)[number];
 
 function formatDateLabel(iso: string): string {
-  const date = new Date(`${iso}T00:00:00Z`);
+  // Defensive against either a plain "yyyy-mm-dd" string or a full ISO
+  // datetime string ("yyyy-mm-ddTHH:mm:ss.sssZ") -- both are 10+ characters
+  // starting with the date, so slicing to the first 10 before appending
+  // the UTC-midnight suffix normalizes either shape instead of producing a
+  // malformed, doubly-suffixed string (see toTrendPointDTO's comment in
+  // dashboard.service.ts for how the datetime-shaped case used to reach
+  // here and render as "Invalid Date").
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
