@@ -105,6 +105,15 @@ enum GoalStatus {
   ABANDONED
 }
 
+// The three metrics a Challenge can be defined against — see the Challenge
+// model's own doc comment for the "X occurrences of <metric> above Y, within
+// Z days" shape this drives.
+enum ChallengeType {
+  SLEEP_SCORE
+  DAILY_STEPS
+  WEEKLY_WORKOUTS
+}
+
 enum SupplementFrequency {
   DAILY
   TWICE_DAILY
@@ -203,6 +212,7 @@ model User {
   supplements         Supplement[]
   goals               Goal[]
   protocols           Protocol[]
+  challenges          Challenge[]
   inBodyMeasurements  InBodyMeasurement[]
   wearableConnections WearableConnection[]
   dailyHealthMetrics  DailyHealthMetric[]
@@ -377,6 +387,48 @@ model ProtocolSupplement {
 
   @@index([protocolId])
   @@map("protocol_supplements")
+}
+
+/// A time-boxed, pass/fail commitment: "reach `requiredCount` days/weeks
+/// where `type`'s metric exceeds `threshold`, within `windowDays` of
+/// activation." Unlike Protocol (an ongoing target with no end date), a
+/// Challenge has a hard expiry once activated and a pass/fail outcome —
+/// but that outcome is computed on read (see challenges.service.ts's
+/// computeProgress), not stored as a status column, matching this
+/// codebase's preference for derived state over stored state that can
+/// drift (dashboard.service.ts's getWeeklyWorkoutCount does the same). A
+/// user can have several challenges active at once — nothing here demotes
+/// another row, unlike Protocol's single-active invariant.
+model Challenge {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type          ChallengeType
+  // Optional custom label; the UI derives a readable description from the
+  // fields below when this is blank (e.g. "5 nights above 80 sleep score,
+  // within 14 days").
+  name          String?
+
+  requiredCount Int
+  threshold     Int
+  windowDays    Int
+
+  // Both null until the user starts the challenge (activateChallenge) — a
+  // challenge can be configured ahead of time and started whenever the user
+  // is ready, since the expiry is relative to activation, not creation.
+  // Once set, the challenge's own fields become read-only (enforced in the
+  // [id] route, not here) — changing the terms mid-challenge would defeat
+  // the point of committing to it.
+  activatedAt   DateTime?
+  expiresAt     DateTime?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([userId, activatedAt])
+  @@map("challenges")
 }
 
 /// A single InBody body-composition scan, entered by uploading a photo/scan
