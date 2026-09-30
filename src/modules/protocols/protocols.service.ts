@@ -34,7 +34,14 @@ export async function getActiveProtocol(userId: string): Promise<ProtocolWithSup
   });
 }
 
-function stripSupplementId(supplement: { id?: string }) {
+// Generic so the return type keeps every field of the supplement input
+// (name, dosage, unit, frequency, timing) rather than collapsing to `{}` --
+// a plain `{ id?: string }` parameter type only tells TS about `id`, so a
+// non-generic version loses `rest`'s other properties from Prisma's point
+// of view even though they're present at runtime. Caught by Railway's build
+// (its @prisma/client has real generated types), not by this sandbox's or
+// the device's stubbed client -- see docs/phase-1-summary.md.
+function stripSupplementId<T extends { id?: string }>(supplement: T): Omit<T, 'id'> {
   const { id: _id, ...rest } = supplement;
   return rest;
 }
