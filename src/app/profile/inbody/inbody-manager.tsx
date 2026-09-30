@@ -366,8 +366,22 @@ function UploadForm({ onUploaded }: { onUploaded: (m: InBodyMeasurementDTO) => v
     const formData = new FormData();
     formData.set('image', file);
 
+    // The server gives OCR up to 90s before it gives up and returns an
+    // error (see inbody-ocr.service.ts's OCR_TIMEOUT_MS) rather than
+    // hanging forever on a stuck native call. This client-side abort is a
+    // second line of defense at a slightly longer bound, so a request that
+    // never gets a response at all -- a dropped connection, a proxy that
+    // swallows it silently -- still turns into a visible error instead of
+    // an upload button that spins forever with nothing ever saved.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 100_000);
+
     try {
-      const response = await fetch('/api/inbody', { method: 'POST', body: formData });
+      const response = await fetch('/api/inbody', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(body?.error ?? 'upload failed');
@@ -382,9 +396,14 @@ function UploadForm({ onUploaded }: { onUploaded: (m: InBodyMeasurementDTO) => v
               .map((f) => f.label)
               .join(', ')}. Use Edit on the new entry to fill those in.`,
       );
-    } catch {
-      setError('Could not process that image. Please try a clearer photo of the report.');
+    } catch (err) {
+      setError(
+        err instanceof DOMException && err.name === 'AbortError'
+          ? 'This is taking far longer than expected and was stopped. Please try again — if it keeps happening, try a smaller or clearer photo.'
+          : 'Could not process that image. Please try a clearer photo of the report.',
+      );
     } finally {
+      clearTimeout(abortTimer);
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
     }
@@ -412,7 +431,7 @@ function UploadForm({ onUploaded }: { onUploaded: (m: InBodyMeasurementDTO) => v
         />
         {uploading && (
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            Reading the report… this can take up to 20 seconds.
+            Reading the report… this usually takes 15-20 seconds, but can take up to a minute.
           </p>
         )}
       </CardContent>

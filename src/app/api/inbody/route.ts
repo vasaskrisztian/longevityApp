@@ -65,7 +65,20 @@ export async function POST(request: Request) {
     });
     return Response.json(toInBodyMeasurementDTO(measurement), { status: 201 });
   } catch (error) {
-    logger.error('inbody_upload_failed', { message: (error as Error).message });
-    return Response.json({ error: 'Failed to process the uploaded image' }, { status: 500 });
+    const message = (error as Error).message;
+    logger.error('inbody_upload_failed', { message });
+    // Distinguished from the generic case so a stuck-OCR incident is
+    // visible to the user as "it timed out, try again" rather than an
+    // indistinguishable "something went wrong" -- see
+    // inbody-ocr.service.ts's OCR_TIMEOUT_MS.
+    const isTimeout = message.includes('OCR timed out');
+    return Response.json(
+      {
+        error: isTimeout
+          ? 'Reading the report took too long and was stopped. Please try again.'
+          : 'Failed to process the uploaded image',
+      },
+      { status: isTimeout ? 504 : 500 },
+    );
   }
 }
