@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
-import type { Protocol, ProtocolSupplement } from '@prisma/client';
+import type { Prisma, Protocol, ProtocolSupplement } from '@prisma/client';
 import type { CreateProtocolInput, UpdateProtocolInput } from '@/lib/validation/protocol.schemas';
 
 /**
@@ -60,7 +60,11 @@ export async function createProtocol(
 ): Promise<ProtocolWithSupplements> {
   const { supplements, isActive, ...rest } = input;
 
-  const ops: unknown[] = [];
+  // Typed as Prisma.PrismaPromise<unknown>[] (not `unknown[]`) because
+  // $transaction's array-form overload requires exactly that element type --
+  // caught by Railway's build, which has the real @prisma/client generated
+  // types, not by this sandbox's or the device's stubbed client.
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
   if (isActive) {
     ops.push(prisma.protocol.updateMany({ where: { userId, isActive: true }, data: { isActive: false } }));
   }
@@ -87,7 +91,7 @@ export async function updateProtocol(
 ): Promise<ProtocolWithSupplements> {
   const { supplements, isActive, ...rest } = input;
 
-  const ops: unknown[] = [];
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
   if (isActive) {
     ops.push(
       prisma.protocol.updateMany({
