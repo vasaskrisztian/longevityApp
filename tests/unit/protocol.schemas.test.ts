@@ -83,6 +83,39 @@ describe('CreateProtocolSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // A blank number input submits '' (not undefined) via react-hook-form's
+  // register(). z.coerce.number() runs before .optional() is checked, and
+  // Number('') is 0, not NaN -- so without the blankToUndefined preprocess,
+  // every one of these would silently save as a real "0" target/dosage
+  // instead of staying unset. See protocol.schemas.ts's blankToUndefined.
+  it('treats a blank target field as unset rather than coercing it to 0', () => {
+    const result = CreateProtocolSchema.safeParse({
+      name: 'Just a name',
+      targetSleepScore: '',
+      targetSleepMinutes: '',
+      targetWeeklyWorkouts: '',
+      targetDailyActiveCalories: '',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.targetSleepScore).toBeUndefined();
+      expect(result.data.targetSleepMinutes).toBeUndefined();
+      expect(result.data.targetWeeklyWorkouts).toBeUndefined();
+      expect(result.data.targetDailyActiveCalories).toBeUndefined();
+    }
+  });
+
+  it('treats a blank supplement dosage as unset rather than a positive-number validation failure', () => {
+    const result = CreateProtocolSchema.safeParse({
+      ...VALID_PROTOCOL,
+      supplements: [{ name: 'Magnesium', dosage: '' }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.supplements[0]?.dosage).toBeUndefined();
+    }
+  });
 });
 
 describe('UpdateProtocolSchema', () => {
