@@ -48,7 +48,7 @@ export default async function DevicesPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-primary">Devices</h1>
+      <h1 className="relative inline-block font-display text-3xl font-semibold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent after:absolute after:-bottom-1 after:left-0 after:h-1 after:w-2/3 after:rounded-full after:bg-gradient-to-r after:from-primary after:to-accent">Devices</h1>
       {errorMessage && (
         <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {errorMessage}

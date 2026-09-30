@@ -23,7 +23,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-primary">Profile</h1>
+      <h1 className="relative inline-block font-display text-3xl font-semibold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent after:absolute after:-bottom-1 after:left-0 after:h-1 after:w-2/3 after:rounded-full after:bg-gradient-to-r after:from-primary after:to-accent">Profile</h1>
       <Card>
         <CardHeader>
           <CardTitle>Personal information</CardTitle>

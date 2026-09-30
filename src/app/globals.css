@@ -3,7 +3,11 @@
 @tailwind utilities;
 
 :root {
+  /* Font files are self-hosted via @fontsource, imported in layout.tsx --
+     these variables just name the families for tailwind.config.ts's
+     fontFamily.sans/display, each with the same fallback stack as before. */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Fraunces', Georgia, ui-serif, serif;
 }
 
 body {
