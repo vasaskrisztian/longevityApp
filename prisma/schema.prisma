@@ -322,16 +322,14 @@ model Goal {
   @@map("goals")
 }
 
-/**
- * A single InBody body-composition scan, entered by uploading a photo/scan
- * of the printed report. All ten measurement fields are nullable: OCR
- * confidence on a phone photo of a dense, bar-chart-heavy printed form
- * varies a lot field-to-field (see inbody-parser.ts's top comment), so a
- * field this record's OCR pass couldn't confidently read is left null
- * rather than stored as a guessed value — the user can fill or correct any
- * field afterward from the InBody page. `rawOcrText` and the original image
- * are always kept precisely so that correction is possible.
- */
+/// A single InBody body-composition scan, entered by uploading a photo/scan
+/// of the printed report. All ten measurement fields are nullable: OCR
+/// confidence on a phone photo of a dense, bar-chart-heavy printed form
+/// varies a lot field-to-field (see inbody-parser.ts's top comment), so a
+/// field this record's OCR pass couldn't confidently read is left null
+/// rather than stored as a guessed value — the user can fill or correct any
+/// field afterward from the InBody page. `rawOcrText` and the original image
+/// are always kept precisely so that correction is possible.
 model InBodyMeasurement {
   id     String @id @default(uuid())
   userId String
