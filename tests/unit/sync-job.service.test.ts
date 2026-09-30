@@ -5,6 +5,7 @@ const prismaMock = {
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
+    findFirst: vi.fn(),
   },
   wearableConnection: {
     findMany: vi.fn(),
@@ -19,6 +20,7 @@ const {
   markSyncJobRunning,
   completeSyncJob,
   completeSyncJobIfStillRunning,
+  getLatestSyncJobForConnection,
 } = await import('@/modules/wearable/services/sync-job.service');
 
 beforeEach(() => {
@@ -210,6 +212,29 @@ describe('completeSyncJob', () => {
     );
 
     expect(prismaMock.syncJob.update.mock.calls[0]![0].data.retryCount).toBe(2);
+  });
+});
+
+describe('getLatestSyncJobForConnection', () => {
+  it('returns the newest job (by createdAt) for the connection, whatever its status', async () => {
+    prismaMock.syncJob.findFirst.mockResolvedValue({ status: 'RUNNING', startedAt: new Date('2026-09-29T13:14:32Z') });
+
+    const result = await getLatestSyncJobForConnection('conn-1');
+
+    expect(prismaMock.syncJob.findFirst).toHaveBeenCalledWith({
+      where: { connectionId: 'conn-1' },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, startedAt: true },
+    });
+    expect(result).toEqual({ status: 'RUNNING', startedAt: new Date('2026-09-29T13:14:32Z') });
+  });
+
+  it('returns null when the connection has no sync jobs yet', async () => {
+    prismaMock.syncJob.findFirst.mockResolvedValue(null);
+
+    const result = await getLatestSyncJobForConnection('conn-1');
+
+    expect(result).toBeNull();
   });
 });
 

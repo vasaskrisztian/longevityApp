@@ -1,5 +1,6 @@
 import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
 import { getConnectionForUserAndProvider } from '@/modules/wearable/services/wearable.service';
+import { getLatestSyncJobForConnection } from '@/modules/wearable/services/sync-job.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,11 @@ export default async function DevicesPage({
   // mean", belongs in modules/**, not in app/**). Returns a synthesized
   // DISCONNECTED summary if the user has never attempted to connect Oura.
   const connection = await getConnectionForUserAndProvider(user.id, 'OURA');
+  // See getLatestSyncJobForConnection's comment: this reflects the last time
+  // a sync was actually *attempted* (including one still running or one that
+  // never finished), unlike connection.lastSyncAt which only updates once an
+  // attempt completes.
+  const latestSyncJob = connection.id ? await getLatestSyncJobForConnection(connection.id) : null;
 
   const isConnected = connection.status === 'CONNECTED';
   const canReconnect = connection.status === 'AUTH_REQUIRED' || connection.status === 'ERROR';
@@ -42,7 +48,7 @@ export default async function DevicesPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Devices</h1>
       {errorMessage && (
         <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {errorMessage}
@@ -67,10 +73,10 @@ export default async function DevicesPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {connection.lastSyncAt && (
+          {latestSyncJob?.startedAt && (
             <p className="text-sm text-muted-foreground">
-              Last sync attempt: {connection.lastSyncAt.toLocaleString()}
-              {connection.lastSyncStatus ? ` (${connection.lastSyncStatus})` : ''}
+              Last sync attempt: {latestSyncJob.startedAt.toLocaleString()}
+              {latestSyncJob.status ? ` (${latestSyncJob.status})` : ''}
             </p>
           )}
           <div className="flex flex-wrap items-start gap-2">

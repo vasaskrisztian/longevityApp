@@ -20,7 +20,7 @@ export default async function NutritionPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Nutrition</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Nutrition</h1>
       <Card>
         <CardHeader>
           <CardTitle>Nutrition profile</CardTitle>

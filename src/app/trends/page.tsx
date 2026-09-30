@@ -22,7 +22,7 @@ export default async function TrendsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Trends</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-primary">Trends</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Sleep, readiness and activity scores, HRV, resting heart rate, sleep duration and
           steps over the last 7 or 30 days.

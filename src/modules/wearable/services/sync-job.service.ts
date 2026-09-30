@@ -85,6 +85,30 @@ export async function enqueueDailySyncJobsForActiveConnections(): Promise<
   return created;
 }
 
+/**
+ * Surfaces "when did we last actually try" for a connection, independent of
+ * whether that attempt ever completed. `WearableConnection.lastSyncAt` (see
+ * wearable.service.ts's recordSyncOutcome) only gets written once
+ * runSyncForConnection finishes — a sync that's still RUNNING, or one that
+ * hung/never settled, leaves `lastSyncAt` stuck on whatever the last
+ * completed attempt was, which made the /profile/devices "Last sync
+ * attempt" line show a stale value instead of reflecting a sync the user
+ * had just triggered. `SyncJob.startedAt` (stamped by markSyncJobRunning
+ * above) already captures the true attempt-start moment for every attempt,
+ * completed or not, so reading the newest job row here instead of the
+ * connection's own fields fixes that without any schema change.
+ */
+export async function getLatestSyncJobForConnection(
+  connectionId: string,
+): Promise<{ status: string; startedAt: Date | null } | null> {
+  const job = await prisma.syncJob.findFirst({
+    where: { connectionId },
+    orderBy: { createdAt: 'desc' },
+    select: { status: true, startedAt: true },
+  });
+  return job ?? null;
+}
+
 /** Marks a job RUNNING and stamps startedAt — called once per attempt, including retries. */
 export async function markSyncJobRunning(jobId: string): Promise<void> {
   await prisma.syncJob.update({

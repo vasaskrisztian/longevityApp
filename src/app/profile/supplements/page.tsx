@@ -29,7 +29,7 @@ export default async function SupplementsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Supplements</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Supplements</h1>
       <Card>
         <CardHeader>
           <CardTitle>Your supplements</CardTitle>

@@ -17,7 +17,7 @@ export default async function LifestylePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Lifestyle</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Lifestyle</h1>
       <Card>
         <CardHeader>
           <CardTitle>Exercise profile</CardTitle>

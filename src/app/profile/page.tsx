@@ -23,7 +23,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Profile</h1>
       <Card>
         <CardHeader>
           <CardTitle>Personal information</CardTitle>

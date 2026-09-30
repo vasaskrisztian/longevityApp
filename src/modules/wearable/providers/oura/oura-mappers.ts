@@ -122,8 +122,11 @@ export function mapOuraRecordToWorkout(record: ProviderRawRecord): NormalizedWor
     // the same "make the mapper's output actually match the column type"
     // fix applied to the DAILY_SLEEP case above, instead of letting `pg`
     // send a non-integer string to an integer column and finding out what
-    // happens on the wire.
-    calories: payload.calories !== undefined ? Math.round(payload.calories) : undefined,
+    // happens on the wire. `payload.calories` can be null (not just
+    // undefined) -- `null !== undefined`, so an earlier version of this
+    // guard let null slip through into Math.round(null), which returns 0
+    // instead of leaving the value absent.
+    calories: payload.calories === null || payload.calories === undefined ? undefined : Math.round(payload.calories),
     distanceM: payload.distance ?? undefined,
     intensity: payload.intensity ?? undefined,
   };

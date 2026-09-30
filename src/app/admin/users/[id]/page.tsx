@@ -92,10 +92,14 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
             </span>
           </div>
           <CardDescription>
-            {connection.lastSyncAt
-              ? `Last sync attempt: ${connection.lastSyncAt.toLocaleString()}${
-                  connection.lastSyncStatus ? ` (${connection.lastSyncStatus})` : ''
-                }`
+            {/* recentSyncJobs[0] (newest first) reflects the last time a
+                sync was actually *attempted* — including one still running
+                or one that never finished — unlike connection.lastSyncAt,
+                which only updates once an attempt completes and so shows a
+                stale value while a sync is hung (see sync-job.service.ts's
+                getLatestSyncJobForConnection for the full writeup). */}
+            {recentSyncJobs[0]?.startedAt
+              ? `Last sync attempt: ${recentSyncJobs[0].startedAt.toLocaleString()} (${recentSyncJobs[0].status})`
               : 'No sync has run yet for this connection.'}
           </CardDescription>
         </CardHeader>

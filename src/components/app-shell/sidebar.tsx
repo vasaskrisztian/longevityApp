@@ -15,11 +15,11 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-card-border bg-white px-4 py-6">
       <div className="mb-8 px-2">
-        <span className="text-base font-semibold tracking-tight">Longevity App</span>
+        <span className="text-base font-semibold tracking-tight text-primary">Longevity App</span>
       </div>
 
       <nav className="flex-1 space-y-1">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+        {NAV_ITEMS.filter((item) => !item.hidden && (!item.adminOnly || isAdmin)).map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link

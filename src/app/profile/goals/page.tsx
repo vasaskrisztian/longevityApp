@@ -27,7 +27,7 @@ export default async function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Goals</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Goals</h1>
       <Card>
         <CardHeader>
           <CardTitle>Your goals</CardTitle>

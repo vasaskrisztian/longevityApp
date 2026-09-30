@@ -41,7 +41,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary">Admin</h1>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Kpi label="Total users" value={totalUsers} />
         <Kpi label="Oura connected" value={ouraConnected} />
