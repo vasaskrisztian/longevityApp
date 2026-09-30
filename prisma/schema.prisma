@@ -202,6 +202,7 @@ model User {
   nutritionProfile    NutritionProfile?
   supplements         Supplement[]
   goals               Goal[]
+  inBodyMeasurements  InBodyMeasurement[]
   wearableConnections WearableConnection[]
   dailyHealthMetrics  DailyHealthMetric[]
   workouts            Workout[]
@@ -319,6 +320,61 @@ model Goal {
   @@index([userId])
   @@index([userId, status])
   @@map("goals")
+}
+
+/**
+ * A single InBody body-composition scan, entered by uploading a photo/scan
+ * of the printed report. All ten measurement fields are nullable: OCR
+ * confidence on a phone photo of a dense, bar-chart-heavy printed form
+ * varies a lot field-to-field (see inbody-parser.ts's top comment), so a
+ * field this record's OCR pass couldn't confidently read is left null
+ * rather than stored as a guessed value — the user can fill or correct any
+ * field afterward from the InBody page. `rawOcrText` and the original image
+ * are always kept precisely so that correction is possible.
+ */
+model InBodyMeasurement {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Parsed from the report's own "Teszt dátuma/ideje" / test date field when
+  // recognizable; falls back to the upload time otherwise (see
+  // inbody-parser.ts's parseMeasuredAt).
+  measuredAt DateTime
+
+  weightKg               Decimal? @db.Decimal(5, 1)
+  bodyFatPercentage      Decimal? @db.Decimal(4, 1)
+  skeletalMuscleMassKg   Decimal? @db.Decimal(5, 1)
+  fatFreeMassKg          Decimal? @db.Decimal(5, 1)
+  bmi                    Decimal? @db.Decimal(4, 1)
+  inBodyScore            Int?
+  visceralFatLevel       Int?
+  basalMetabolicRateKcal Int?
+  totalBodyWaterL        Decimal? @db.Decimal(5, 1)
+  ecwRatio               Decimal? @db.Decimal(5, 3)
+
+  // The uploaded photo/scan itself, kept alongside the parsed values so the
+  // original document can always be reviewed against what was extracted.
+  // Stored in Postgres rather than external object storage: this app has no
+  // blob-storage credentials configured, and a personal user's occasional
+  // scan uploads (a handful of MB every few weeks) are nowhere near a scale
+  // where this matters -- see docs/ci-cd-setup.md for the deploy topology.
+  imageData        Bytes
+  imageContentType String
+  imageFilename    String?
+
+  // The full text OCR read off the image (both the left and right report
+  // columns, concatenated) -- kept even when every field parses cleanly, so
+  // a value the parser missed or misread can be looked up and corrected by
+  // hand instead of re-uploading the photo.
+  rawOcrText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, measuredAt])
+  @@map("inbody_measurements")
 }
 
 // ------------------------------------------------------------------

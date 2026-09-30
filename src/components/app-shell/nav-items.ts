@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Lifestyle', href: '/profile/lifestyle' },
   { label: 'Nutrition', href: '/profile/nutrition', hidden: true },
   { label: 'Supplements', href: '/profile/supplements' },
+  { label: 'InBody', href: '/profile/inbody' },
   { label: 'Goals', href: '/profile/goals', hidden: true },
   { label: 'Devices', href: '/profile/devices' },
   { label: 'Admin', href: '/admin', adminOnly: true },

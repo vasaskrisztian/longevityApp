@@ -25,3 +25,5 @@ prisma/dev.db
 # not part of the app, never part of the git history.
 Claude outputs/
 
+
+*.tsbuildinfo
