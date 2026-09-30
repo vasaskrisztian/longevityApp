@@ -20,6 +20,12 @@ export interface DailyMetricFields {
   restingHeartRate: number | null;
   averageHrv: number | null;
   steps: number | null;
+  // Added alongside the Protocols feature — the only DailyHealthMetric
+  // column that feature's "cél" (target) comparison needs and this
+  // interface didn't already surface. See getWeeklyWorkoutCount below for
+  // the other actual value protocols compare against (weekly workout
+  // count, which lives on Workout, not this table).
+  activeCalories: number | null;
 }
 
 export interface DailyMetricSnapshot extends DailyMetricFields {
@@ -79,6 +85,7 @@ function toDailyMetricFields(row: any): DailyMetricFields {
     restingHeartRate: row.restingHeartRate ?? null,
     averageHrv: row.averageHrv === null || row.averageHrv === undefined ? null : Number(row.averageHrv),
     steps: row.steps ?? null,
+    activeCalories: row.activeCalories ?? null,
   };
 }
 
@@ -90,6 +97,7 @@ const EMPTY_FIELDS: DailyMetricFields = {
   restingHeartRate: null,
   averageHrv: null,
   steps: null,
+  activeCalories: null,
 };
 
 /**
@@ -150,4 +158,23 @@ export async function getTrend(userId: string, rangeDays: TrendRangeDays): Promi
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return points;
+}
+
+/**
+ * How many workouts landed in the trailing 7-day window [today - 6, today]
+ * (inclusive) — the "actual" the Protocols feature's targetWeeklyWorkouts
+ * compares against on the dashboard. Lives here rather than in
+ * modules/protocols since it reads Workout, a wearable-sync table this
+ * module already owns reading from.
+ */
+export async function getWeeklyWorkoutCount(userId: string): Promise<number> {
+  const today = utcMidnight(new Date());
+  const from = new Date(today);
+  from.setUTCDate(from.getUTCDate() - 6);
+  const to = new Date(today);
+  to.setUTCDate(to.getUTCDate() + 1);
+
+  return prisma.workout.count({
+    where: { userId, startedAt: { gte: from, lt: to } },
+  });
 }

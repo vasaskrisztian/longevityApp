@@ -23,6 +23,7 @@ function snapshot(overrides: Record<string, unknown> = {}) {
     restingHeartRate: 54,
     averageHrv: 48.3,
     steps: 8123,
+    activeCalories: 412,
     ...overrides,
   };
 }
@@ -37,6 +38,7 @@ function trendPoint(overrides: Record<string, unknown> = {}) {
     restingHeartRate: 55,
     averageHrv: 47.1,
     steps: 7000,
+    activeCalories: 390,
     ...overrides,
   };
 }
@@ -73,6 +75,7 @@ describe('createHealthMcpGateway().getHealthSummary', () => {
       restingHeartRate: 54,
       averageHrv: 48.3,
       steps: 8123,
+      activeCalories: 412,
     });
   });
 });
@@ -97,6 +100,7 @@ describe('createHealthMcpGateway() trend contexts', () => {
           restingHeartRate: 55,
           averageHrv: 47.1,
           steps: 7000,
+          activeCalories: 390,
         },
       ],
     });

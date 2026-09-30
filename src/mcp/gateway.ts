@@ -88,6 +88,7 @@ function toTrendContextPoint(point: TrendPoint): TrendContextPoint {
     restingHeartRate: point.restingHeartRate,
     averageHrv: point.averageHrv,
     steps: point.steps,
+    activeCalories: point.activeCalories,
   };
 }
 
@@ -115,6 +116,7 @@ export function createHealthMcpGateway(): HealthMcpGateway {
         restingHeartRate: snapshot.restingHeartRate,
         averageHrv: snapshot.averageHrv,
         steps: snapshot.steps,
+        activeCalories: snapshot.activeCalories,
       };
     },
 

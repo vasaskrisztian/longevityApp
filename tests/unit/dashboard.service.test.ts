@@ -5,10 +5,15 @@ const prismaMock = {
     findFirst: vi.fn(),
     findMany: vi.fn(),
   },
+  workout: {
+    count: vi.fn(),
+  },
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
 
-const { getTodaySnapshot, getTrend } = await import('@/modules/dashboard/dashboard.service');
+const { getTodaySnapshot, getTrend, getWeeklyWorkoutCount } = await import(
+  '@/modules/dashboard/dashboard.service'
+);
 
 /** Freezes "now" so isToday/date-window assertions aren't flaky across midnight. */
 const TODAY = new Date('2026-06-15T12:00:00Z');
@@ -23,6 +28,7 @@ function row(overrides: Record<string, unknown> = {}) {
     restingHeartRate: 54,
     averageHrv: { toString: () => '48.30' } as unknown as number, // Decimal-like stub
     steps: 8123,
+    activeCalories: 412,
     sourceProviders: ['OURA'],
     ...overrides,
   };
@@ -99,6 +105,7 @@ describe('getTodaySnapshot', () => {
         totalSleepMinutes: undefined,
         restingHeartRate: null,
         steps: undefined,
+        activeCalories: null,
       }),
     );
 
@@ -111,6 +118,7 @@ describe('getTodaySnapshot', () => {
       totalSleepMinutes: null,
       restingHeartRate: null,
       steps: null,
+      activeCalories: null,
     });
   });
 
@@ -134,6 +142,7 @@ describe('getTodaySnapshot', () => {
       totalSleepMinutes: 421,
       restingHeartRate: 54,
       steps: 8123,
+      activeCalories: 412,
     });
   });
 });
@@ -191,6 +200,7 @@ describe('getTrend', () => {
       restingHeartRate: null,
       averageHrv: null,
       steps: null,
+      activeCalories: null,
     });
   });
 
@@ -214,5 +224,26 @@ describe('getTrend', () => {
     expect(result[0]).toMatchObject({ sleepScore: 10 });
     expect(result[6]).toMatchObject({ sleepScore: 20 });
     expect(result.slice(1, 6).every((p) => p.sleepScore === null)).toBe(true);
+  });
+});
+
+describe('getWeeklyWorkoutCount', () => {
+  it('counts workouts scoped to userId in the inclusive [today - 6, today] window', async () => {
+    prismaMock.workout.count.mockResolvedValue(3);
+
+    const result = await getWeeklyWorkoutCount('u1');
+
+    expect(prismaMock.workout.count).toHaveBeenCalledWith({
+      where: {
+        userId: 'u1',
+        startedAt: { gte: new Date('2026-06-09T00:00:00Z'), lt: new Date('2026-06-16T00:00:00Z') },
+      },
+    });
+    expect(result).toBe(3);
+  });
+
+  it('returns 0 when the user has no workouts in the window', async () => {
+    prismaMock.workout.count.mockResolvedValue(0);
+    await expect(getWeeklyWorkoutCount('u1')).resolves.toBe(0);
   });
 });

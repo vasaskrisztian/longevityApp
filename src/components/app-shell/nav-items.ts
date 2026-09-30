@@ -9,6 +9,7 @@ import {
   Target,
   Watch,
   ShieldCheck,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Lifestyle', href: '/profile/lifestyle', icon: Leaf },
   { label: 'Nutrition', href: '/profile/nutrition', icon: Utensils, hidden: true },
   { label: 'Supplements', href: '/profile/supplements', icon: Pill },
+  { label: 'Protocols', href: '/profile/protocols', icon: ClipboardList },
   { label: 'InBody', href: '/profile/inbody', icon: Scale },
   { label: 'Goals', href: '/profile/goals', icon: Target, hidden: true },
   { label: 'Devices', href: '/profile/devices', icon: Watch },

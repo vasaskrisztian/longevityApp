@@ -202,6 +202,7 @@ model User {
   nutritionProfile    NutritionProfile?
   supplements         Supplement[]
   goals               Goal[]
+  protocols           Protocol[]
   inBodyMeasurements  InBodyMeasurement[]
   wearableConnections WearableConnection[]
   dailyHealthMetrics  DailyHealthMetric[]
@@ -320,6 +321,62 @@ model Goal {
   @@index([userId])
   @@index([userId, status])
   @@map("goals")
+}
+
+/// A named target plan: the numbers a user is trying to hit (sleep score,
+/// sleep duration, weekly workouts, daily active calories) plus the
+/// supplements that go with it. A user can keep several protocols (e.g. "Cutting"
+/// vs "Base building") but only one is ever `isActive` at a time — that's the
+/// one the dashboard compares today's actuals against. Enforced in
+/// protocols.service.ts (unset the previous active row in the same
+/// transaction), not a DB constraint, matching this codebase's existing
+/// preference for application-level invariants over partial unique indexes.
+model Protocol {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  isActive    Boolean  @default(false)
+
+  targetSleepScore          Int?
+  targetSleepMinutes        Int?
+  targetWeeklyWorkouts      Int?
+  targetDailyActiveCalories Int?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplements ProtocolSupplement[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("protocols")
+}
+
+/// A supplement target line within a Protocol — deliberately its own row
+/// rather than reusing the Supplement model: this is "what the plan calls
+/// for", not "what the user actually takes" (Supplement), so dosage/unit/
+/// frequency/timing are all optional free-form targets, not a tracked
+/// regimen. Replaced wholesale on every protocol update (delete + recreate
+/// in protocols.service.ts) rather than diffed row-by-row.
+model ProtocolSupplement {
+  id         String    @id @default(uuid())
+  protocolId String
+  protocol   Protocol  @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  name       String
+  dosage     Decimal?  @db.Decimal(8, 2)
+  unit       String?
+  frequency  SupplementFrequency?
+  timing     SupplementTiming?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([protocolId])
+  @@map("protocol_supplements")
 }
 
 /// A single InBody body-composition scan, entered by uploading a photo/scan
