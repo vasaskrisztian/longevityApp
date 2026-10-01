@@ -159,13 +159,12 @@ export async function getCreatorPublicProfile(userId: string): Promise<CreatorPu
     // dashboard.service.ts's toDailyMetricFields and inbody.service.ts's
     // toDecimalOrNull already apply; the local stubbed client didn't model
     // this distinction, which is why this only surfaced in Railway's build).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recentMetrics: metrics.map((m: any) => ({
+    recentMetrics: metrics.map((m): PublicMetricPoint => ({
       date: m.date,
       sleepScore: m.sleepScore,
       steps: m.steps,
       restingHeartRate: m.restingHeartRate,
-      averageHrv: m.averageHrv === null || m.averageHrv === undefined ? null : Number(m.averageHrv),
+      averageHrv: m.averageHrv == null ? null : Number(m.averageHrv),
       activeCalories: m.activeCalories,
     })),
   };
