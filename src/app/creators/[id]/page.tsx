@@ -3,6 +3,10 @@ import { getCreatorPublicProfile, type PublicProtocol } from '@/modules/creators
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FollowButton } from './follow-button';
 
+// Always-fresh public data (follower count, published content) — never
+// statically cached. See /app/creators/page.tsx's comment.
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: { id: string };
 }

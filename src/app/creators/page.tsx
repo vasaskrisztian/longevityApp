@@ -4,6 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 
 export const metadata = { title: 'Creators — Longevity Klub' };
 
+// No auth/cookies call and no dynamic segment here, so Next.js would
+// otherwise try to statically prerender this page at build time — which
+// fails the Railway build (no live Postgres in the build step) and would
+// also serve a stale follower/publish snapshot to every visitor in
+// production. Follower counts and publish state must always be current.
+export const dynamic = 'force-dynamic';
+
 export default async function CreatorsDirectoryPage() {
   const creators = await listPublicCreators();
 

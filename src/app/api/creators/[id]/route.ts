@@ -1,5 +1,9 @@
 import { getCreatorPublicProfile } from '@/modules/creators/creators.service';
 
+// Always-fresh public data (follower count, published content) — never
+// statically cached. See /api/creators/route.ts's comment.
+export const dynamic = 'force-dynamic';
+
 interface RouteParams {
   params: { id: string };
 }
