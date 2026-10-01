@@ -28,6 +28,12 @@ vi.mock('@/modules/protocols/protocols.service', () => ({
   deleteProtocol: deleteProtocolMock,
 }));
 
+// Phase 13 — see api-protocols.route.test.ts's identical mock comment.
+const canPublishPubliclyMock = vi.fn();
+vi.mock('@/modules/creators/creators.service', () => ({
+  canPublishPublicly: canPublishPubliclyMock,
+}));
+
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -54,6 +60,7 @@ beforeEach(() => {
   getProtocolByIdMock.mockReset();
   updateProtocolMock.mockReset();
   deleteProtocolMock.mockReset();
+  canPublishPubliclyMock.mockReset();
 });
 
 describe('GET /api/protocols/[id]', () => {
@@ -163,6 +170,31 @@ describe('PATCH /api/protocols/[id]', () => {
     const response = await PATCH(patchRequest({ isActive: true }), ctx('p1'));
 
     expect(response.status).toBe(500);
+  });
+
+  // Phase 13
+  it('returns 403 for visibility: PUBLIC when the owner is not a consenting creator', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getProtocolByIdMock.mockResolvedValue(OWNED_PROTOCOL);
+    requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    canPublishPubliclyMock.mockResolvedValue(false);
+
+    const response = await PATCH(patchRequest({ visibility: 'PUBLIC' }), ctx('p1'));
+
+    expect(response.status).toBe(403);
+    expect(updateProtocolMock).not.toHaveBeenCalled();
+  });
+
+  it('allows visibility: PRIVATE without checking creator eligibility', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getProtocolByIdMock.mockResolvedValue(OWNED_PROTOCOL);
+    requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    updateProtocolMock.mockResolvedValue({ ...OWNED_PROTOCOL, visibility: 'PRIVATE' });
+
+    const response = await PATCH(patchRequest({ visibility: 'PRIVATE' }), ctx('p1'));
+
+    expect(response.status).toBe(200);
+    expect(canPublishPubliclyMock).not.toHaveBeenCalled();
   });
 });
 

@@ -4,6 +4,7 @@ import { getUserDetailForAdmin, recordAdminViewUser } from '@/modules/admin/admi
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
 import { TriggerSyncButton } from './trigger-sync-button';
+import { SetAccountTypeButton } from './set-account-type-button';
 
 const CONNECTION_STATUS_LABEL: Record<string, string> = {
   CONNECTED: 'Connected',
@@ -78,6 +79,29 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
             <dt className="text-muted-foreground">Joined</dt>
             <dd>{user.createdAt.toLocaleDateString()}</dd>
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Creator status</CardTitle>
+          <CardDescription>
+            Phase 13: only an admin can grant or revoke CREATOR — the account&apos;s own public-profile
+            consent and per-item Public/Private choices are entirely separate and stay with the user.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            Account type: <span className="font-medium">{user.accountType}</span>
+            {user.accountType === 'CREATOR' && (
+              <>
+                {' '}
+                · public profile{' '}
+                <span className="font-medium">{user.publicProfileConsentAt ? 'enabled' : 'not enabled'}</span>
+              </>
+            )}
+          </p>
+          <SetAccountTypeButton userId={user.id} currentAccountType={user.accountType} />
         </CardContent>
       </Card>
 

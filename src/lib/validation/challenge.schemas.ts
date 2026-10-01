@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VisibilityEnum } from './visibility.schemas';
 
 // The three metrics a challenge can be defined against — kept in sync with
 // the ChallengeType enum in schema.prisma.
@@ -23,6 +24,10 @@ export const CreateChallengeSchema = z.object({
   threshold: z.coerce.number().int().min(1, 'Must be at least 1').max(100_000),
   // "within Z days" — the challenge's total length once activated.
   windowDays: z.coerce.number().int().min(1, 'Must be at least 1 day').max(365),
+  // Optional, not `.default()` — see protocol.schemas.ts's identical field
+  // for why (keeps z.infer's output type from forcing every form-values
+  // object to set it; Prisma's own column default fills it in when absent).
+  visibility: VisibilityEnum.optional(),
 });
 
 export type CreateChallengeInput = z.infer<typeof CreateChallengeSchema>;

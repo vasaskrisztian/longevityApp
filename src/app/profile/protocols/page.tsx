@@ -1,5 +1,6 @@
 import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
 import { prisma } from '@/lib/db/prisma';
+import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ProtocolsManager, type ProtocolDTO } from './protocols-manager';
 
@@ -8,11 +9,16 @@ export default async function ProtocolsPage() {
   // No requireOwnResourceOrAdmin needed here — userId is the caller's own
   // id, never a client-supplied param. The CRUD API routes (/api/
   // protocols/[id]) accept an arbitrary id and call requireOwnResourceOrAdmin.
-  const protocols = await prisma.protocol.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: 'desc' },
-    include: { supplements: true },
-  });
+  const [protocols, canPublish] = await Promise.all([
+    prisma.protocol.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      include: { supplements: true },
+    }),
+    // Phase 13: only a consenting CREATOR ever sees the Publish control —
+    // see creators.service.ts's doc comment.
+    canPublishPublicly(user.id),
+  ]);
 
   // `p`/`s` are typed `any` because @prisma/client's generated types aren't
   // available in this sandbox (prisma generate can't reach binaries.prisma.sh
@@ -27,6 +33,7 @@ export default async function ProtocolsPage() {
     targetSleepMinutes: p.targetSleepMinutes,
     targetWeeklyWorkouts: p.targetWeeklyWorkouts,
     targetDailyActiveCalories: p.targetDailyActiveCalories,
+    visibility: p.visibility,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supplements: p.supplements.map((s: any) => ({
       name: s.name,
@@ -53,7 +60,7 @@ export default async function ProtocolsPage() {
           </CardDescription>
         </CardHeader>
       </Card>
-      <ProtocolsManager initial={initial} />
+      <ProtocolsManager initial={initial} canPublish={canPublish} />
     </div>
   );
 }

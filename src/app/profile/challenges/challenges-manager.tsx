@@ -31,6 +31,7 @@ export interface ChallengeDTO {
   windowDays: number;
   activatedAt: string | null;
   expiresAt: string | null;
+  visibility: 'PRIVATE' | 'PUBLIC';
   progress: ChallengeProgressDTO;
 }
 
@@ -203,18 +204,38 @@ function ProgressBar({ current, required }: { current: number; required: number 
 
 function ChallengeRow({
   challenge,
+  canPublish,
   onUpdated,
   onDeleted,
 }: {
   challenge: ChallengeDTO;
+  canPublish: boolean;
   onUpdated: (c: ChallengeDTO) => void;
   onDeleted: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
   const { status } = challenge.progress;
   const isDraft = status === 'DRAFT';
+
+  // Phase 13: unlike edits to the challenge's terms, this works whatever
+  // the status — see the [id] route's single-field `visibility` carve-out.
+  async function handleToggleVisibility() {
+    setTogglingVisibility(true);
+    const nextVisibility = challenge.visibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC';
+    const response = await fetch(`/api/challenges/${challenge.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility: nextVisibility }),
+    });
+    setTogglingVisibility(false);
+    if (response.ok) {
+      const updated = await response.json();
+      onUpdated(toDTO(updated));
+    }
+  }
 
   async function handleSave(data: ChallengeFormValues) {
     const response = await fetch(`/api/challenges/${challenge.id}`, {
@@ -290,6 +311,11 @@ function ChallengeRow({
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}>
                 {STATUS_LABEL[status]}
               </span>
+              {challenge.visibility === 'PUBLIC' && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                  Public
+                </span>
+              )}
             </p>
             <p className="text-sm text-muted-foreground">{describeTerms(challenge)}</p>
             {!isDraft && (
@@ -303,6 +329,15 @@ function ChallengeRow({
             {isDraft && (
               <Button size="sm" onClick={handleActivate} disabled={activating}>
                 {activating ? 'Starting…' : 'Start challenge'}
+              </Button>
+            )}
+            {canPublish && (
+              <Button size="sm" variant="outline" onClick={handleToggleVisibility} disabled={togglingVisibility}>
+                {togglingVisibility
+                  ? 'Updating…'
+                  : challenge.visibility === 'PUBLIC'
+                    ? 'Make private'
+                    : 'Publish publicly'}
               </Button>
             )}
             <div className="flex gap-2">
@@ -333,11 +368,18 @@ function toDTO(raw: any): ChallengeDTO {
     windowDays: raw.windowDays,
     activatedAt: raw.activatedAt ?? null,
     expiresAt: raw.expiresAt ?? null,
+    visibility: raw.visibility ?? 'PRIVATE',
     progress: raw.progress,
   };
 }
 
-export function ChallengesManager({ initial }: { initial: ChallengeDTO[] }) {
+export function ChallengesManager({
+  initial,
+  canPublish,
+}: {
+  initial: ChallengeDTO[];
+  canPublish: boolean;
+}) {
   const [challenges, setChallenges] = useState(initial);
   const [adding, setAdding] = useState(false);
 
@@ -376,6 +418,7 @@ export function ChallengesManager({ initial }: { initial: ChallengeDTO[] }) {
           <ChallengeRow
             key={challenge.id}
             challenge={challenge}
+            canPublish={canPublish}
             onUpdated={(updated) =>
               setChallenges((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
             }

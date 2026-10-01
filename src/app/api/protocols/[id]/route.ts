@@ -5,6 +5,7 @@ import {
 } from '@/lib/auth/authorization';
 import { UpdateProtocolSchema } from '@/lib/validation/protocol.schemas';
 import { getProtocolById, updateProtocol, deleteProtocol } from '@/modules/protocols/protocols.service';
+import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
 
 interface RouteParams {
@@ -48,6 +49,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const parsed = UpdateProtocolSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // See POST /api/protocols — same CREATOR-only gate on PUBLIC.
+  if (parsed.data.visibility === 'PUBLIC' && !(await canPublishPublicly(result.protocol!.userId))) {
+    return Response.json(
+      { error: 'Only a consenting creator account can publish a protocol publicly' },
+      { status: 403 },
+    );
   }
 
   try {

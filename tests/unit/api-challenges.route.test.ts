@@ -24,6 +24,12 @@ vi.mock('@/modules/challenges/challenges.service', () => ({
   createChallenge: createChallengeMock,
 }));
 
+// Phase 13 — see tests/unit/api-protocols.route.test.ts's identical mock comment.
+const canPublishPubliclyMock = vi.fn();
+vi.mock('@/modules/creators/creators.service', () => ({
+  canPublishPublicly: canPublishPubliclyMock,
+}));
+
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -44,6 +50,7 @@ beforeEach(() => {
   requireAuthenticatedUserMock.mockReset();
   listChallengesMock.mockReset();
   createChallengeMock.mockReset();
+  canPublishPubliclyMock.mockReset();
 });
 
 describe('GET /api/challenges', () => {
@@ -115,5 +122,33 @@ describe('POST /api/challenges', () => {
     const response = await POST(postRequest(VALID_CHALLENGE));
 
     expect(response.status).toBe(500);
+  });
+
+  // Phase 13
+  it('returns 403 for visibility: PUBLIC when the caller is not a consenting creator', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    canPublishPubliclyMock.mockResolvedValue(false);
+
+    const response = await POST(postRequest({ ...VALID_CHALLENGE, visibility: 'PUBLIC' }));
+
+    expect(response.status).toBe(403);
+    expect(createChallengeMock).not.toHaveBeenCalled();
+  });
+
+  it('creates a PUBLIC challenge when the caller is a consenting creator', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    canPublishPubliclyMock.mockResolvedValue(true);
+    createChallengeMock.mockResolvedValue({
+      id: 'c1',
+      userId: 'u1',
+      ...VALID_CHALLENGE,
+      visibility: 'PUBLIC',
+      activatedAt: null,
+    });
+
+    const response = await POST(postRequest({ ...VALID_CHALLENGE, visibility: 'PUBLIC' }));
+
+    expect(response.status).toBe(201);
+    expect(createChallengeMock).toHaveBeenCalledWith('u1', expect.objectContaining({ visibility: 'PUBLIC' }));
   });
 });

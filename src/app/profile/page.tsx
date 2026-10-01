@@ -2,6 +2,7 @@ import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
 import { prisma } from '@/lib/db/prisma';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PersonalInfoForm, type PersonalInfoFormValues } from './personal-info-form';
+import { CreatorConsentToggle } from './creator-consent-toggle';
 
 function toDateInputValue(date: Date | null | undefined): string {
   if (!date) return '';
@@ -11,6 +12,13 @@ function toDateInputValue(date: Date | null | undefined): string {
 export default async function ProfilePage() {
   const user = await requireAuthenticatedUserForPage();
   const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
+  // Phase 13: only CREATOR accounts can ever have a public profile — see
+  // creators.service.ts's doc comment. accountType is granted by an admin
+  // only (admin.service.ts's setUserAccountType), never self-serve.
+  const account = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { accountType: true, publicProfileConsentAt: true },
+  });
 
   const defaultValues: PersonalInfoFormValues = {
     fullName: profile?.fullName ?? '',
@@ -33,6 +41,22 @@ export default async function ProfilePage() {
           <PersonalInfoForm defaultValues={defaultValues} />
         </CardContent>
       </Card>
+
+      {account?.accountType === 'CREATOR' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Creator public profile</CardTitle>
+            <CardDescription>
+              An admin has granted this account creator status. Enabling a public profile lets anyone —
+              including people without an account — see protocols and challenges you mark Public, plus your
+              recent health data. Nothing is shown unless you enable this AND mark individual items Public.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreatorConsentToggle initialConsent={Boolean(account.publicProfileConsentAt)} userId={user.id} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

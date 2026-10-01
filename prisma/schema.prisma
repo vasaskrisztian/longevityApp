@@ -44,6 +44,32 @@ enum UserStatus {
   DELETED
 }
 
+/// Phase 13 (Creators & Followers): a second, independent dimension from
+/// UserRole (USER/ADMIN is about *system* permissions; this is about
+/// *content* — whose protocols/challenges/health data can ever be shown to
+/// other users at all). An admin is not automatically a CREATOR and a
+/// CREATOR is not automatically an admin. Only `requireAdmin()` can grant
+/// CREATOR (see admin.service.ts's setUserAccountType) — per the product
+/// decision, nobody self-serves their way to a public profile.
+enum AccountType {
+  MEMBER
+  CREATOR
+}
+
+/// Per-resource publish flag on Protocol/Challenge. Defaults to PRIVATE
+/// everywhere — a resource only ever becomes visible to anyone but its
+/// owner (or an admin) when ALL of: the owner is a CREATOR, the owner has
+/// given explicit publicProfileConsentAt (a separate GDPR-style consent
+/// from the registration-time termsAcceptedAt/privacyAcceptedAt — "make my
+/// data public" is a materially bigger disclosure than "I agreed to the
+/// ToS"), AND the resource itself is set to PUBLIC. All three gates are
+/// re-checked on every read of creators.service.ts's public-profile query,
+/// not just at write time — see that module's doc comment.
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -192,6 +218,22 @@ model User {
   role             UserRole   @default(USER)
   status           UserStatus @default(ACTIVE)
 
+  // Phase 13: see the AccountType/Visibility doc comments above. A MEMBER
+  // can follow CREATORs and upload their own data like anyone else — this
+  // field only governs whether THIS account's own content can ever be made
+  // public, not whether it can use the rest of the app.
+  accountType            AccountType @default(MEMBER)
+  // Set the moment a CREATOR explicitly opts their account into having a
+  // public profile at all (src/modules/creators/creators.service.ts's
+  // setPublicProfileConsent) — null means "no public profile", full stop,
+  // even if accountType is CREATOR (an admin can grant the *ability*
+  // without the person having opted in yet). Demoting back to MEMBER, or
+  // the creator revoking consent, clears this AND flips every one of their
+  // Protocol/Challenge rows back to PRIVATE in the same transaction (see
+  // admin.service.ts/creators.service.ts) — content never stays public
+  // once either gate closes.
+  publicProfileConsentAt DateTime?
+
   termsAcceptedAt    DateTime?
   privacyAcceptedAt  DateTime?
 
@@ -213,6 +255,17 @@ model User {
   goals               Goal[]
   protocols           Protocol[]
   challenges          Challenge[]
+
+  // Phase 13: self-relation via the join model Follow. "Following" is the
+  // rows where this user is the follower; "followers" is the rows where
+  // this user is the creator being followed. Followers are anonymous to
+  // each other AND to the creator by product decision — nothing in this
+  // codebase ever selects Follow.follower for a creator-facing read, only
+  // Follow.count() (see creators.service.ts's getFollowerCount) — so the
+  // "followers" relation exists for the schema/cascade-delete wiring, not
+  // because any query walks it to list identities.
+  following Follow[] @relation("Following")
+  followers Follow[] @relation("Followers")
   inBodyMeasurements  InBodyMeasurement[]
   wearableConnections WearableConnection[]
   dailyHealthMetrics  DailyHealthMetric[]
@@ -355,6 +408,14 @@ model Protocol {
   targetWeeklyWorkouts      Int?
   targetDailyActiveCalories Int?
 
+  // Phase 13: PRIVATE always, regardless of what a caller sends, unless the
+  // owner is a consenting CREATOR — enforced in the Route Handler (see
+  // src/app/api/protocols/route.ts and .../[id]/route.ts), not here; this
+  // column alone does not imply anything is actually reachable by anyone
+  // but the owner — creators.service.ts's public-profile query re-checks
+  // the owner's accountType/publicProfileConsentAt on every read too.
+  visibility  Visibility @default(PRIVATE)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -362,6 +423,7 @@ model Protocol {
 
   @@index([userId])
   @@index([userId, isActive])
+  @@index([userId, visibility])
   @@map("protocols")
 }
 
@@ -423,12 +485,42 @@ model Challenge {
   activatedAt   DateTime?
   expiresAt     DateTime?
 
+  // Phase 13: same PRIVATE-unless-consenting-CREATOR rule as
+  // Protocol.visibility above — see that field's doc comment.
+  visibility    Visibility    @default(PRIVATE)
+
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   @@index([userId])
   @@index([userId, activatedAt])
+  @@index([userId, visibility])
   @@map("challenges")
+}
+
+/// Phase 13: a MEMBER (or CREATOR) following a CREATOR's public profile.
+/// Deliberately its own join table rather than a scalar array on User —
+/// needs its own `createdAt` and a stable row to delete on unfollow.
+/// followerId/creatorId are NOT role-checked by a DB constraint (Prisma/
+/// Postgres can't express "creatorId must point at a CREATOR" declaratively)
+/// — creators.service.ts's followCreator() checks that before writing.
+model Follow {
+  id         String   @id @default(uuid())
+
+  followerId String
+  follower   User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+
+  creatorId  String
+  creator    User     @relation("Followers", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  // A user can only follow a given creator once — followCreator() treats a
+  // unique-constraint violation as "already following" (idempotent), not
+  // an error.
+  @@unique([followerId, creatorId])
+  @@index([creatorId])
+  @@map("follows")
 }
 
 /// A single InBody body-composition scan, entered by uploading a photo/scan

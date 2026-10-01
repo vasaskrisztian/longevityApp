@@ -118,6 +118,28 @@ describe('CreateProtocolSchema', () => {
   });
 });
 
+// Phase 13 — visibility is optional (not `.default()`) so an omitting
+// caller gets `undefined` through to Prisma, which then applies the
+// column's own @default(PRIVATE) — see the schema file's comment.
+describe('visibility (Phase 13)', () => {
+  it('is left undefined when omitted', () => {
+    const result = CreateProtocolSchema.safeParse(VALID_PROTOCOL);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.visibility).toBeUndefined();
+    }
+  });
+
+  it('accepts PRIVATE and PUBLIC', () => {
+    expect(CreateProtocolSchema.safeParse({ ...VALID_PROTOCOL, visibility: 'PRIVATE' }).success).toBe(true);
+    expect(CreateProtocolSchema.safeParse({ ...VALID_PROTOCOL, visibility: 'PUBLIC' }).success).toBe(true);
+  });
+
+  it('rejects any other value', () => {
+    expect(CreateProtocolSchema.safeParse({ ...VALID_PROTOCOL, visibility: 'SECRET' }).success).toBe(false);
+  });
+});
+
 describe('UpdateProtocolSchema', () => {
   it('accepts a partial payload with a single field (e.g. "set as active")', () => {
     expect(UpdateProtocolSchema.safeParse({ isActive: true }).success).toBe(true);

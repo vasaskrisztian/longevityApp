@@ -80,6 +80,27 @@ describe('CreateChallengeSchema', () => {
   });
 });
 
+// Phase 13 — same optional-not-default rationale as protocol.schemas.ts's
+// visibility field.
+describe('visibility (Phase 13)', () => {
+  it('is left undefined when omitted', () => {
+    const result = CreateChallengeSchema.safeParse(VALID_CHALLENGE);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.visibility).toBeUndefined();
+    }
+  });
+
+  it('accepts PRIVATE and PUBLIC', () => {
+    expect(CreateChallengeSchema.safeParse({ ...VALID_CHALLENGE, visibility: 'PRIVATE' }).success).toBe(true);
+    expect(CreateChallengeSchema.safeParse({ ...VALID_CHALLENGE, visibility: 'PUBLIC' }).success).toBe(true);
+  });
+
+  it('rejects any other value', () => {
+    expect(CreateChallengeSchema.safeParse({ ...VALID_CHALLENGE, visibility: 'SECRET' }).success).toBe(false);
+  });
+});
+
 describe('UpdateChallengeSchema', () => {
   it('accepts a partial payload with a single field', () => {
     expect(UpdateChallengeSchema.safeParse({ name: 'Renamed challenge' }).success).toBe(true);

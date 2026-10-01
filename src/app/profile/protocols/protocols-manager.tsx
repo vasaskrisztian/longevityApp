@@ -31,6 +31,7 @@ export interface ProtocolDTO {
   targetSleepMinutes?: number | null;
   targetWeeklyWorkouts?: number | null;
   targetDailyActiveCalories?: number | null;
+  visibility: 'PRIVATE' | 'PUBLIC';
   supplements: ProtocolSupplementDTO[];
 }
 
@@ -216,11 +217,13 @@ function ProtocolForm({
 
 function ProtocolRow({
   protocol,
+  canPublish,
   onUpdated,
   onDeleted,
   onActivated,
 }: {
   protocol: ProtocolDTO;
+  canPublish: boolean;
   onUpdated: (p: ProtocolDTO) => void;
   onDeleted: () => void;
   onActivated: (id: string) => void;
@@ -228,6 +231,25 @@ function ProtocolRow({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
+
+  // Phase 13: a separate, single-field PATCH — same pattern as
+  // handleActivate below — so publishing never touches the rest of the
+  // protocol's data and never goes through the full edit form.
+  async function handleToggleVisibility() {
+    setTogglingVisibility(true);
+    const nextVisibility = protocol.visibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC';
+    const response = await fetch(`/api/protocols/${protocol.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility: nextVisibility }),
+    });
+    setTogglingVisibility(false);
+    if (response.ok) {
+      const updated = await response.json();
+      onUpdated(toDTO(updated));
+    }
+  }
 
   async function handleSave(data: ProtocolFormValues) {
     const response = await fetch(`/api/protocols/${protocol.id}`, {
@@ -312,6 +334,11 @@ function ProtocolRow({
                   Active
                 </span>
               )}
+              {protocol.visibility === 'PUBLIC' && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                  Public
+                </span>
+              )}
             </p>
             {protocol.description && (
               <p className="text-sm text-muted-foreground">{protocol.description}</p>
@@ -329,6 +356,15 @@ function ProtocolRow({
             {!protocol.isActive && (
               <Button size="sm" onClick={handleActivate} disabled={activating}>
                 {activating ? 'Setting…' : 'Set as active'}
+              </Button>
+            )}
+            {canPublish && (
+              <Button size="sm" variant="outline" onClick={handleToggleVisibility} disabled={togglingVisibility}>
+                {togglingVisibility
+                  ? 'Updating…'
+                  : protocol.visibility === 'PUBLIC'
+                    ? 'Make private'
+                    : 'Publish publicly'}
               </Button>
             )}
             <div className="flex gap-2">
@@ -360,6 +396,7 @@ function toDTO(raw: any): ProtocolDTO {
     targetSleepMinutes: raw.targetSleepMinutes ?? null,
     targetWeeklyWorkouts: raw.targetWeeklyWorkouts ?? null,
     targetDailyActiveCalories: raw.targetDailyActiveCalories ?? null,
+    visibility: raw.visibility ?? 'PRIVATE',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supplements: (raw.supplements ?? []).map((s: any) => ({
       name: s.name,
@@ -371,7 +408,13 @@ function toDTO(raw: any): ProtocolDTO {
   };
 }
 
-export function ProtocolsManager({ initial }: { initial: ProtocolDTO[] }) {
+export function ProtocolsManager({
+  initial,
+  canPublish,
+}: {
+  initial: ProtocolDTO[];
+  canPublish: boolean;
+}) {
   const [protocols, setProtocols] = useState(initial);
   const [adding, setAdding] = useState(false);
 
@@ -410,6 +453,7 @@ export function ProtocolsManager({ initial }: { initial: ProtocolDTO[] }) {
           <ProtocolRow
             key={protocol.id}
             protocol={protocol}
+            canPublish={canPublish}
             onUpdated={(updated) =>
               setProtocols((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
             }

@@ -1,6 +1,7 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
 import { CreateChallengeSchema } from '@/lib/validation/challenge.schemas';
 import { listChallenges, createChallenge } from '@/modules/challenges/challenges.service';
+import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
 
 export async function GET() {
@@ -27,6 +28,15 @@ export async function POST(request: Request) {
   const parsed = CreateChallengeSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // Phase 13: see src/app/api/protocols/route.ts's identical gate — PUBLIC
+  // is only ever honored for a consenting creator.
+  if (parsed.data.visibility === 'PUBLIC' && !(await canPublishPublicly(userId))) {
+    return Response.json(
+      { error: 'Only a consenting creator account can publish a challenge publicly' },
+      { status: 403 },
+    );
   }
 
   try {

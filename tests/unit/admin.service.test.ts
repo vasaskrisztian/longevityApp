@@ -5,10 +5,18 @@ const prismaMock = {
     findMany: vi.fn(),
     count: vi.fn(),
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   syncJob: {
     findMany: vi.fn(),
   },
+  protocol: {
+    updateMany: vi.fn(),
+  },
+  challenge: {
+    updateMany: vi.fn(),
+  },
+  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
 
@@ -33,6 +41,8 @@ const {
   userExistsForAdmin,
   recordAdminViewUser,
   recordAdminTriggerSync,
+  setUserAccountType,
+  recordAdminSetAccountType,
 } = await import('@/modules/admin/admin.service');
 
 const BASE_QUERY = { q: undefined, ouraStatus: 'ALL' as const, page: 1, pageSize: 20 };
@@ -295,6 +305,60 @@ describe('recordAdminTriggerSync', () => {
       action: 'ADMIN_TRIGGER_SYNC',
       entityType: 'SyncJob',
       entityId: 'job-1',
+    });
+  });
+});
+
+// Phase 13
+describe('setUserAccountType', () => {
+  it('grants CREATOR with a single, plain update — no cascade', async () => {
+    prismaMock.user.update.mockResolvedValue({});
+
+    await setUserAccountType('u1', 'CREATOR');
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { accountType: 'CREATOR' },
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('demoting to MEMBER clears publicProfileConsentAt AND flips every protocol/challenge back to PRIVATE, in one transaction', async () => {
+    prismaMock.user.update.mockResolvedValue({});
+    prismaMock.protocol.updateMany.mockResolvedValue({ count: 3 });
+    prismaMock.challenge.updateMany.mockResolvedValue({ count: 1 });
+
+    await setUserAccountType('u1', 'MEMBER');
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { accountType: 'MEMBER', publicProfileConsentAt: null },
+    });
+    expect(prismaMock.protocol.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      data: { visibility: 'PRIVATE' },
+    });
+    expect(prismaMock.challenge.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      data: { visibility: 'PRIVATE' },
+    });
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+  });
+});
+
+describe('recordAdminSetAccountType', () => {
+  it('writes an ADMIN_SET_ACCOUNT_TYPE audit row with the new accountType in metadata', async () => {
+    recordAuditLogMock.mockResolvedValue(undefined);
+
+    await recordAdminSetAccountType('admin-1', 'u1', 'CREATOR');
+
+    expect(recordAuditLogMock).toHaveBeenCalledWith({
+      actorUserId: 'admin-1',
+      targetUserId: 'u1',
+      action: 'ADMIN_SET_ACCOUNT_TYPE',
+      entityType: 'User',
+      entityId: 'u1',
+      metadata: { accountType: 'CREATOR' },
     });
   });
 });

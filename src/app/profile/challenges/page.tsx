@@ -1,5 +1,6 @@
 import { requireAuthenticatedUserForPage } from '@/lib/auth/page-guards';
 import { listChallenges } from '@/modules/challenges/challenges.service';
+import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChallengesManager, type ChallengeDTO } from './challenges-manager';
 
@@ -11,7 +12,10 @@ export default async function ChallengesPage() {
   // — logic that only lives in challenges.service.ts's computeProgress, so
   // listChallenges is called directly here rather than duplicated. Same
   // precedent as dashboard/page.tsx calling dashboard.service.ts directly.
-  const challenges = await listChallenges(user.id);
+  const [challenges, canPublish] = await Promise.all([
+    listChallenges(user.id),
+    canPublishPublicly(user.id),
+  ]);
 
   const activeCount = challenges.filter((c) => c.progress.status === 'ACTIVE').length;
   const completedCount = challenges.filter((c) => c.progress.status === 'COMPLETED').length;
@@ -30,6 +34,7 @@ export default async function ChallengesPage() {
     windowDays: c.windowDays,
     activatedAt: c.activatedAt ? new Date(c.activatedAt).toISOString() : null,
     expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
+    visibility: c.visibility,
     progress: c.progress,
   }));
 
@@ -49,7 +54,7 @@ export default async function ChallengesPage() {
           </CardDescription>
         </CardHeader>
       </Card>
-      <ChallengesManager initial={initial} />
+      <ChallengesManager initial={initial} canPublish={canPublish} />
     </div>
   );
 }

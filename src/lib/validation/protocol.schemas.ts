@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SupplementFrequencyEnum, SupplementTimingEnum } from './supplement.schemas';
+import { VisibilityEnum } from './visibility.schemas';
 
 // `z.coerce.number()` runs BEFORE `.optional()` is checked, and an empty
 // text input submits `''`, which `Number('')` coerces to `0` — not
@@ -49,6 +50,15 @@ export const CreateProtocolSchema = z.object({
   targetWeeklyWorkouts: optionalCoercedInt(0, 50),
   targetDailyActiveCalories: optionalCoercedInt(0, 20_000),
   supplements: z.array(ProtocolSupplementSchema).max(50).default([]),
+  // Optional (not `.default()`, deliberately) — the form never sends this
+  // field on create (see protocols-manager.tsx), so `undefined` reaches
+  // Prisma's `data`, which Prisma treats as "not provided" and lets the
+  // column's own `@default(PRIVATE)` apply. A `.default()` here would make
+  // z.infer's output type require `visibility` on every ProtocolFormValues
+  // object, breaking every existing form-initial-values object that
+  // doesn't set it. See the Route Handler for the CREATOR-only gate on
+  // ever actually honoring PUBLIC.
+  visibility: VisibilityEnum.optional(),
 });
 
 export type CreateProtocolInput = z.infer<typeof CreateProtocolSchema>;

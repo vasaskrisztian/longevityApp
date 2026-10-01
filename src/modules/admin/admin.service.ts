@@ -101,6 +101,8 @@ export interface AdminUserDetail {
     fullName: string | null;
     role: string;
     status: string;
+    accountType: string;
+    publicProfileConsentAt: Date | null;
     emailVerifiedAt: Date | null;
     lastLoginAt: Date | null;
     createdAt: Date;
@@ -155,6 +157,8 @@ export async function getUserDetailForAdmin(targetUserId: string): Promise<Admin
       fullName: userRow.profile?.fullName ?? null,
       role: userRow.role,
       status: userRow.status,
+      accountType: userRow.accountType,
+      publicProfileConsentAt: userRow.publicProfileConsentAt,
       emailVerifiedAt: userRow.emailVerifiedAt,
       lastLoginAt: userRow.lastLoginAt,
       createdAt: userRow.createdAt,
@@ -212,5 +216,53 @@ export async function recordAdminTriggerSync(
     action: 'ADMIN_TRIGGER_SYNC',
     entityType: 'SyncJob',
     entityId: syncJobId,
+  });
+}
+
+/**
+ * Phase 13: the ONLY way an account ever becomes a CREATOR (or stops being
+ * one) — per the product decision, nobody self-serves their way to a
+ * public profile. Demoting CREATOR -> MEMBER cascades exactly like a
+ * creator revoking their own consent (creators.service.ts's
+ * revokePublicProfileConsent): clears publicProfileConsentAt and flips
+ * every one of their Protocol/Challenge rows back to PRIVATE, in the same
+ * transaction, so a de-platformed creator's content doesn't stay publicly
+ * reachable by a stale link. Promoting MEMBER -> CREATOR only grants the
+ * *ability* — the user still has to opt in via
+ * POST /api/creators/me/consent before anything of theirs can go public.
+ */
+export async function setUserAccountType(
+  targetUserId: string,
+  accountType: 'MEMBER' | 'CREATOR',
+): Promise<void> {
+  if (accountType === 'CREATOR') {
+    await prisma.user.update({ where: { id: targetUserId }, data: { accountType: 'CREATOR' } });
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: targetUserId },
+      data: { accountType: 'MEMBER', publicProfileConsentAt: null },
+    }),
+    prisma.protocol.updateMany({ where: { userId: targetUserId }, data: { visibility: 'PRIVATE' } }),
+    prisma.challenge.updateMany({ where: { userId: targetUserId }, data: { visibility: 'PRIVATE' } }),
+  ]);
+}
+
+/** New `ADMIN_SET_ACCOUNT_TYPE` audit row, same pattern as
+ * recordAdminTriggerSync above. */
+export async function recordAdminSetAccountType(
+  actorUserId: string,
+  targetUserId: string,
+  accountType: 'MEMBER' | 'CREATOR',
+): Promise<void> {
+  await recordAuditLog({
+    actorUserId,
+    targetUserId,
+    action: 'ADMIN_SET_ACCOUNT_TYPE',
+    entityType: 'User',
+    entityId: targetUserId,
+    metadata: { accountType },
   });
 }

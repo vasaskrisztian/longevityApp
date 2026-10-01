@@ -30,6 +30,12 @@ vi.mock('@/modules/challenges/challenges.service', () => ({
   deleteChallenge: deleteChallengeMock,
 }));
 
+// Phase 13 — see api-protocols.route.test.ts's identical mock comment.
+const canPublishPubliclyMock = vi.fn();
+vi.mock('@/modules/creators/creators.service', () => ({
+  canPublishPublicly: canPublishPubliclyMock,
+}));
+
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -72,6 +78,7 @@ beforeEach(() => {
   updateChallengeMock.mockReset();
   activateChallengeMock.mockReset();
   deleteChallengeMock.mockReset();
+  canPublishPubliclyMock.mockReset();
 });
 
 describe('GET /api/challenges/[id]', () => {
@@ -227,6 +234,58 @@ describe('PATCH /api/challenges/[id]', () => {
     const response = await PATCH(patchRequest({ activate: true }), ctx('c1'));
 
     expect(response.status).toBe(500);
+  });
+
+  // Phase 13: visibility is the one field a creator can still change on an
+  // already-active challenge — see the route's single-field carve-out.
+  describe('visibility (single-field action)', () => {
+    it('returns 403 when the owner is not a consenting creator', async () => {
+      requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      getChallengeByIdMock.mockResolvedValue(DRAFT_CHALLENGE);
+      requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      canPublishPubliclyMock.mockResolvedValue(false);
+
+      const response = await PATCH(patchRequest({ visibility: 'PUBLIC' }), ctx('c1'));
+
+      expect(response.status).toBe(403);
+      expect(updateChallengeMock).not.toHaveBeenCalled();
+    });
+
+    it('publishes an ALREADY-ACTIVE challenge when the owner is a consenting creator', async () => {
+      requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      getChallengeByIdMock.mockResolvedValue(ACTIVE_CHALLENGE);
+      requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      canPublishPubliclyMock.mockResolvedValue(true);
+      updateChallengeMock.mockResolvedValue({ ...ACTIVE_CHALLENGE, visibility: 'PUBLIC' });
+
+      const response = await PATCH(patchRequest({ visibility: 'PUBLIC' }), ctx('c1'));
+
+      expect(response.status).toBe(200);
+      expect(updateChallengeMock).toHaveBeenCalledWith('c1', { visibility: 'PUBLIC' });
+    });
+
+    it('allows making an active challenge PRIVATE again without checking creator eligibility', async () => {
+      requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      getChallengeByIdMock.mockResolvedValue(ACTIVE_CHALLENGE);
+      requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      updateChallengeMock.mockResolvedValue({ ...ACTIVE_CHALLENGE, visibility: 'PRIVATE' });
+
+      const response = await PATCH(patchRequest({ visibility: 'PRIVATE' }), ctx('c1'));
+
+      expect(response.status).toBe(200);
+      expect(canPublishPubliclyMock).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for an invalid visibility value', async () => {
+      requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+      getChallengeByIdMock.mockResolvedValue(DRAFT_CHALLENGE);
+      requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+
+      const response = await PATCH(patchRequest({ visibility: 'SECRET' }), ctx('c1'));
+
+      expect(response.status).toBe(400);
+      expect(updateChallengeMock).not.toHaveBeenCalled();
+    });
   });
 });
 

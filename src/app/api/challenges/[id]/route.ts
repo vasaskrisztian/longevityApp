@@ -4,12 +4,14 @@ import {
   toErrorResponse,
 } from '@/lib/auth/authorization';
 import { UpdateChallengeSchema } from '@/lib/validation/challenge.schemas';
+import { VisibilityEnum } from '@/lib/validation/visibility.schemas';
 import {
   getChallengeById,
   updateChallenge,
   activateChallenge,
   deleteChallenge,
 } from '@/modules/challenges/challenges.service';
+import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
 
 interface RouteParams {
@@ -68,6 +70,34 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
   }
 
+  // Phase 13: `visibility` is NOT one of the challenge's "terms" — the
+  // read-only-once-activated rule below exists to protect
+  // type/requiredCount/threshold/windowDays, which would defeat the point
+  // of committing to a challenge if changeable mid-run. Publishing/
+  // unpublishing an already-running challenge is the opposite: showing
+  // live progress to followers is the point, so it's handled here, before
+  // the activatedAt lock, as its own single-field action — same shape as
+  // `{ activate: true }` above.
+  if (body && typeof body === 'object' && 'visibility' in body && Object.keys(body).length === 1) {
+    const visibilityParsed = VisibilityEnum.safeParse((body as { visibility: unknown }).visibility);
+    if (!visibilityParsed.success) {
+      return Response.json({ error: 'Invalid visibility value' }, { status: 400 });
+    }
+    if (visibilityParsed.data === 'PUBLIC' && !(await canPublishPublicly(challenge.userId))) {
+      return Response.json(
+        { error: 'Only a consenting creator account can publish a challenge publicly' },
+        { status: 403 },
+      );
+    }
+    try {
+      const updated = await updateChallenge(params.id, { visibility: visibilityParsed.data });
+      return Response.json(updated, { status: 200 });
+    } catch (error) {
+      logger.error('challenge_visibility_update_failed', { message: (error as Error).message });
+      return Response.json({ error: 'Failed to update challenge visibility' }, { status: 500 });
+    }
+  }
+
   // Once activated, a challenge's terms are read-only — changing them
   // mid-run would defeat the point of committing to it (see
   // challenges.service.ts's updateChallenge doc comment).
@@ -78,6 +108,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const parsed = UpdateChallengeSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // See POST /api/challenges — same CREATOR-only gate on PUBLIC.
+  if (parsed.data.visibility === 'PUBLIC' && !(await canPublishPublicly(challenge.userId))) {
+    return Response.json(
+      { error: 'Only a consenting creator account can publish a challenge publicly' },
+      { status: 403 },
+    );
   }
 
   try {

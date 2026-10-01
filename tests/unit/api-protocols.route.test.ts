@@ -24,6 +24,14 @@ vi.mock('@/modules/protocols/protocols.service', () => ({
   createProtocol: createProtocolMock,
 }));
 
+// Phase 13: the route imports creators.service.ts for the PUBLIC-visibility
+// gate — mocked here so importing the route never touches the real Prisma
+// client (which isn't initialized in this sandbox, see docs/phase-1-summary.md).
+const canPublishPubliclyMock = vi.fn();
+vi.mock('@/modules/creators/creators.service', () => ({
+  canPublishPublicly: canPublishPubliclyMock,
+}));
+
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -44,6 +52,7 @@ beforeEach(() => {
   requireAuthenticatedUserMock.mockReset();
   listProtocolsMock.mockReset();
   createProtocolMock.mockReset();
+  canPublishPubliclyMock.mockReset();
 });
 
 describe('GET /api/protocols', () => {
@@ -120,5 +129,34 @@ describe('POST /api/protocols', () => {
     const response = await POST(postRequest(VALID_PROTOCOL));
 
     expect(response.status).toBe(500);
+  });
+
+  // Phase 13
+  it('returns 403 for visibility: PUBLIC when the caller is not a consenting creator', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    canPublishPubliclyMock.mockResolvedValue(false);
+
+    const response = await POST(postRequest({ ...VALID_PROTOCOL, visibility: 'PUBLIC' }));
+
+    expect(response.status).toBe(403);
+    expect(createProtocolMock).not.toHaveBeenCalled();
+  });
+
+  it('creates a PUBLIC protocol when the caller is a consenting creator', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    canPublishPubliclyMock.mockResolvedValue(true);
+    createProtocolMock.mockResolvedValue({
+      id: 'p1',
+      userId: 'u1',
+      ...VALID_PROTOCOL,
+      visibility: 'PUBLIC',
+      isActive: false,
+      supplements: [],
+    });
+
+    const response = await POST(postRequest({ ...VALID_PROTOCOL, visibility: 'PUBLIC' }));
+
+    expect(response.status).toBe(201);
+    expect(createProtocolMock).toHaveBeenCalledWith('u1', expect.objectContaining({ visibility: 'PUBLIC' }));
   });
 });
