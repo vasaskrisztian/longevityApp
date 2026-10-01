@@ -1,5 +1,7 @@
 import { listPublicCreators } from '@/modules/creators/creators.service';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Deliberately public — no requireAuthenticatedUser. This is the one
  * category of data ARCHITECTURE.md §4.2's "everything is private by

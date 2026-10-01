@@ -3,6 +3,7 @@ import { listPublicCreators } from '@/modules/creators/creators.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export const metadata = { title: 'Creators — Longevity Klub' };
+export const dynamic = 'force-dynamic';
 
 export default async function CreatorsDirectoryPage() {
   const creators = await listPublicCreators();
