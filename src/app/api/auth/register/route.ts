@@ -2,15 +2,21 @@ import { RegisterSchema } from '@/lib/validation/auth.schemas';
 import { registerUser, EmailAlreadyRegisteredError } from '@/modules/auth/auth.service';
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
 import { logger } from '@/lib/logging/logger';
+import { sendEmail } from '@/lib/email/mailer';
 
-// TODO(Phase 2/mailer): wire a real transactional email provider. For now
-// the verification link is logged server-side only — it must never be
-// returned in the HTTP response body.
-function sendVerificationEmail(email: string, token: string) {
+// Real sending goes through lib/email/mailer.ts (Resend, with a
+// console-log fallback when RESEND_API_KEY isn't configured) — this
+// function only owns the email's actual copy. The verification link must
+// never be returned in the HTTP response body, only delivered by email.
+async function sendVerificationEmail(email: string, token: string) {
   const verifyUrl = `${process.env.APP_URL ?? ''}/api/auth/verify-email?token=${token}`;
   logger.info('verification_email_dispatched', { emailDomain: email.split('@')[1] ?? '' });
-  // eslint-disable-next-line no-console
-  console.log(`[dev-only] Verification link for ${email}: ${verifyUrl}`);
+  await sendEmail({
+    to: email,
+    subject: 'Confirm your email — Longevity Klub',
+    html: `<p>Welcome to Longevity Klub! Confirm your email address to finish creating your account:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>`,
+    text: `Welcome to Longevity Klub! Confirm your email address to finish creating your account:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create this account, you can ignore this email.`,
+  });
 }
 
 export async function POST(request: Request) {
@@ -28,7 +34,11 @@ export async function POST(request: Request) {
 
   try {
     const { verificationToken } = await registerUser(parsed.data);
-    sendVerificationEmail(parsed.data.email, verificationToken);
+    // Awaited (not fire-and-forget): sendEmail() never throws, and without
+    // awaiting here this handler's response could be sent — and the
+    // function/request lifecycle torn down — before the outbound call to
+    // Resend actually completes.
+    await sendVerificationEmail(parsed.data.email, verificationToken);
   } catch (error) {
     if (!(error instanceof EmailAlreadyRegisteredError)) {
       logger.error('registration_failed', { message: (error as Error).message });
