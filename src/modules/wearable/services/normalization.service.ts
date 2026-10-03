@@ -71,7 +71,15 @@ export async function normalizeAndUpsertDailyMetrics(params: {
   userId: string;
   provider: WearableProviderId;
   records: ProviderRawRecord[];
-  adapter: WearableProviderAdapter;
+  // Narrowed from the full WearableProviderAdapter (this function only ever
+  // calls mapToNormalizedFields) so phase 19's Apple Health ingestion route
+  // can pass a plain `{ mapToNormalizedFields }` object instead of a full
+  // OAuth-shaped adapter — Apple Health has no token exchange/refresh/revoke
+  // to implement (the device pushes data directly, there's no cloud API to
+  // pull from). Every existing caller (Oura's full adapter) is still
+  // trivially assignable here — this is a type-only narrowing, zero
+  // behavior change for the existing sync path.
+  adapter: Pick<WearableProviderAdapter, 'mapToNormalizedFields'>;
 }): Promise<{ datesUpserted: number }> {
   // TEMPORARY, DELIBERATE diagnostic — one line per call (not per record), so
   // this is safe from the log-rate-limit regression that per-record logging

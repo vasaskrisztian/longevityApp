@@ -18,6 +18,12 @@ vi.mock('@/lib/audit/audit-log.service', () => ({
   recordAuditLog: recordAuditLogMock,
 }));
 
+// Phase 19: same Bearer-vs-cookie response-shape branch as connect/route.ts.
+const headersGetMock = vi.fn();
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => ({ get: headersGetMock })),
+}));
+
 const loggerMock = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 vi.mock('@/lib/logging/logger', () => ({ logger: loggerMock }));
 
@@ -52,6 +58,7 @@ const REQUEST = new Request('https://app.example.com/api/integrations/oura/disco
 
 beforeEach(() => {
   vi.clearAllMocks();
+  headersGetMock.mockReturnValue(null);
 });
 
 describe('POST /api/integrations/oura/disconnect', () => {
@@ -159,5 +166,19 @@ describe('POST /api/integrations/oura/disconnect', () => {
     expect(revokeTokensMock).not.toHaveBeenCalled();
     expect(deleteCredentialMock).toHaveBeenCalledWith('conn-1');
     expect(markConnectionDisconnectedMock).toHaveBeenCalledWith('conn-1');
+  });
+
+  it('phase 19: a Bearer-authenticated (mobile) caller gets a plain JSON acknowledgement instead of the 303 redirect', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getConnectionForUserAndProviderMock.mockResolvedValue({ id: 'conn-1', status: 'CONNECTED' });
+    loadCredentialMock.mockResolvedValue(null);
+    headersGetMock.mockReturnValue('Bearer some-access-token');
+
+    const response = await POST(REQUEST);
+
+    expect(markConnectionDisconnectedMock).toHaveBeenCalledWith('conn-1');
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ ok: true });
   });
 });

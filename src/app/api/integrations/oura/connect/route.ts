@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
 import { generatePkcePair } from '@/lib/auth/pkce';
 import { checkRateLimit, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
@@ -56,5 +57,19 @@ export async function GET() {
   });
 
   const authorizationUrl = provider.buildAuthorizationUrl({ state, codeChallenge });
+
+  // The web app's own page navigates the browser here directly (a cookie
+  // session rides along automatically), so a 302 straight to Oura is
+  // correct. The Expo mobile app (phase 16) authenticates with a Bearer
+  // token instead of a cookie — opening this URL in a system/in-app browser
+  // would carry none of that, since a browser navigation can't attach a
+  // custom Authorization header. So a Bearer-authenticated caller gets the
+  // URL back as data instead, and opens it itself (mobile/app/(tabs)/
+  // devices.tsx, phase 19) — Oura's own authorize page needs no auth header
+  // at all, only the state/PKCE challenge already embedded in the URL.
+  const isMobileBearerAuth = (await headers()).get('authorization')?.startsWith('Bearer ') ?? false;
+  if (isMobileBearerAuth) {
+    return Response.json({ authorizationUrl }, { status: 200 });
+  }
   return Response.redirect(authorizationUrl, 302);
 }

@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
 import { resolveAppUrl } from '@/lib/http/app-url';
 import { logger } from '@/lib/logging/logger';
@@ -56,5 +57,15 @@ export async function POST(request: Request) {
     });
   }
 
+  // Same Bearer-vs-cookie branch as connect/route.ts (phase 19): mobile has
+  // no /profile/devices web page to land on, and following this redirect
+  // would otherwise land on whatever /login or the page-guard chain renders
+  // for a cookie-less caller — harmless (the disconnect already happened
+  // above), but fragile to depend on. A Bearer caller gets a plain JSON
+  // acknowledgement instead.
+  const isMobileBearerAuth = (await headers()).get('authorization')?.startsWith('Bearer ') ?? false;
+  if (isMobileBearerAuth) {
+    return Response.json({ ok: true }, { status: 200 });
+  }
   return Response.redirect(resolveAppUrl('/profile/devices', request.url), 303);
 }

@@ -14,6 +14,15 @@ vi.mock('@/lib/auth/authorization', () => ({
   toErrorResponse,
 }));
 
+// Phase 19: the route itself checks the raw Authorization header (separately
+// from requireAuthenticatedUser's own cookie-or-Bearer auth check) purely to
+// decide the RESPONSE shape — JSON for a mobile/Bearer caller, the original
+// 302 redirect for a cookie-based web caller. See next/headers mock below.
+const headersGetMock = vi.fn();
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => ({ get: headersGetMock })),
+}));
+
 const generatePkcePairMock = vi.fn();
 vi.mock('@/lib/auth/pkce', () => ({ generatePkcePair: generatePkcePairMock }));
 
@@ -43,6 +52,7 @@ const { GET } = await import('@/app/api/integrations/oura/connect/route');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  headersGetMock.mockReturnValue(null);
   checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 4, resetAt: Date.now() + 900_000 });
   getRedirectUriMock.mockReturnValue('https://app.example.com/api/integrations/oura/callback');
   generatePkcePairMock.mockReturnValue({
@@ -127,5 +137,25 @@ describe('GET /api/integrations/oura/connect', () => {
     expect(response.headers.get('location')).toBe(
       'https://cloud.ouraring.com/oauth/authorize?state=state-abc',
     );
+  });
+
+  it('a cookie-based (no Authorization header) caller still gets the original 302 redirect', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    headersGetMock.mockReturnValue(null);
+
+    const response = await GET();
+
+    expect(response.status).toBe(302);
+  });
+
+  it('phase 19: a Bearer-authenticated (mobile) caller gets the authorization URL back as JSON, not a redirect — a browser navigation cannot carry a custom Authorization header', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    headersGetMock.mockReturnValue('Bearer some-access-token');
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ authorizationUrl: 'https://cloud.ouraring.com/oauth/authorize?state=state-abc' });
   });
 });

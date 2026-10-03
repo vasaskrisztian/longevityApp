@@ -51,6 +51,12 @@ export function checkRateLimit(
 
 export const AUTH_RATE_LIMIT = { windowMs: 15 * 60 * 1000, max: 5 };
 export const MANUAL_SYNC_RATE_LIMIT = { windowMs: 5 * 60 * 1000, max: 1 };
+// Apple Health has no OAuth/queue — the device itself pushes a batch of
+// HealthKit-derived daily samples directly (phase 19's "no cloud API"
+// design, see claude/phase-15-mobile-migration-plan.md). A background sync
+// plus an occasional manual "sync now" tap is the expected traffic shape;
+// generous enough for both without leaving the endpoint unbounded.
+export const APPLE_HEALTH_INGEST_RATE_LIMIT = { windowMs: 60 * 1000, max: 2 };
 
 export function getClientIdentifier(request: Request): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
