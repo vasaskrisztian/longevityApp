@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { getDashboardSnapshot, type DashboardSnapshot } from '@/src/api/dashboard';
+import { getDashboardSnapshot, getProtocolOverlay, type DashboardSnapshot, type ProtocolOverlay } from '@/src/api/dashboard';
 import { getConnections, type ConnectionSummary } from '@/src/api/wearables';
 import { getProfileBundle } from '@/src/api/profile';
 import { Card } from '@/src/components/ui/Card';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
- * Real data, phase 17 — replaces the ScreenStub. Deliberately not full
- * parity with the web app's dashboard/page.tsx yet: the protocol-target
- * overlays ("Following: X protocol", target lines under each score, the
- * weekly-workouts card) depend on screens phase 20 hasn't ported yet
- * (Protocols) and a count the mobile API doesn't expose on its own
- * (getWeeklyWorkoutCount has no route). Core metrics — the actual point of
- * "Dashboard + Trends" — are real here: Sleep/Readiness/Activity/HRV/
- * Resting HR/Sleep duration/Steps, wired to the same /api/dashboard route
- * the web app's server component calls directly (mobile reaches it over
- * HTTP via the phase 16 Bearer auth instead).
+ * Real data, phase 17 — replaces the ScreenStub. Phase 22's follow-up (see
+ * claude/phase-15-mobile-migration-plan.md) added the protocol-target
+ * overlay this screen was missing since phase 17: "Following: X protocol",
+ * target lines under the Sleep/Sleep-duration/Active-calories/Workouts
+ * cards, and the Workouts(7 days) card itself — all sourced from the new
+ * `GET /api/dashboard/protocol-overlay` route and mirroring
+ * src/app/dashboard/page.tsx's `ScoreCard`/`TargetLine` exactly (same
+ * fields get targets: only `targetSleepScore`/`targetSleepMinutes`/
+ * `targetWeeklyWorkouts`/`targetDailyActiveCalories` exist on the Protocol
+ * model — Readiness/Activity/HRV/Resting HR/Steps never show a target,
+ * same as web).
  */
 
 function formatSleepDuration(totalMinutes: number | null): string | null {
@@ -27,7 +28,30 @@ function formatSleepDuration(totalMinutes: number | null): string | null {
   return `${hours}h ${minutes}m`;
 }
 
-function ScoreCard({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
+/** Renders under a target-bearing card's value, e.g. "Target: 85" — never
+ * rendered at all when the active protocol doesn't set that target, same
+ * as the web app's TargetLine. */
+function TargetLine({ target, unit }: { target: number | null | undefined; unit?: string }) {
+  if (target === null || target === undefined) return null;
+  return (
+    <Text style={styles.targetText}>
+      Target: {target}
+      {unit ? ` ${unit}` : ''}
+    </Text>
+  );
+}
+
+function ScoreCard({
+  label,
+  value,
+  unit,
+  target,
+}: {
+  label: string;
+  value: number | null;
+  unit?: string;
+  target?: number | null;
+}) {
   return (
     <Card style={styles.scoreCard}>
       <Text style={styles.scoreLabel}>{label}</Text>
@@ -35,7 +59,11 @@ function ScoreCard({ label, value, unit }: { label: string; value: number | null
         {value === null ? '—' : value}
         {value !== null && unit ? <Text style={styles.scoreUnit}> {unit}</Text> : null}
       </Text>
-      {value === null ? <Text style={styles.scoreHint}>No data yet</Text> : null}
+      {target != null ? (
+        <TargetLine target={target} unit={unit} />
+      ) : value === null ? (
+        <Text style={styles.scoreHint}>No data yet</Text>
+      ) : null}
     </Card>
   );
 }
@@ -44,6 +72,7 @@ interface DashboardState {
   snapshot: DashboardSnapshot | null;
   ouraConnection: ConnectionSummary | null;
   firstName: string | null;
+  protocolOverlay: ProtocolOverlay | null;
 }
 
 export default function DashboardScreen() {
@@ -60,15 +89,17 @@ export default function DashboardScreen() {
     }
     setError(null);
     try {
-      const [snapshot, connections, profileBundle] = await Promise.all([
+      const [snapshot, connections, profileBundle, protocolOverlay] = await Promise.all([
         getDashboardSnapshot(),
         getConnections(),
         getProfileBundle(),
+        getProtocolOverlay(),
       ]);
       setState({
         snapshot,
         ouraConnection: connections.find((c) => c.provider === 'OURA') ?? null,
         firstName: profileBundle.profile?.fullName?.split(' ')[0] ?? null,
+        protocolOverlay,
       });
     } catch {
       setError('Could not load your dashboard. Pull down to try again.');
@@ -95,7 +126,10 @@ export default function DashboardScreen() {
 
   const snapshot = state?.snapshot ?? null;
   const connection = state?.ouraConnection ?? null;
+  const activeProtocol = state?.protocolOverlay?.activeProtocol ?? null;
+  const weeklyWorkoutCount = state?.protocolOverlay?.weeklyWorkoutCount ?? null;
   const sleepDuration = formatSleepDuration(snapshot?.totalSleepMinutes ?? null);
+  const targetSleepDuration = formatSleepDuration(activeProtocol?.targetSleepMinutes ?? null);
 
   return (
     <ScrollView
@@ -127,8 +161,34 @@ export default function DashboardScreen() {
         </View>
       ) : null}
 
+      {activeProtocol ? (
+        <Card style={styles.protocolCard}>
+          <Text style={styles.protocolTitle}>Following: {activeProtocol.name}</Text>
+          <Text style={styles.protocolDescription}>
+            {activeProtocol.description || "Today's actuals above are compared against this protocol's targets."}
+          </Text>
+          {activeProtocol.supplements.length > 0 ? (
+            <View style={styles.protocolSupplements}>
+              <Text style={styles.protocolSupplementsLabel}>Supplements on this protocol</Text>
+              {activeProtocol.supplements.map((s, i) => (
+                <Text key={`${s.name}-${i}`} style={styles.protocolSupplementItem}>
+                  •{' '}
+                  {[
+                    s.name,
+                    s.dosage ? `— ${s.dosage}${s.unit ? ` ${s.unit}` : ''}` : null,
+                    s.frequency ? `(${s.frequency.replaceAll('_', ' ').toLowerCase()})` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      ) : null}
+
       <View style={styles.row}>
-        <ScoreCard label="Sleep" value={snapshot?.sleepScore ?? null} />
+        <ScoreCard label="Sleep" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />
         <ScoreCard label="Readiness" value={snapshot?.readinessScore ?? null} />
         <ScoreCard label="Activity" value={snapshot?.activityScore ?? null} />
       </View>
@@ -142,16 +202,28 @@ export default function DashboardScreen() {
         <Card style={styles.scoreCard}>
           <Text style={styles.scoreLabel}>Sleep duration</Text>
           <Text style={styles.scoreValue}>{sleepDuration ?? '—'}</Text>
-          {!sleepDuration ? <Text style={styles.scoreHint}>No data yet</Text> : null}
+          {targetSleepDuration ? (
+            <Text style={styles.targetText}>Target: {targetSleepDuration}</Text>
+          ) : !sleepDuration ? (
+            <Text style={styles.scoreHint}>No data yet</Text>
+          ) : null}
         </Card>
         <ScoreCard label="Steps" value={snapshot?.steps ?? null} />
       </View>
 
-      <ScoreCard
-        label="Active calories (today)"
-        value={snapshot?.activeCalories ?? null}
-        unit="kcal"
-      />
+      <View style={styles.row}>
+        <ScoreCard
+          label="Active calories (today)"
+          value={snapshot?.activeCalories ?? null}
+          unit="kcal"
+          target={activeProtocol?.targetDailyActiveCalories}
+        />
+        <ScoreCard
+          label="Workouts (last 7 days)"
+          value={weeklyWorkoutCount}
+          target={activeProtocol?.targetWeeklyWorkouts}
+        />
+      </View>
 
       {!snapshot ? (
         <Card>
@@ -209,6 +281,40 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sansMedium,
     fontSize: 12,
     color: colors.muted.foreground,
+  },
+  targetText: {
+    marginTop: 4,
+    fontFamily: fontFamily.sansMedium,
+    fontSize: 12,
+    color: colors.accent.default,
+  },
+  protocolCard: {
+    gap: 6,
+    borderColor: colors.primary.default,
+  },
+  protocolTitle: {
+    fontFamily: fontFamily.sansSemibold,
+    fontSize: 16,
+    color: colors.foreground,
+  },
+  protocolDescription: {
+    fontFamily: fontFamily.sans,
+    fontSize: 13,
+    color: colors.muted.foreground,
+  },
+  protocolSupplements: {
+    marginTop: 6,
+    gap: 2,
+  },
+  protocolSupplementsLabel: {
+    fontFamily: fontFamily.sansMedium,
+    fontSize: 12,
+    color: colors.muted.foreground,
+  },
+  protocolSupplementItem: {
+    fontFamily: fontFamily.sans,
+    fontSize: 13,
+    color: colors.foreground,
   },
   scoreValue: {
     marginTop: 6,

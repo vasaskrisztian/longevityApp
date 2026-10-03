@@ -3,8 +3,12 @@ import type { CreateProtocolInput } from '@/src/validation/schemas';
 
 /** Raw wire shape — ProtocolSupplement.dosage is a Prisma Decimal column,
  * which Response.json() serializes as a string, same as goals.ts/
- * supplements.ts's dosage/targetValue conversions. */
-interface RawProtocolSupplement {
+ * supplements.ts's dosage/targetValue conversions. Exported (along with
+ * `toProtocol` below) so dashboard.ts's protocol-overlay fetch — which
+ * receives this exact same wire shape nested in a different response
+ * envelope — can reuse the one conversion function instead of duplicating
+ * the Decimal-to-number logic a second time. */
+export interface RawProtocolSupplement {
   name: string;
   dosage: string | number | null;
   unit: string | null;
@@ -12,7 +16,7 @@ interface RawProtocolSupplement {
   timing: string | null;
 }
 
-interface RawProtocol {
+export interface RawProtocol {
   id: string;
   name: string;
   description: string | null;
@@ -46,7 +50,7 @@ export interface Protocol {
   supplements: ProtocolSupplement[];
 }
 
-function toProtocol(raw: RawProtocol): Protocol {
+export function toProtocol(raw: RawProtocol): Protocol {
   return {
     id: raw.id,
     name: raw.name,
