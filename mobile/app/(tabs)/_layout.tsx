@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
+import { getProfileBundle } from '@/src/api/profile';
 
 // Mirrors the web app's sidebar nav (Dashboard/Trends/Profile/Devices —
 // see ARCHITECTURE.md §2 repository structure / phase-1-summary.md's "Base
@@ -16,9 +18,44 @@ export default function TabLayout() {
   // Root _layout.tsx's `ready` gate already waits out `status === 'loading'`
   // before anything in this tree mounts, so by the time this runs status is
   // settled one way or the other.
-  const { status } = useSession();
+  const { status, user } = useSession();
+
+  // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
+  // authenticated non-admin user who hasn't completed the onboarding wizard
+  // is sent to /onboarding instead of seeing an empty dashboard/profile.
+  // Admins are exempt, same as the web app. Fetched here rather than cached
+  // globally — this is the one place that needs it, and it only runs once
+  // per (tabs) mount (leaving /onboarding and coming back is a fresh mount).
+  const [onboarding, setOnboarding] = useState<'loading' | 'incomplete' | 'complete'>(
+    user?.role === 'ADMIN' ? 'complete' : 'loading',
+  );
+
+  useEffect(() => {
+    if (status !== 'signedIn' || user?.role === 'ADMIN') return;
+    let cancelled = false;
+    getProfileBundle()
+      .then((bundle) => {
+        if (!cancelled) setOnboarding(bundle.onboardingCompletedAt ? 'complete' : 'incomplete');
+      })
+      .catch(() => {
+        // Can't tell — fail open rather than trap the user in a redirect
+        // loop if /api/profile is briefly unreachable; the dashboard's own
+        // empty states already handle a user with no profile data yet.
+        if (!cancelled) setOnboarding('complete');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, user?.role]);
+
   if (status === 'signedOut') {
     return <Redirect href="/login" />;
+  }
+  if (onboarding === 'loading') {
+    return null;
+  }
+  if (onboarding === 'incomplete') {
+    return <Redirect href="/onboarding" />;
   }
 
   return (
