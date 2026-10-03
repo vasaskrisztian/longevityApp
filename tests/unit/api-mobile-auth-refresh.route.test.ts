@@ -13,10 +13,10 @@ vi.mock('@/modules/auth/mobile-session.service', () => ({
   rotateMobileRefreshToken: rotateMobileRefreshTokenMock,
 }));
 
-const { POST } = await import('@/app/api/auth/mobile/refresh/route');
+const { POST } = await import('@/app/api/mobile/auth/refresh/route');
 
 function postRequest(body: unknown): Request {
-  return new Request('http://localhost/api/auth/mobile/refresh', {
+  return new Request('http://localhost/api/mobile/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -29,7 +29,7 @@ beforeEach(() => {
   rotateMobileRefreshTokenMock.mockReset();
 });
 
-describe('POST /api/auth/mobile/refresh', () => {
+describe('POST /api/mobile/auth/refresh', () => {
   it('returns 429 when rate-limited', async () => {
     checkRateLimitMock.mockReturnValue({ allowed: false, remaining: 0, resetAt: 0 });
 

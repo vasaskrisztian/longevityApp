@@ -45,7 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // The actual credential check — constant-shape failure, active/
         // verified checks, lastLoginAt bump — lives in auth.service.ts,
-        // shared with the mobile login route (api/auth/mobile/login).
+        // shared with the mobile login route (api/mobile/auth/login).
         const user = await verifyUserCredentials(parsed.data.email, parsed.data.password);
         if (!user) {
           return null;

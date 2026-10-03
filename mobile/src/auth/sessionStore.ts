@@ -129,7 +129,7 @@ export class InvalidCredentialsError extends Error {
 }
 
 export async function login(email: string, password: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/mobile/login`, {
+  const response = await fetch(`${API_BASE_URL}/api/mobile/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -158,7 +158,7 @@ export async function logout(): Promise<void> {
   if (refreshToken) {
     // Best-effort — the route always responds 200 regardless, and the
     // user is already signed out locally either way.
-    fetch(`${API_BASE_URL}/api/auth/mobile/logout`, {
+    fetch(`${API_BASE_URL}/api/mobile/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -168,7 +168,7 @@ export async function logout(): Promise<void> {
 
 async function refreshWithToken(refreshToken: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/mobile/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/api/mobile/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),

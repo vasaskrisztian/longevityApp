@@ -5,10 +5,10 @@ vi.mock('@/modules/auth/mobile-session.service', () => ({
   revokeMobileRefreshToken: revokeMobileRefreshTokenMock,
 }));
 
-const { POST } = await import('@/app/api/auth/mobile/logout/route');
+const { POST } = await import('@/app/api/mobile/auth/logout/route');
 
 function postRequest(body: unknown): Request {
-  return new Request('http://localhost/api/auth/mobile/logout', {
+  return new Request('http://localhost/api/mobile/auth/logout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -19,7 +19,7 @@ beforeEach(() => {
   revokeMobileRefreshTokenMock.mockReset().mockResolvedValue(undefined);
 });
 
-describe('POST /api/auth/mobile/logout', () => {
+describe('POST /api/mobile/auth/logout', () => {
   it('revokes the token and returns 200 for a valid body', async () => {
     const response = await POST(postRequest({ refreshToken: 'abc' }));
 

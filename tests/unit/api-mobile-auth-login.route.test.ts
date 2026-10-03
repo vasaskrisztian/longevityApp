@@ -22,10 +22,10 @@ vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { POST } = await import('@/app/api/auth/mobile/login/route');
+const { POST } = await import('@/app/api/mobile/auth/login/route');
 
 function postRequest(body: unknown): Request {
-  return new Request('http://localhost/api/auth/mobile/login', {
+  return new Request('http://localhost/api/mobile/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -39,7 +39,7 @@ beforeEach(() => {
   issueMobileSessionMock.mockReset();
 });
 
-describe('POST /api/auth/mobile/login', () => {
+describe('POST /api/mobile/auth/login', () => {
   it('returns 429 and never checks credentials when rate-limited', async () => {
     checkRateLimitMock.mockReturnValue({ allowed: false, remaining: 0, resetAt: 0 });
 
