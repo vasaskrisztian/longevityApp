@@ -45,6 +45,34 @@ export async function canPublishPublicly(userId: string): Promise<boolean> {
   return Boolean(user && user.accountType === 'CREATOR' && user.publicProfileConsentAt);
 }
 
+export interface PublicProfileStatus {
+  accountType: 'MEMBER' | 'CREATOR' | 'ADMIN';
+  canPublish: boolean;
+}
+
+/**
+ * Phase 20 (mobile): the web app's profile/page.tsx is a server component
+ * that queries `accountType`/`publicProfileConsentAt` directly to decide
+ * whether to render the CreatorConsentToggle section at all (only ever
+ * shown to an admin-granted CREATOR) and what its initial state is. Mobile
+ * has no server component to do that inline, so this bundles the same two
+ * facts into one mobile-reachable read: `accountType` decides whether the
+ * consent toggle is shown; `canPublish` (the same gate every Protocol/
+ * Challenge Publish button already checks server-side) is its current
+ * value. Both are re-derived live here, same as canPublishPublicly above —
+ * never cached.
+ */
+export async function getPublicProfileStatus(userId: string): Promise<PublicProfileStatus> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accountType: true, publicProfileConsentAt: true },
+  });
+  return {
+    accountType: (user?.accountType ?? 'MEMBER') as PublicProfileStatus['accountType'],
+    canPublish: Boolean(user && user.accountType === 'CREATOR' && user.publicProfileConsentAt),
+  };
+}
+
 /** The CREATOR's own opt-in — see this module's doc comment. Throws
  * NotACreatorError if the account isn't CREATOR (an admin must grant that
  * first); the route maps this to 403. */

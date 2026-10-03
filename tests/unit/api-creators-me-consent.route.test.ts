@@ -15,10 +15,12 @@ vi.mock('@/lib/auth/authorization', () => ({
 
 const setPublicProfileConsentMock = vi.fn();
 const revokePublicProfileConsentMock = vi.fn();
+const getPublicProfileStatusMock = vi.fn();
 class NotACreatorError extends Error {}
 vi.mock('@/modules/creators/creators.service', () => ({
   setPublicProfileConsent: setPublicProfileConsentMock,
   revokePublicProfileConsent: revokePublicProfileConsentMock,
+  getPublicProfileStatus: getPublicProfileStatusMock,
   NotACreatorError,
 }));
 
@@ -26,7 +28,7 @@ vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { PATCH } = await import('@/app/api/creators/me/consent/route');
+const { GET, PATCH } = await import('@/app/api/creators/me/consent/route');
 
 function patchRequest(body: unknown): Request {
   return new Request('https://example.com', {
@@ -38,6 +40,37 @@ function patchRequest(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('GET /api/creators/me/consent', () => {
+  it('returns 401 and never touches the service when unauthenticated', async () => {
+    requireAuthenticatedUserMock.mockRejectedValue(new UnauthenticatedError());
+
+    const response = await GET();
+
+    expect(response.status).toBe(401);
+    expect(getPublicProfileStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("scopes the read to the caller's own id and returns the status", async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getPublicProfileStatusMock.mockResolvedValue({ accountType: 'CREATOR', canPublish: true });
+
+    const response = await GET();
+
+    expect(getPublicProfileStatusMock).toHaveBeenCalledWith('u1');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accountType: 'CREATOR', canPublish: true });
+  });
+
+  it('returns canPublish: false for a plain MEMBER account', async () => {
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getPublicProfileStatusMock.mockResolvedValue({ accountType: 'MEMBER', canPublish: false });
+
+    const response = await GET();
+
+    expect(await response.json()).toEqual({ accountType: 'MEMBER', canPublish: false });
+  });
 });
 
 describe('PATCH /api/creators/me/consent', () => {

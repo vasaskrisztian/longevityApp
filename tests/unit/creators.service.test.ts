@@ -38,6 +38,7 @@ vi.mock('@/modules/challenges/challenges.service', () => ({
 
 const {
   canPublishPublicly,
+  getPublicProfileStatus,
   setPublicProfileConsent,
   revokePublicProfileConsent,
   getCreatorPublicProfile,
@@ -78,6 +79,34 @@ describe('canPublishPublicly', () => {
       publicProfileConsentAt: new Date('2026-01-01'),
     });
     await expect(canPublishPublicly('u1')).resolves.toBe(true);
+  });
+});
+
+describe('getPublicProfileStatus', () => {
+  it('defaults to MEMBER/canPublish:false when the user row is missing', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    await expect(getPublicProfileStatus('missing')).resolves.toEqual({
+      accountType: 'MEMBER',
+      canPublish: false,
+    });
+  });
+
+  it('reports a plain MEMBER account as canPublish:false', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ accountType: 'MEMBER', publicProfileConsentAt: null });
+    await expect(getPublicProfileStatus('u1')).resolves.toEqual({ accountType: 'MEMBER', canPublish: false });
+  });
+
+  it('reports a non-consenting CREATOR as canPublish:false but accountType:CREATOR', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ accountType: 'CREATOR', publicProfileConsentAt: null });
+    await expect(getPublicProfileStatus('u1')).resolves.toEqual({ accountType: 'CREATOR', canPublish: false });
+  });
+
+  it('reports a consenting CREATOR as canPublish:true', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      accountType: 'CREATOR',
+      publicProfileConsentAt: new Date('2026-01-01'),
+    });
+    await expect(getPublicProfileStatus('u1')).resolves.toEqual({ accountType: 'CREATOR', canPublish: true });
   });
 });
 

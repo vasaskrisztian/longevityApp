@@ -26,6 +26,11 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="supplements" options={{ title: 'Supplements' }} />
       <Stack.Screen name="nutrition" options={{ title: 'Nutrition' }} />
       <Stack.Screen name="lifestyle" options={{ title: 'Lifestyle' }} />
+      <Stack.Screen name="discover" options={{ title: 'Discover' }} />
+      <Stack.Screen name="protocols" options={{ title: 'Protocols' }} />
+      <Stack.Screen name="challenges" options={{ title: 'Challenges' }} />
+      <Stack.Screen name="creators/index" options={{ title: 'Creators' }} />
+      <Stack.Screen name="creators/[id]" options={{ title: 'Creator' }} />
     </Stack>
   );
 }

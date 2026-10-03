@@ -3,9 +3,29 @@ import { SetPublicProfileConsentSchema } from '@/lib/validation/creator.schemas'
 import {
   setPublicProfileConsent,
   revokePublicProfileConsent,
+  getPublicProfileStatus,
   NotACreatorError,
 } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
+
+/**
+ * Phase 20 (mobile): the web app reads `accountType`/`publicProfileConsentAt`
+ * straight from a server component (src/app/profile/page.tsx) to decide
+ * whether to show the creator-consent section and its initial state. Mobile
+ * has no server component, so this GET gives it the same two facts over the
+ * wire — see creators.service.ts's getPublicProfileStatus doc comment.
+ */
+export async function GET() {
+  let userId: string;
+  try {
+    userId = (await requireAuthenticatedUser()).id;
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+
+  const status = await getPublicProfileStatus(userId);
+  return Response.json(status, { status: 200 });
+}
 
 /**
  * The CREATOR's own explicit opt-in/opt-out of having a public profile at

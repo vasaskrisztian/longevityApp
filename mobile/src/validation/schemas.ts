@@ -142,6 +142,61 @@ export const CreateSupplementSchema = z.object({
 });
 export type CreateSupplementInput = z.infer<typeof CreateSupplementSchema>;
 
+// Phase 20 — mirrors lib/validation/visibility.schemas.ts/protocol.schemas.ts/
+// challenge.schemas.ts on the root app. Same hand-duplication precedent as
+// every schema above (mobile/ has no path back to src/lib); the server
+// remains the real validation boundary (and the real PUBLIC-visibility gate
+// — see src/app/api/protocols/route.ts's canPublishPublicly check) in every
+// case.
+export const VisibilityEnum = z.enum(['PRIVATE', 'PUBLIC']);
+
+// Blank numeric text inputs submit '' , which z.coerce.number() turns into 0
+// rather than leaving unset — same fix as the onboarding/goal schemas'
+// optionalCoercedInt above, needed again here for the optional protocol
+// targets and supplement dosage.
+const blankToUndefined = (val: unknown) => (val === '' || val === null || val === undefined ? undefined : val);
+
+const optionalCoercedPositiveNumber = (max: number) =>
+  z.preprocess(blankToUndefined, z.coerce.number().positive('Dosage must be greater than 0').max(max).optional());
+
+export const ProtocolSupplementSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  dosage: optionalCoercedPositiveNumber(1_000_000),
+  unit: z.string().trim().max(20).optional(),
+  frequency: SupplementFrequencyEnum.optional(),
+  timing: SupplementTimingEnum.optional(),
+});
+export type ProtocolSupplementInput = z.infer<typeof ProtocolSupplementSchema>;
+
+export const CreateProtocolSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  description: z.string().trim().max(1000).optional(),
+  // 0-100 Oura-style score.
+  targetSleepScore: optionalCoercedInt(0, 100),
+  // Minutes, capped at 24h.
+  targetSleepMinutes: optionalCoercedInt(0, 1440),
+  targetWeeklyWorkouts: optionalCoercedInt(0, 50),
+  targetDailyActiveCalories: optionalCoercedInt(0, 20_000),
+  supplements: z.array(ProtocolSupplementSchema).max(50).default([]),
+});
+export type CreateProtocolInput = z.infer<typeof CreateProtocolSchema>;
+
+export const ChallengeTypeEnum = z.enum(['SLEEP_SCORE', 'DAILY_STEPS', 'WEEKLY_WORKOUTS']);
+
+// requiredCount/threshold/windowDays are required (min 1), not optional —
+// same reasoning as the root app's challenge.schemas.ts: a challenge
+// without terms isn't a challenge, and leaving these optional would let a
+// blank field silently coerce to a real (wrong) 0 instead of failing
+// validation.
+export const CreateChallengeSchema = z.object({
+  type: ChallengeTypeEnum,
+  name: z.string().trim().max(200).optional(),
+  requiredCount: z.coerce.number().int().min(1, 'Must be at least 1').max(1000),
+  threshold: z.coerce.number().int().min(1, 'Must be at least 1').max(100_000),
+  windowDays: z.coerce.number().int().min(1, 'Must be at least 1 day').max(365),
+});
+export type CreateChallengeInput = z.infer<typeof CreateChallengeSchema>;
+
 /** "STRENGTH_TRAINING" -> "Strength training" — every enum above renders this way. */
 export function enumLabel(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { getProfileBundle, updatePersonalInfo } from '@/src/api/profile';
+import { getPublicProfileStatus, setPublicProfileConsent, type PublicProfileStatus } from '@/src/api/creators';
 import { useSession } from '@/src/auth/useSession';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
@@ -16,10 +17,13 @@ import { GenderEnum, PersonalInfoSchema, enumLabel, type PersonalInfoInput } fro
 /**
  * The Profile tab's hub screen — personal info (view/edit, mirrors the web
  * app's profile/page.tsx + personal-info-form.tsx) plus nav rows into the
- * Goals/Supplements/Nutrition/Lifestyle sub-screens, same grouping the web
- * sidebar uses. Creator public-profile toggle isn't here yet — that's
- * phase 20 territory (Creators), gated behind an accountType this screen
- * doesn't fetch.
+ * Goals/Supplements/Nutrition/Lifestyle/Discover/Protocols/Challenges
+ * sub-screens, same grouping the web sidebar uses. Phase 20 (see
+ * claude/phase-15-mobile-migration-plan.md) adds the creator public-profile
+ * toggle below, mirroring the web app's creator-consent-toggle.tsx — shown
+ * only for an account the admin has granted CREATOR status, fetched
+ * separately from the personal-info bundle above since it comes from the
+ * creators module, not the profile module.
  */
 
 const GENDER_OPTIONS: ChipOption[] = GenderEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
@@ -50,6 +54,8 @@ export default function ProfileHomeScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [publicProfileStatus, setPublicProfileStatus] = useState<PublicProfileStatus | null>(null);
+  const [togglingConsent, setTogglingConsent] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -66,9 +72,24 @@ export default function ProfileHomeScreen() {
       })
       .catch(() => setServerError('Could not load your profile.'))
       .finally(() => setLoading(false));
+    getPublicProfileStatus()
+      .then(setPublicProfileStatus)
+      .catch(() => setPublicProfileStatus(null));
   }, []);
 
   useEffect(load, [load]);
+
+  async function handleToggleConsent() {
+    if (!publicProfileStatus) return;
+    setTogglingConsent(true);
+    const nextConsent = !publicProfileStatus.canPublish;
+    try {
+      await setPublicProfileConsent(nextConsent);
+      setPublicProfileStatus({ ...publicProfileStatus, canPublish: nextConsent });
+    } finally {
+      setTogglingConsent(false);
+    }
+  }
 
   async function save() {
     if (!form) return;
@@ -160,6 +181,34 @@ export default function ProfileHomeScreen() {
         <View style={styles.navDivider} />
         <NavRow label="Lifestyle" onPress={() => router.push('/profile/lifestyle')} />
       </Card>
+
+      <Card style={styles.navCard}>
+        <NavRow label="Discover" onPress={() => router.push('/profile/discover')} />
+        <View style={styles.navDivider} />
+        <NavRow label="Protocols" onPress={() => router.push('/profile/protocols')} />
+        <View style={styles.navDivider} />
+        <NavRow label="Challenges" onPress={() => router.push('/profile/challenges')} />
+        <View style={styles.navDivider} />
+        <NavRow label="Creators" onPress={() => router.push('/profile/creators')} />
+      </Card>
+
+      {publicProfileStatus?.accountType === 'CREATOR' ? (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Creator public profile</Text>
+          <Text style={styles.cardDescription}>
+            {publicProfileStatus.canPublish
+              ? 'Your public protocols, challenges, and recent data are visible to anyone in the Creators directory.'
+              : 'Turn this on to let followers see your public protocols, challenges, and recent data in the Creators directory.'}
+          </Text>
+          <Button
+            title={togglingConsent ? 'Updating…' : publicProfileStatus.canPublish ? 'Make profile private' : 'Publish profile publicly'}
+            variant={publicProfileStatus.canPublish ? 'outline' : 'primary'}
+            size="sm"
+            onPress={handleToggleConsent}
+            loading={togglingConsent}
+          />
+        </Card>
+      ) : null}
 
       {user ? <Text style={styles.email}>{user.email}</Text> : null}
       <Button title="Kijelentkezés" variant="destructive" onPress={() => logout()} />
