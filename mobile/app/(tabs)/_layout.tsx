@@ -8,11 +8,14 @@ import { getProfileBundle } from '@/src/api/profile';
 
 // Mirrors the web app's sidebar nav (Dashboard/Trends/Profile/Devices —
 // see ARCHITECTURE.md §2 repository structure / phase-1-summary.md's "Base
-// UI shell"). Admin is intentionally not a tab yet — it's gated behind the
-// ADMIN role and will be added in phase 22 once role-aware auth (phase 16)
-// exists; Lifestyle/Nutrition/Supplements/Goals live inside the Profile
-// stack rather than as top-level tabs, same as the web sidebar groups them
-// under Profile.
+// UI shell"), plus Admin (phase 22): a 5th tab shown only to role === 'ADMIN',
+// hidden from everyone else via `href: null` (expo-router's documented way
+// to register a route without putting it in the tab bar — see
+// node_modules/expo-router/build/layouts/Tabs.d.ts) rather than filtering
+// the <Tabs.Screen> children array, so the route stays reachable even if
+// something ever links to it directly. Lifestyle/Nutrition/Supplements/
+// Goals live inside the Profile stack rather than as top-level tabs, same
+// as the web sidebar groups them under Profile.
 export default function TabLayout() {
   // The actual sign-in gate: every route under (tabs) requires a session.
   // Root _layout.tsx's `ready` gate already waits out `status === 'loading'`
@@ -95,6 +98,14 @@ export default function TabLayout() {
         options={{
           title: 'Devices',
           tabBarIcon: ({ color, size }) => <Ionicons name="watch-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          href: user?.role === 'ADMIN' ? undefined : null,
+          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark-outline" size={size} color={color} />,
         }}
       />
     </Tabs>

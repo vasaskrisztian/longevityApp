@@ -9,6 +9,10 @@ const prismaMock = {
   },
   syncJob: {
     findMany: vi.fn(),
+    count: vi.fn(),
+  },
+  wearableConnection: {
+    count: vi.fn(),
   },
   protocol: {
     updateMany: vi.fn(),
@@ -43,6 +47,7 @@ const {
   recordAdminTriggerSync,
   setUserAccountType,
   recordAdminSetAccountType,
+  getAdminStats,
 } = await import('@/modules/admin/admin.service');
 
 const BASE_QUERY = { q: undefined, ouraStatus: 'ALL' as const, page: 1, pageSize: 20 };
@@ -360,5 +365,29 @@ describe('recordAdminSetAccountType', () => {
       entityId: 'u1',
       metadata: { accountType: 'CREATOR' },
     });
+  });
+});
+
+describe('getAdminStats', () => {
+  it('runs all four counts with the exact where-clauses admin/page.tsx uses, and returns them by name', async () => {
+    prismaMock.user.count.mockResolvedValue(42);
+    prismaMock.wearableConnection.count
+      .mockResolvedValueOnce(30) // OURA CONNECTED
+      .mockResolvedValueOnce(5); // AUTH_REQUIRED
+    prismaMock.syncJob.count.mockResolvedValue(2);
+
+    const result = await getAdminStats();
+
+    expect(prismaMock.user.count).toHaveBeenCalledWith();
+    expect(prismaMock.wearableConnection.count).toHaveBeenNthCalledWith(1, {
+      where: { provider: 'OURA', status: 'CONNECTED' },
+    });
+    expect(prismaMock.wearableConnection.count).toHaveBeenNthCalledWith(2, {
+      where: { status: 'AUTH_REQUIRED' },
+    });
+    const syncJobArgs = prismaMock.syncJob.count.mock.calls[0]![0];
+    expect(syncJobArgs.where.status).toBe('FAILED');
+    expect(syncJobArgs.where.createdAt.gte).toBeInstanceOf(Date);
+    expect(result).toEqual({ totalUsers: 42, ouraConnected: 30, authRequired: 5, failedSyncsToday: 2 });
   });
 });

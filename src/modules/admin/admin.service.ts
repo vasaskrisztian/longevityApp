@@ -17,6 +17,34 @@ import type { AdminUserListQuery } from '@/lib/validation/admin.schemas';
 
 const CONNECTED_OURA_STATUSES = ['CONNECTED', 'AUTH_REQUIRED', 'ERROR'] as const;
 
+export interface AdminStats {
+  totalUsers: number;
+  ouraConnected: number;
+  authRequired: number;
+  failedSyncsToday: number;
+}
+
+/**
+ * Phase 22 (mobile admin): the 4 KPI tiles on `admin/page.tsx` were computed
+ * inline in that server component via direct `prisma.*.count()` calls, with
+ * no backing API route — fine for a server-rendered page, but mobile has no
+ * server components, so this is a new, read-only, non-audited (same as
+ * `listUsersForAdmin` above) endpoint purely for parity. The four queries
+ * and their `where` clauses are copied verbatim from `admin/page.tsx` so the
+ * mobile KPI tiles can never silently drift from the web ones.
+ */
+export async function getAdminStats(): Promise<AdminStats> {
+  const [totalUsers, ouraConnected, authRequired, failedSyncsToday] = await Promise.all([
+    prisma.user.count(),
+    prisma.wearableConnection.count({ where: { provider: 'OURA', status: 'CONNECTED' } }),
+    prisma.wearableConnection.count({ where: { status: 'AUTH_REQUIRED' } }),
+    prisma.syncJob.count({
+      where: { status: 'FAILED', createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+    }),
+  ]);
+  return { totalUsers, ouraConnected, authRequired, failedSyncsToday };
+}
+
 export interface AdminUserListItem {
   id: string;
   email: string;
