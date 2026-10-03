@@ -180,6 +180,8 @@ export default function ProfileHomeScreen() {
         <NavRow label="Nutrition" onPress={() => router.push('/profile/nutrition')} />
         <View style={styles.navDivider} />
         <NavRow label="Lifestyle" onPress={() => router.push('/profile/lifestyle')} />
+        <View style={styles.navDivider} />
+        <NavRow label="InBody" onPress={() => router.push('/profile/inbody')} />
       </Card>
 
       <Card style={styles.navCard}>

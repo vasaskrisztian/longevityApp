@@ -27,7 +27,14 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Longevity Klub to access your photos to upload an InBody scan report.",
+          "cameraPermission": "Allow Longevity Klub to use your camera to photograph an InBody scan report."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
