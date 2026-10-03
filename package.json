@@ -39,6 +39,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "ioredis": "^5.4.1",
+    "jose": "^5.10.0",
     "lucide-react": "^0.446.0",
     "next": "^14.2.15",
     "next-auth": "5.0.0-beta.22",

@@ -1,7 +1,8 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/src/theme/tokens';
+import { useSession } from '@/src/auth/useSession';
 
 // Mirrors the web app's sidebar nav (Dashboard/Trends/Profile/Devices —
 // see ARCHITECTURE.md §2 repository structure / phase-1-summary.md's "Base
@@ -11,6 +12,15 @@ import { colors } from '@/src/theme/tokens';
 // stack rather than as top-level tabs, same as the web sidebar groups them
 // under Profile.
 export default function TabLayout() {
+  // The actual sign-in gate: every route under (tabs) requires a session.
+  // Root _layout.tsx's `ready` gate already waits out `status === 'loading'`
+  // before anything in this tree mounts, so by the time this runs status is
+  // settled one way or the other.
+  const { status } = useSession();
+  if (status === 'signedOut') {
+    return <Redirect href="/login" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

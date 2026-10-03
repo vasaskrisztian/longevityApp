@@ -1,5 +1,7 @@
+import { headers } from 'next/headers';
 import { UserRole } from '@prisma/client';
 import { auth } from '@/lib/auth/auth';
+import { verifyMobileAccessToken } from '@/lib/auth/mobile-jwt';
 import { UnauthenticatedError, ForbiddenError } from '@/lib/auth/errors';
 
 export { UnauthenticatedError, ForbiddenError };
@@ -22,10 +24,24 @@ export interface SessionUser {
 
 export async function requireAuthenticatedUser(): Promise<SessionUser> {
   const session = await auth();
-  if (!session?.user) {
-    throw new UnauthenticatedError();
+  if (session?.user) {
+    return session.user;
   }
-  return session.user;
+
+  // The web app authenticates via NextAuth's cookie session (above); the
+  // Expo mobile app can't rely on an HttpOnly cookie, so it sends a short-
+  // lived Bearer access token instead (lib/auth/mobile-jwt.ts) — every
+  // route that calls this helper transparently accepts either, with no
+  // call-site changes needed.
+  const authorization = (await headers()).get('authorization');
+  if (authorization?.startsWith('Bearer ')) {
+    const payload = await verifyMobileAccessToken(authorization.slice('Bearer '.length));
+    if (payload) {
+      return { id: payload.sub, role: payload.role, email: payload.email };
+    }
+  }
+
+  throw new UnauthenticatedError();
 }
 
 export async function requireAdmin(): Promise<SessionUser> {

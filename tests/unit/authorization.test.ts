@@ -16,6 +16,17 @@ vi.mock('@prisma/client', () => ({
 const authMock = vi.fn();
 vi.mock('@/lib/auth/auth', () => ({ auth: authMock }));
 
+// Bearer-token (mobile) fallback path — isolate from the real `next/headers`
+// request context and the real JWT verification.
+const headersGetMock = vi.fn();
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => ({ get: headersGetMock })),
+}));
+const verifyMobileAccessTokenMock = vi.fn();
+vi.mock('@/lib/auth/mobile-jwt', () => ({
+  verifyMobileAccessToken: verifyMobileAccessTokenMock,
+}));
+
 const { requireAuthenticatedUser, requireAdmin, requireOwnResourceOrAdmin, toErrorResponse, UnauthenticatedError, ForbiddenError } =
   await import('@/lib/auth/authorization');
 
@@ -25,6 +36,8 @@ function sessionFor(user: { id: string; role: 'USER' | 'ADMIN' }) {
 
 beforeEach(() => {
   authMock.mockReset();
+  headersGetMock.mockReset().mockReturnValue(null);
+  verifyMobileAccessTokenMock.mockReset();
 });
 
 describe('requireAuthenticatedUser', () => {
@@ -41,6 +54,43 @@ describe('requireAuthenticatedUser', () => {
   it('throws UnauthenticatedError when the session has no user', async () => {
     authMock.mockResolvedValue({});
     await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it('falls back to a valid Bearer access token when there is no cookie session (mobile)', async () => {
+    authMock.mockResolvedValue(null);
+    headersGetMock.mockReturnValue('Bearer a-valid-token');
+    verifyMobileAccessTokenMock.mockResolvedValue({ sub: 'u1', role: 'USER', email: 'jane@example.com' });
+
+    await expect(requireAuthenticatedUser()).resolves.toEqual({
+      id: 'u1',
+      role: 'USER',
+      email: 'jane@example.com',
+    });
+    expect(verifyMobileAccessTokenMock).toHaveBeenCalledWith('a-valid-token');
+  });
+
+  it('throws UnauthenticatedError for an invalid/expired Bearer token', async () => {
+    authMock.mockResolvedValue(null);
+    headersGetMock.mockReturnValue('Bearer garbage');
+    verifyMobileAccessTokenMock.mockResolvedValue(null);
+
+    await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it('throws UnauthenticatedError when there is no session and no Authorization header at all', async () => {
+    authMock.mockResolvedValue(null);
+    headersGetMock.mockReturnValue(null);
+
+    await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
+    expect(verifyMobileAccessTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('prefers the cookie session over a Bearer header when both are present', async () => {
+    authMock.mockResolvedValue(sessionFor({ id: 'cookie-user', role: 'USER' }));
+    headersGetMock.mockReturnValue('Bearer some-token');
+
+    await expect(requireAuthenticatedUser()).resolves.toEqual({ id: 'cookie-user', role: 'USER' });
+    expect(verifyMobileAccessTokenMock).not.toHaveBeenCalled();
   });
 });
 

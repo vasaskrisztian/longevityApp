@@ -275,6 +275,7 @@ model User {
   oauthStates         OAuthState[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  mobileRefreshTokens MobileRefreshToken[]
 
   // Auth.js (NextAuth) linkage — enables Google OAuth later without a schema change.
   accounts Account[]
@@ -828,6 +829,29 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@map("email_verification_tokens")
+}
+
+// Phase 16 (mobile migration): a rotating refresh token for the Expo app,
+// which can't rely on NextAuth's HttpOnly session cookie the way the web
+// app does. Mirrors PasswordResetToken/EmailVerificationToken's hashed,
+// single-use-per-rotation pattern — see lib/auth/tokens.ts. `revokedAt` is
+// set both on ordinary rotation (the old token is retired the moment a new
+// one is issued) and on reuse-detection (if a revoked token is presented
+// again — a sign it leaked — every other still-active token for that user
+// is revoked too; see modules/auth/mobile-session.service.ts).
+model MobileRefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("mobile_refresh_tokens")
 }
 
 // ------------------------------------------------------------------

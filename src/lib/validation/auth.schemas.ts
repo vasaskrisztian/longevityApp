@@ -53,3 +53,9 @@ export const ResetPasswordSchema = z
   });
 
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+
+// Phase 16 (mobile migration): the refresh/logout body for the Expo app's
+// rotating-refresh-token flow — see modules/auth/mobile-session.service.ts.
+export const MobileRefreshTokenSchema = z.object({
+  refreshToken: z.string().min(1),
+});

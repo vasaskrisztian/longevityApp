@@ -1,5 +1,6 @@
+import { UserStatus, type UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { hashPassword } from '@/lib/auth/password';
+import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { generateRawToken, hashToken } from '@/lib/auth/tokens';
 import { logger } from '@/lib/logging/logger';
 import type { RegisterInput } from '@/lib/validation/auth.schemas';
@@ -71,6 +72,58 @@ export async function registerUser(input: RegisterInput): Promise<{
   logger.info('user_registered', { userId: user.id });
 
   return { userId: user.id, verificationToken };
+}
+
+export interface VerifiedCredentialsUser {
+  id: string;
+  role: UserRole;
+  email: string;
+}
+
+/**
+ * The one place a password comparison happens for email+password login —
+ * shared by both the web app's NextAuth Credentials provider
+ * (lib/auth/auth.ts's authorize()) and the mobile login route
+ * (api/auth/mobile/login), so the security-sensitive bits (constant-shape
+ * failure, active/verified checks, lastLoginAt bump) exist exactly once.
+ * Callers own their own rate limiting — it's tied to how each caller gets
+ * its client identifier (NextAuth's `authorize()` gets a Request from the
+ * framework; the mobile route reads its own).
+ */
+export async function verifyUserCredentials(
+  email: string,
+  password: string,
+): Promise<VerifiedCredentialsUser | null> {
+  const user = await prisma.user.findUnique({ where: { email } });
+  // Constant-shape failure path: whether the user exists or the password is
+  // wrong, we return null either way. We still run verifyPassword against a
+  // dummy hash-shaped value when the user doesn't exist, so the response
+  // time doesn't leak existence.
+  const passwordHash =
+    user?.passwordHash ??
+    '$argon2id$v=19$m=65536,t=3,p=4$invalidinvalidinvalid$invalidinvalidinvalidinvalidinvalidinvalid';
+  const isValid = await verifyPassword(passwordHash, password);
+
+  if (!user || !isValid) {
+    return null;
+  }
+  if (user.status !== UserStatus.ACTIVE) {
+    logger.warn('login_blocked_inactive_account', { userId: user.id, status: user.status });
+    return null;
+  }
+  if (!user.emailVerifiedAt) {
+    logger.warn('login_blocked_unverified_email', { userId: user.id });
+    return null;
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  logger.info('login_success', { userId: user.id });
+
+  return { id: user.id, role: user.role, email: user.email };
 }
 
 export async function verifyEmail(rawToken: string): Promise<boolean> {

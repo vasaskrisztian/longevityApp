@@ -1,9 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { UserStatus } from '@prisma/client';
 import { authConfig } from '@/lib/auth/auth.config';
-import { prisma } from '@/lib/db/prisma';
-import { verifyPassword } from '@/lib/auth/password';
+import { verifyUserCredentials } from '@/modules/auth/auth.service';
 import { LoginSchema } from '@/lib/validation/auth.schemas';
 import { logger } from '@/lib/logging/logger';
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
@@ -44,34 +42,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) {
           return null;
         }
-        const { email, password } = parsed.data;
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        // Constant-shape failure path: whether the user exists or the
-        // password is wrong, we return null either way. We still run
-        // verifyPassword against a dummy hash-shaped value when the user
-        // doesn't exist, so the response time doesn't leak existence.
-        const passwordHash = user?.passwordHash ?? '$argon2id$v=19$m=65536,t=3,p=4$invalidinvalidinvalid$invalidinvalidinvalidinvalidinvalidinvalid';
-        const isValid = await verifyPassword(passwordHash, password);
-
-        if (!user || !isValid) {
+        // The actual credential check — constant-shape failure, active/
+        // verified checks, lastLoginAt bump — lives in auth.service.ts,
+        // shared with the mobile login route (api/auth/mobile/login).
+        const user = await verifyUserCredentials(parsed.data.email, parsed.data.password);
+        if (!user) {
           return null;
         }
-        if (user.status !== UserStatus.ACTIVE) {
-          logger.warn('login_blocked_inactive_account', { userId: user.id, status: user.status });
-          return null;
-        }
-        if (!user.emailVerifiedAt) {
-          logger.warn('login_blocked_unverified_email', { userId: user.id });
-          return null;
-        }
-
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
-
-        logger.info('login_success', { userId: user.id });
 
         return { id: user.id, role: user.role, email: user.email, name: null };
       },
