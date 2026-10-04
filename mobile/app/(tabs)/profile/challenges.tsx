@@ -17,6 +17,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { ChallengeTypeEnum, CreateChallengeSchema, type CreateChallengeInput } from '@/src/validation/schemas';
 
@@ -230,6 +231,7 @@ function ChallengeRow({
   }
 
   async function handleDelete() {
+    if (!(await confirmDestructive(`Delete "${challenge.name}"?`, 'This challenge will be permanently deleted. This cannot be undone.'))) return;
     setDeleting(true);
     try {
       await deleteChallenge(challenge.id);

@@ -18,6 +18,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TextField } from '@/src/components/ui/TextField';
 import { LineChart } from '@/src/components/charts/LineChart';
+import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
 
 /**
@@ -216,6 +217,7 @@ function MeasurementRow({
   }, [showingPhoto, measurement.id]);
 
   async function handleDelete() {
+    if (!(await confirmDestructive('Delete this InBody measurement?', 'The measurement and its photo will be permanently deleted. This cannot be undone.'))) return;
     setDeleting(true);
     try {
       await deleteInBodyMeasurement(measurement.id);

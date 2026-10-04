@@ -7,6 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { CreateGoalSchema, GoalStatusEnum, GoalTypeEnum, enumLabel, type CreateGoalInput } from '@/src/validation/schemas';
 
@@ -132,6 +133,7 @@ function GoalRow({ goal, onUpdated, onDeleted }: { goal: Goal; onUpdated: (g: Go
   }
 
   async function handleDelete() {
+    if (!(await confirmDestructive(`Delete "${goal.name}"?`, 'This goal will be permanently deleted. This cannot be undone.'))) return;
     setDeleting(true);
     try {
       await deleteGoal(goal.id);
