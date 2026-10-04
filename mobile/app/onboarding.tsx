@@ -441,6 +441,10 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
     paddingBottom: 60,
+    // Readable column on a wide desktop window (no-op on a phone).
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   centered: {
     flex: 1,

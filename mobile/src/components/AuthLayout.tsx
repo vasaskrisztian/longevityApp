@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 20 },
   brand: { fontFamily: fontFamily.display, fontSize: 28, color: colors.foreground, textAlign: 'center' },
-  card: { gap: 16 },
+  card: { gap: 16, width: '100%', maxWidth: 440, alignSelf: 'center' },
   title: { fontFamily: fontFamily.sansSemibold, fontSize: 18, color: colors.foreground },
   body: { gap: 14 },
 });

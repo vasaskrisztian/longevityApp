@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
 import { getProfileBundle } from '@/src/api/profile';
+import { DesktopShell } from '@/src/components/DesktopShell';
+import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 
 // Mirrors the web app's sidebar nav (Dashboard/Trends/Profile/Devices —
 // see ARCHITECTURE.md §2 repository structure / phase-1-summary.md's "Base
@@ -22,6 +24,7 @@ export default function TabLayout() {
   // before anything in this tree mounts, so by the time this runs status is
   // settled one way or the other.
   const { status, user } = useSession();
+  const isDesktop = useIsDesktop();
 
   // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
   // authenticated non-admin user who hasn't completed the onboarding wizard
@@ -61,8 +64,11 @@ export default function TabLayout() {
     return <Redirect href="/onboarding" />;
   }
 
-  return (
+  const tabs = (
     <Tabs
+      // On a wide web window the bottom bar is replaced by DesktopShell's
+      // sidebar (the navigator itself, routes and guards are identical).
+      tabBar={isDesktop ? () => null : undefined}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary.default,
@@ -110,4 +116,6 @@ export default function TabLayout() {
       />
     </Tabs>
   );
+
+  return isDesktop ? <DesktopShell>{tabs}</DesktopShell> : tabs;
 }
