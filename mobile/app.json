@@ -44,6 +44,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3793343d-6d4c-4116-a2ab-b91b80044642"
+      }
+    },
+    "owner": "vasas.krisztian"
   }
 }
