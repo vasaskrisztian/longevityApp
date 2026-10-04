@@ -16,7 +16,14 @@ export function TextField({ label, error, style, ...props }: TextFieldProps) {
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput style={styles.input} placeholderTextColor={colors.muted.foreground} {...props} />
+      <TextInput
+        style={styles.input}
+        placeholderTextColor={colors.muted.foreground}
+        // The visible label is a separate <Text>, so without this a screen reader
+        // (VoiceOver/TalkBack) announces an unlabeled text box.
+        accessibilityLabel={label}
+        {...props}
+      />
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );

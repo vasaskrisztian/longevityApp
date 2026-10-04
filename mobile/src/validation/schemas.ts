@@ -202,3 +202,50 @@ export function enumLabel(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
+
+// ---------------------------------------------------------------------------
+// Account lifecycle (phase 23 follow-up: register / password reset screens).
+// Mirrors lib/validation/auth.schemas.ts on the root app — same hand-
+// duplication convention as everything above; the server re-validates.
+// ---------------------------------------------------------------------------
+
+export const PasswordSchema = z
+  .string()
+  .min(10, 'Password must be at least 10 characters long')
+  .regex(/[a-z]/, 'Password must contain a lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+  .regex(/[0-9]/, 'Password must contain a digit');
+
+export const RegisterFormSchema = z
+  .object({
+    fullName: z.string().trim().min(1, 'Full name is required').max(200),
+    email: z.string().trim().email('Enter a valid email address').toLowerCase(),
+    password: PasswordSchema,
+    passwordConfirmation: z.string(),
+    termsAccepted: z.literal(true, {
+      errorMap: () => ({ message: 'You must accept the Terms of Service' }),
+    }),
+    privacyAccepted: z.literal(true, {
+      errorMap: () => ({ message: 'You must accept the Privacy Policy' }),
+    }),
+  })
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: 'Passwords do not match',
+    path: ['passwordConfirmation'],
+  });
+
+export type RegisterFormInput = z.infer<typeof RegisterFormSchema>;
+
+export const RequestPasswordResetFormSchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').toLowerCase(),
+});
+
+export const ResetPasswordFormSchema = z
+  .object({
+    password: PasswordSchema,
+    passwordConfirmation: z.string(),
+  })
+  .refine((data) => data.password === data.passwordConfirmation, {
+    message: 'Passwords do not match',
+    path: ['passwordConfirmation'],
+  });
