@@ -1,9 +1,15 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getCreatorPublicProfile, type PublicProtocol } from '@/modules/creators/creators.service';
+import { requireAuthenticatedUser, UnauthenticatedError } from '@/lib/auth/authorization';
+import {
+  getCreatorPublicProfile,
+  getCreatorTeaser,
+  type PublicProtocol,
+} from '@/modules/creators/creators.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FollowButton } from './follow-button';
 
-// Always-fresh public data (follower count, published content) — never
+// Always-fresh data (follower count, published content) — never
 // statically cached. See /app/creators/page.tsx's comment.
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +21,78 @@ function MetricCell({ value, unit }: { value: number | string | null; unit?: str
   return <td className="px-3 py-1.5 text-right">{value == null ? '—' : `${value}${unit ?? ''}`}</td>;
 }
 
+async function isSignedIn(): Promise<boolean> {
+  try {
+    await requireAuthenticatedUser();
+    return true;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return false;
+    throw error;
+  }
+}
+
+/**
+ * What a visitor without an account sees: only the basic facts (name, join
+ * date, counts) from getCreatorTeaser — never protocols, challenges or
+ * health data — plus the call to register or log in.
+ */
+async function CreatorTeaserView({ id }: { id: string }) {
+  const teaser = await getCreatorTeaser(id);
+  if (!teaser) {
+    notFound();
+  }
+  const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-primary">
+          {teaser.fullName ?? 'Creator'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Creator since {teaser.memberSince.toLocaleDateString()}
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="grid grid-cols-2 gap-4 pt-6 text-sm sm:grid-cols-4">
+          <div>{plural(teaser.followerCount, 'follower')}</div>
+          <div>{plural(teaser.publicProtocolCount, 'protocol')}</div>
+          <div>{plural(teaser.publicChallengeCount, 'challenge')}</div>
+          <div>{plural(teaser.trackedDays, 'day')} tracked</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Unlock the full profile</CardTitle>
+          <CardDescription>
+            Create a free account to read this creator’s protocols, follow their challenges and see their recent
+            results.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Link
+            href="/register"
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Create a free account
+          </Link>
+          <Link href="/login" className="rounded-xl border border-card-border px-4 py-2 text-sm font-medium">
+            Log in
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default async function CreatorPublicProfilePage({ params }: PageProps) {
+  // Detailed content is for registered users only; visitors get the teaser.
+  if (!(await isSignedIn())) {
+    return <CreatorTeaserView id={params.id} />;
+  }
+
   const profile = await getCreatorPublicProfile(params.id);
   if (!profile) {
     notFound();
