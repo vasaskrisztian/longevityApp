@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "hu.kardisoft.longevityklub",
+      "bundleIdentifier": "hu.longevityklub",
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "hu.kardisoft.longevityklub"
+      "package": "hu.longevityklub"
     },
     "web": {
       "bundler": "metro",
