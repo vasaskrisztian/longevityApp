@@ -243,6 +243,58 @@ export async function listPublicCreators(): Promise<CreatorDirectoryItem[]> {
   );
 }
 
+export interface CreatorTeaser {
+  id: string;
+  fullName: string | null;
+  memberSince: Date;
+  followerCount: number;
+  publicProtocolCount: number;
+  publicChallengeCount: number;
+  /** How many days of health data the creator has tracked — a bare count,
+   * never any of the values themselves. */
+  trackedDays: number;
+}
+
+/**
+ * The signed-out "teaser" view of a creator: ONLY a name, the join date and
+ * counts. Same two gates as getCreatorPublicProfile (CREATOR + consent) and
+ * the same collapsed `null` for missing / non-creator / non-consenting.
+ * Nothing here selects protocol, challenge or health-metric content — a
+ * visitor has to register to see any of that (the app's growth funnel).
+ */
+export async function getCreatorTeaser(userId: string): Promise<CreatorTeaser | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      accountType: true,
+      publicProfileConsentAt: true,
+      createdAt: true,
+      profile: { select: { fullName: true } },
+    },
+  });
+  if (!user || user.accountType !== 'CREATOR' || !user.publicProfileConsentAt) {
+    return null;
+  }
+
+  const [followerCount, publicProtocolCount, publicChallengeCount, trackedDays] = await Promise.all([
+    prisma.follow.count({ where: { creatorId: userId } }),
+    prisma.protocol.count({ where: { userId, visibility: 'PUBLIC' } }),
+    prisma.challenge.count({ where: { userId, visibility: 'PUBLIC' } }),
+    prisma.dailyHealthMetric.count({ where: { userId } }),
+  ]);
+
+  return {
+    id: user.id,
+    fullName: user.profile?.fullName ?? null,
+    memberSince: user.createdAt,
+    followerCount,
+    publicProtocolCount,
+    publicChallengeCount,
+    trackedDays,
+  };
+}
+
 /** Follows are idempotent: following an already-followed creator succeeds
  * silently rather than erroring (a double-click on the UI's Follow button
  * must never surface a 500/409). */

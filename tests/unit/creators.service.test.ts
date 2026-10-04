@@ -18,6 +18,7 @@ const prismaMock = {
   },
   dailyHealthMetric: {
     findMany: vi.fn(),
+    count: vi.fn(),
   },
   follow: {
     count: vi.fn(),
@@ -42,6 +43,7 @@ const {
   setPublicProfileConsent,
   revokePublicProfileConsent,
   getCreatorPublicProfile,
+  getCreatorTeaser,
   listPublicCreators,
   followCreator,
   unfollowCreator,
@@ -210,6 +212,50 @@ describe('getCreatorPublicProfile', () => {
     expect(prismaMock.challenge.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'u1', visibility: 'PUBLIC' } }),
     );
+  });
+});
+
+describe('getCreatorTeaser', () => {
+  const consentedCreator = {
+    id: 'c1',
+    accountType: 'CREATOR',
+    publicProfileConsentAt: new Date('2026-02-01'),
+    createdAt: new Date('2026-01-01'),
+    profile: { fullName: 'Ada Lovelace' },
+  };
+
+  it('returns null for missing, non-creator and non-consenting users', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce(null);
+    await expect(getCreatorTeaser('x')).resolves.toBeNull();
+    prismaMock.user.findUnique.mockResolvedValueOnce({ ...consentedCreator, accountType: 'MEMBER' });
+    await expect(getCreatorTeaser('x')).resolves.toBeNull();
+    prismaMock.user.findUnique.mockResolvedValueOnce({ ...consentedCreator, publicProfileConsentAt: null });
+    await expect(getCreatorTeaser('x')).resolves.toBeNull();
+    expect(prismaMock.dailyHealthMetric.count).not.toHaveBeenCalled();
+  });
+
+  it('returns only name, join date and counts — never content or metrics', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(consentedCreator);
+    prismaMock.follow.count.mockResolvedValue(5);
+    prismaMock.protocol.count.mockResolvedValue(2);
+    prismaMock.challenge.count.mockResolvedValue(1);
+    prismaMock.dailyHealthMetric.count.mockResolvedValue(200);
+
+    const teaser = await getCreatorTeaser('c1');
+
+    expect(teaser).toEqual({
+      id: 'c1',
+      fullName: 'Ada Lovelace',
+      memberSince: new Date('2026-01-01'),
+      followerCount: 5,
+      publicProtocolCount: 2,
+      publicChallengeCount: 1,
+      trackedDays: 200,
+    });
+    expect(prismaMock.protocol.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.challenge.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.dailyHealthMetric.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.protocol.count).toHaveBeenCalledWith({ where: { userId: 'c1', visibility: 'PUBLIC' } });
   });
 });
 
