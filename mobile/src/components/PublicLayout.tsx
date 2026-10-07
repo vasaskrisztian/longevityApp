@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
@@ -12,8 +13,15 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  * <JoinCard>) the call to action that is the whole point of the page.
  */
 export function PublicLayout({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.flex}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: styles.content.padding + insets.top, paddingBottom: styles.content.padding + insets.bottom },
+      ]}
+    >
       <View style={styles.column}>
         <View style={styles.header}>
           <Pressable onPress={() => router.navigate('/creators')} accessibilityRole="link">

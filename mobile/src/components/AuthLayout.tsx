@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/src/components/ui/Card';
 import { colors, fontFamily } from '@/src/theme/tokens';
@@ -10,9 +11,10 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  * long form (register) needs it. Mirrors the web app's `(auth)/layout.tsx`.
  */
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.flex} contentContainerStyle={[styles.content, { paddingTop: styles.content.padding + insets.top, paddingBottom: styles.content.padding + insets.bottom }]} keyboardShouldPersistTaps="handled">
         <Text style={styles.brand}>Longevity Klub</Text>
         <Card style={styles.card}>
           <Text style={styles.title}>{title}</Text>

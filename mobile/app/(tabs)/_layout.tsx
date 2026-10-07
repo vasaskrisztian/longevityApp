@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
@@ -25,6 +26,7 @@ export default function TabLayout() {
   // settled one way or the other.
   const { status, user } = useSession();
   const isDesktop = useIsDesktop();
+  const insets = useSafeAreaInsets();
 
   // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
   // authenticated non-admin user who hasn't completed the onboarding wizard
@@ -64,6 +66,13 @@ export default function TabLayout() {
     return <Redirect href="/onboarding" />;
   }
 
+  // Dashboard/Trends/Devices draw no native header (headerShown: false above),
+  // so without this their first line sits under the iPhone's status
+  // bar/camera cut-out. Profile and Admin are nested Stacks with their own
+  // native header, which already handles the inset — they must NOT get it
+  // twice. (On web and in the desktop shell the inset is 0.)
+  const headerlessScene = { sceneStyle: { paddingTop: insets.top } };
+
   const tabs = (
     <Tabs
       // On a wide web window the bottom bar is replaced by DesktopShell's
@@ -81,6 +90,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          ...headerlessScene,
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <Ionicons name="speedometer-outline" size={size} color={color} />,
         }}
@@ -88,6 +98,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="trends"
         options={{
+          ...headerlessScene,
           title: 'Trends',
           tabBarIcon: ({ color, size }) => <Ionicons name="trending-up-outline" size={size} color={color} />,
         }}
@@ -102,6 +113,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="devices"
         options={{
+          ...headerlessScene,
           title: 'Devices',
           tabBarIcon: ({ color, size }) => <Ionicons name="watch-outline" size={size} color={color} />,
         }}
