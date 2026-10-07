@@ -335,7 +335,7 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
       setError('Camera access is needed to take a photo of the report.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
     await handlePicked(result);
   }
 
@@ -345,7 +345,7 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
       setError('Photo library access is needed to choose a photo of the report.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     await handlePicked(result);
   }
 
