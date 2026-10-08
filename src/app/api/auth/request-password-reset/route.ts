@@ -3,12 +3,13 @@ import { requestPasswordReset } from '@/modules/auth/auth.service';
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
 import { logger } from '@/lib/logging/logger';
 import { sendEmail } from '@/lib/email/mailer';
+import { resolveWebAppOrigin } from '@/lib/http/app-url';
 
 // Real sending goes through lib/email/mailer.ts (Resend, with a
 // console-log fallback when RESEND_API_KEY isn't configured) — see
 // api/auth/register/route.ts's sendVerificationEmail for the same pattern.
 async function sendPasswordResetEmail(email: string, token: string) {
-  const resetUrl = `${process.env.APP_URL ?? ''}/reset-password?token=${token}`;
+  const resetUrl = `${resolveWebAppOrigin()}/reset-password?token=${token}`;
   await sendEmail({
     to: email,
     subject: 'Reset your password — Longevity Klub',

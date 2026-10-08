@@ -16,3 +16,15 @@
 export function resolveAppUrl(path: string, requestUrl: string): URL {
   return new URL(path, process.env.APP_URL || requestUrl);
 }
+
+/**
+ * Public origin of the Expo web app, for links emailed to users that should
+ * open the single (Expo) frontend — e.g. the password-reset link
+ * (`/reset-password?token=…` exists in both frontends). `WEB_APP_URL` is
+ * opt-in: unset, links keep pointing at `APP_URL` (the Next.js UI), so
+ * nothing changes until the Expo web service is switched on.
+ */
+export function resolveWebAppOrigin(): string {
+  const raw = process.env.WEB_APP_URL || process.env.APP_URL || '';
+  return raw.replace(/\/+$/, '');
+}
