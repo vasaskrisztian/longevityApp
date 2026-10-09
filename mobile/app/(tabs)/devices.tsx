@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import {
@@ -13,6 +13,9 @@ import {
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import appleHealthNative from '@/src/health/native';
+import { AppleHealthRateLimitedError } from '@/src/api/appleHealth';
+import { syncAppleHealth } from '@/src/health/sync';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
 
 /**
@@ -24,13 +27,10 @@ import { colors, fontFamily, radii } from '@/src/theme/tokens';
  * phase 19 (see src/api/wearables.ts) and the authorization URL is opened
  * here with expo-web-browser instead of a plain <a href>.
  *
- * Apple Health has no cloud API for us to connect — the phone itself has to
- * query HealthKit and push readings to /api/integrations/apple-health/ingest
- * (shipped this phase, backend-only). That native bridge needs an Apple
- * Developer Program account and an EAS development build, neither of which
- * exist in this project yet (see claude/phase-15-mobile-migration-plan.md,
- * phase 23) — so rather than ship a button that can't work, this screen
- * says so plainly below the Oura card.
+ * Apple Health has no cloud API for us to connect — the phone itself reads
+ * HealthKit (src/health/*, iOS native build only) and pushes daily summaries to
+ * /api/integrations/apple-health/ingest. The card below connects/syncs it on
+ * an iPhone and explains where it works on web/Android.
  */
 
 const STATUS_LABEL: Record<string, string> = {
@@ -65,6 +65,10 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function DevicesScreen() {
   const [connection, setConnection] = useState<ConnectionSummary | null>(null);
+  const [appleConnection, setAppleConnection] = useState<ConnectionSummary | null>(null);
+  const [appleSupported, setAppleSupported] = useState<boolean | null>(null);
+  const [appleSyncing, setAppleSyncing] = useState(false);
+  const [appleMessage, setAppleMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export default function DevicesScreen() {
     try {
       const connections = await getConnections();
       setConnection(connections.find((c) => c.provider === 'OURA') ?? null);
+      setAppleConnection(connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null);
     } catch {
       setLoadError('Could not load your devices. Pull down to try again.');
     } finally {
@@ -100,6 +105,49 @@ export default function DevicesScreen() {
   useEffect(() => {
     load(false);
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (Platform.OS !== 'ios') {
+      setAppleSupported(false);
+      return;
+    }
+    appleHealthNative.isSupported().then((supported) => {
+      if (!cancelled) setAppleSupported(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAppleSync() {
+    setAppleSyncing(true);
+    setAppleMessage(null);
+    try {
+      const outcome = await syncAppleHealth(appleConnection?.lastSyncAt);
+      if (outcome.status === 'synced') {
+        setAppleMessage({ ok: true, text: `Synced ${outcome.days} day${outcome.days === 1 ? '' : 's'} of Apple Health data.` });
+      } else if (outcome.status === 'no_data') {
+        setAppleMessage({
+          ok: false,
+          text: 'No Apple Health data was found. Check that Longevity Klub is allowed to read your data in Settings > Health > Data Access & Devices.',
+        });
+      } else {
+        setAppleMessage({ ok: false, text: 'Apple Health is not available on this device.' });
+      }
+      await load(true);
+    } catch (error) {
+      setAppleMessage({
+        ok: false,
+        text:
+          error instanceof AppleHealthRateLimitedError
+            ? error.message
+            : 'Could not sync Apple Health. Please try again.',
+      });
+    } finally {
+      setAppleSyncing(false);
+    }
+  }
 
   async function handleConnect() {
     setConnecting(true);
@@ -237,16 +285,58 @@ export default function DevicesScreen() {
       <Card style={styles.cardGap}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Apple Health</Text>
-          <View style={[styles.badge, { backgroundColor: colors.muted.default }]}>
-            <Text style={[styles.badgeText, { color: colors.muted.foreground }]}>Coming soon</Text>
-          </View>
+          {appleSupported === false ? (
+            <View style={[styles.badge, { backgroundColor: colors.muted.default }]}>
+              <Text style={[styles.badgeText, { color: colors.muted.foreground }]}>iPhone only</Text>
+            </View>
+          ) : (
+            <StatusBadge status={appleConnection?.status ?? 'DISCONNECTED'} />
+          )}
         </View>
-        <Text style={styles.cardDescription}>
-          Apple Health has no cloud service to connect to — syncing it means reading HealthKit data
-          directly on your phone, which this app doesn&apos;t do yet. That needs a native build of the
-          app (our Apple developer account and build setup aren&apos;t in place yet), so it isn&apos;t
-          available here. Oura above works today.
-        </Text>
+
+        {appleSupported === false ? (
+          <Text style={styles.cardDescription}>
+            Apple Health data lives on your iPhone. Open the Longevity Klub app on your iPhone to
+            connect it — steps, calories, sleep, resting heart rate and HRV are then synced here
+            automatically.
+          </Text>
+        ) : (
+          <>
+            <Text style={styles.cardDescription}>
+              {appleConnection?.status === 'CONNECTED'
+                ? 'Your Apple Health data syncs automatically whenever you open the app.'
+                : 'Share steps, calories, sleep, resting heart rate and HRV from Apple Health. Read-only — Longevity Klub never writes to Apple Health.'}
+            </Text>
+            {appleConnection?.lastSyncAt ? (
+              <Text style={styles.metaText}>
+                Last sync: {new Date(appleConnection.lastSyncAt).toLocaleString()}
+              </Text>
+            ) : null}
+            {appleMessage ? (
+              <Alert variant={appleMessage.ok ? 'success' : 'destructive'}>{appleMessage.text}</Alert>
+            ) : null}
+            <Button
+              title={
+                appleSyncing
+                  ? 'Syncing…'
+                  : appleConnection?.status === 'CONNECTED'
+                    ? 'Sync now'
+                    : 'Connect Apple Health'
+              }
+              variant={appleConnection?.status === 'CONNECTED' ? 'outline' : 'primary'}
+              size="sm"
+              onPress={handleAppleSync}
+              loading={appleSyncing}
+              disabled={appleSupported !== true}
+            />
+            {appleConnection?.status === 'CONNECTED' ? (
+              <Text style={styles.hintText}>
+                To stop sharing, turn off access in Settings &gt; Health &gt; Data Access &amp;
+                Devices &gt; Longevity Klub.
+              </Text>
+            ) : null}
+          </>
+        )}
       </Card>
 
       <Text style={styles.disclaimer}>

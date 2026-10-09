@@ -45,7 +45,16 @@ function toSummary(row: any): ConnectionSummary {
 }
 
 /**
- * One entry per SUPPORTED_WEARABLE_PROVIDERS, always — a provider the user
+ * Providers shown in the connections list: the OAuth ones plus Apple Health,
+ * which has no OAuth adapter (so it is deliberately NOT in
+ * SUPPORTED_WEARABLE_PROVIDERS — that list gates the OAuth routes) but still
+ * has a WearableConnection row, created by the first device push to
+ * /api/integrations/apple-health/ingest, that the mobile app needs to show.
+ */
+const LISTED_PROVIDERS: readonly WearableProviderId[] = [...SUPPORTED_WEARABLE_PROVIDERS, 'APPLE_HEALTH'];
+
+/**
+ * One entry per LISTED_PROVIDERS, always — a provider the user
  * has never attempted to connect gets a synthesized DISCONNECTED entry
  * rather than being omitted, so the /profile/devices UI and the
  * GET /api/wearables response never have to special-case "no row yet".
@@ -68,7 +77,7 @@ export async function listConnectionsForUser(userId: string): Promise<Connection
     }
   }
 
-  return SUPPORTED_WEARABLE_PROVIDERS.map((provider) => {
+  return LISTED_PROVIDERS.map((provider) => {
     const row = byProvider.get(provider);
     return row ? toSummary(row) : defaultSummary(provider);
   });

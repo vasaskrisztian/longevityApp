@@ -3,6 +3,8 @@ import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAppleHealthAutoSync } from '@/src/health/useAppleHealthAutoSync';
+
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
 import { getProfileBundle } from '@/src/api/profile';
@@ -27,6 +29,7 @@ export default function TabLayout() {
   const { status, user } = useSession();
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
+  useAppleHealthAutoSync(status === 'signedIn');
 
   // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
   // authenticated non-admin user who hasn't completed the onboarding wizard

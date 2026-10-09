@@ -55,10 +55,21 @@ describe('listConnectionsForUser', () => {
 
     const result = await listConnectionsForUser('u1');
 
+    // Oura (OAuth) plus Apple Health (push-only, no OAuth adapter).
     expect(result).toEqual([
       {
         id: null,
         provider: 'OURA',
+        status: 'DISCONNECTED',
+        connectedAt: null,
+        disconnectedAt: null,
+        grantedScopes: [],
+        lastSyncAt: null,
+        lastSyncStatus: null,
+      },
+      {
+        id: null,
+        provider: 'APPLE_HEALTH',
         status: 'DISCONNECTED',
         connectedAt: null,
         disconnectedAt: null,
@@ -85,7 +96,38 @@ describe('listConnectionsForUser', () => {
         lastSyncAt: OURA_ROW.lastSyncAt,
         lastSyncStatus: 'SUCCESS',
       },
+      {
+        id: null,
+        provider: 'APPLE_HEALTH',
+        status: 'DISCONNECTED',
+        connectedAt: null,
+        disconnectedAt: null,
+        grantedScopes: [],
+        lastSyncAt: null,
+        lastSyncStatus: null,
+      },
     ]);
+  });
+
+  it('reports a pushed Apple Health connection (status and last sync) from its newest row', async () => {
+    const synced = new Date('2026-10-08T07:00:00Z');
+    const apple = {
+      ...OURA_ROW,
+      id: 'conn-apple',
+      provider: 'APPLE_HEALTH',
+      grantedScopes: [],
+      lastSyncAt: synced,
+    };
+    prismaMock.wearableConnection.findMany.mockResolvedValue([apple]);
+
+    const result = await listConnectionsForUser('u1');
+
+    expect(result.find((c) => c.provider === 'APPLE_HEALTH')).toMatchObject({
+      id: 'conn-apple',
+      status: 'CONNECTED',
+      lastSyncAt: synced,
+    });
+    expect(result.find((c) => c.provider === 'OURA')?.id).toBeNull();
   });
 
   it('defaults grantedScopes to an empty array when a row has none set', async () => {
@@ -105,7 +147,7 @@ describe('listConnectionsForUser', () => {
 
     const result = await listConnectionsForUser('u1');
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]?.id).toBe('conn-new');
     expect(result[0]?.status).toBe('CONNECTED');
   });

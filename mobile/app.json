@@ -40,6 +40,14 @@
           "photosPermission": "Allow Longevity Klub to access your photos to upload an InBody scan report.",
           "cameraPermission": "Allow Longevity Klub to use your camera to photograph an InBody scan report."
         }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Longevity Klub reads your steps, calories, sleep, resting heart rate and HRV from Apple Health to show them next to your protocols and goals. It never writes to Apple Health.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
       ]
     ],
     "experiments": {
