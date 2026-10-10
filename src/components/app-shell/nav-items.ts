@@ -48,3 +48,21 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Devices', href: '/profile/devices', icon: Watch },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
 ];
+
+/**
+ * The one nav item that should look selected for `pathname`: the item with
+ * the longest href that equals the path or is a path prefix of it. Plain
+ * prefix matching highlighted "Profile" (/profile) together with every
+ * sub-page entry (Devices at /profile/devices, Lifestyle, Protocols...),
+ * because those live under /profile too — the most specific match wins, so
+ * /profile/devices selects only Devices, and /profile/anything-unlisted
+ * (e.g. /profile/creators) still falls back to Profile.
+ */
+export function findActiveNavHref(pathname: string, items: readonly Pick<NavItem, 'href'>[]): string | null {
+  let best: string | null = null;
+  for (const { href } of items) {
+    const matches = pathname === href || pathname.startsWith(`${href}/`);
+    if (matches && (best === null || href.length > best.length)) best = href;
+  }
+  return best;
+}

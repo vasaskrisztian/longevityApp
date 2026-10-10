@@ -65,6 +65,8 @@ export interface OuraWorkoutRecord {
   calories: number | null;
   distance: number | null; // meters
   intensity: string | null;
+  /** manual | autodetected | confirmed | workout_heart_rate */
+  source?: string | null;
 }
 
 export interface OuraDailySpo2Record {

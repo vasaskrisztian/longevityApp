@@ -131,6 +131,7 @@ describe('mapOuraRecordToWorkout', () => {
         calories: 380,
         distance: 7500,
         intensity: 'moderate',
+        source: 'autodetected',
       },
     });
 
@@ -143,6 +144,7 @@ describe('mapOuraRecordToWorkout', () => {
       calories: 380,
       distanceM: 7500,
       intensity: 'moderate',
+      source: 'autodetected',
     });
   });
 
@@ -166,6 +168,7 @@ describe('mapOuraRecordToWorkout', () => {
     expect(result!.calories).toBeUndefined();
     expect(result!.distanceM).toBeUndefined();
     expect(result!.intensity).toBeUndefined();
+    expect(result!.source).toBeUndefined();
   });
 
   it('returns null for any non-WORKOUT dataType', () => {

@@ -129,5 +129,6 @@ export function mapOuraRecordToWorkout(record: ProviderRawRecord): NormalizedWor
     calories: payload.calories === null || payload.calories === undefined ? undefined : Math.round(payload.calories),
     distanceM: payload.distance ?? undefined,
     intensity: payload.intensity ?? undefined,
+    source: payload.source ?? undefined,
   };
 }

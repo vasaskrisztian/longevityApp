@@ -6,7 +6,7 @@ const prismaMock = {
     findMany: vi.fn(),
   },
   workout: {
-    count: vi.fn(),
+    findMany: vi.fn(),
   },
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
@@ -228,22 +228,48 @@ describe('getTrend', () => {
 });
 
 describe('getWeeklyWorkoutCount', () => {
-  it('counts workouts scoped to userId in the inclusive [today - 6, today] window', async () => {
-    prismaMock.workout.count.mockResolvedValue(3);
+  const session = (startIso: string, minutes: number, activityType = 'running', source: string | null = 'confirmed') => ({
+    startedAt: new Date(startIso),
+    endedAt: new Date(new Date(startIso).getTime() + minutes * 60_000),
+    durationMin: minutes,
+    activityType,
+    source,
+  });
+
+  it('reads the user own workouts in the inclusive [today - 6, today] window and counts distinct sessions', async () => {
+    prismaMock.workout.findMany.mockResolvedValue([
+      session('2026-06-10T07:00:00Z', 45),
+      session('2026-06-12T17:00:00Z', 60, 'cycling', 'autodetected'),
+      session('2026-06-15T06:00:00Z', 30, 'strength_training', 'manual'),
+    ]);
 
     const result = await getWeeklyWorkoutCount('u1');
 
-    expect(prismaMock.workout.count).toHaveBeenCalledWith({
-      where: {
-        userId: 'u1',
-        startedAt: { gte: new Date('2026-06-09T00:00:00Z'), lt: new Date('2026-06-16T00:00:00Z') },
-      },
-    });
+    expect(prismaMock.workout.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: 'u1',
+          startedAt: { gte: new Date('2026-06-09T00:00:00Z'), lt: new Date('2026-06-16T00:00:00Z') },
+        },
+      }),
+    );
     expect(result).toBe(3);
   });
 
+  it('ignores auto-detected walks, very short activities and duplicate recordings of one session', async () => {
+    prismaMock.workout.findMany.mockResolvedValue([
+      session('2026-06-10T07:00:00Z', 45),
+      session('2026-06-10T07:05:00Z', 40), // same workout recorded twice
+      session('2026-06-11T12:00:00Z', 40, 'walking', 'autodetected'),
+      session('2026-06-12T12:00:00Z', 5, 'running', 'manual'),
+      session('2026-06-13T12:00:00Z', 40, 'walking', 'confirmed'), // a walk the person logged counts
+    ]);
+
+    await expect(getWeeklyWorkoutCount('u1')).resolves.toBe(2);
+  });
+
   it('returns 0 when the user has no workouts in the window', async () => {
-    prismaMock.workout.count.mockResolvedValue(0);
+    prismaMock.workout.findMany.mockResolvedValue([]);
     await expect(getWeeklyWorkoutCount('u1')).resolves.toBe(0);
   });
 });

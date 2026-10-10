@@ -189,6 +189,8 @@ export interface NormalizedWorkout {
   calories?: number;
   distanceM?: number;
   intensity?: string;
+  /** The provider's origin label for the activity (Oura: manual | autodetected | confirmed | workout_heart_rate). */
+  source?: string;
 }
 
 /**

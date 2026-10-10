@@ -1,3 +1,4 @@
+import { countDistinctWorkouts } from '@/modules/wearable/domain/workout-count';
 import { prisma } from '@/lib/db/prisma';
 import type { Challenge } from '@prisma/client';
 import type { CreateChallengeInput, UpdateChallengeInput } from '@/lib/validation/challenge.schemas';
@@ -77,7 +78,12 @@ async function countQualifyingWeeks(
 
   const counts = await Promise.all(
     chunks.map((chunk) =>
-      prisma.workout.count({ where: { userId, startedAt: { gte: chunk.start, lt: chunk.end } } }),
+      prisma.workout
+        .findMany({
+          where: { userId, startedAt: { gte: chunk.start, lt: chunk.end } },
+          select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
+        })
+        .then(countDistinctWorkouts),
     ),
   );
   return counts.filter((count: number) => count > threshold).length;

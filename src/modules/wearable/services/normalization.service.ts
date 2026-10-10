@@ -251,8 +251,8 @@ export async function normalizeAndUpsertWorkouts(params: {
       // eslint-disable-next-line no-await-in-loop -- same rationale as normalizeAndUpsertDailyMetrics: small batch, sequential, single checked-out client
       await query(
         `insert into workouts
-           (id, "userId", provider, "externalId", "activityType", "startedAt", "endedAt", "durationMin", calories, "distanceM", intensity, "updatedAt")
-         values ($1, $2, $3::"WearableProvider", $4, $5, $6::timestamp, $7::timestamp, $8, $9, $10, $11, now())
+           (id, "userId", provider, "externalId", "activityType", "startedAt", "endedAt", "durationMin", calories, "distanceM", intensity, source, "updatedAt")
+         values ($1, $2, $3::"WearableProvider", $4, $5, $6::timestamp, $7::timestamp, $8, $9, $10, $11, $12, now())
          on conflict (provider, "externalId") do update set
            "activityType" = excluded."activityType",
            "startedAt" = excluded."startedAt",
@@ -261,6 +261,7 @@ export async function normalizeAndUpsertWorkouts(params: {
            calories = excluded.calories,
            "distanceM" = excluded."distanceM",
            intensity = excluded.intensity,
+           source = excluded.source,
            "updatedAt" = now()`,
         [
           randomUUID(),
@@ -274,6 +275,7 @@ export async function normalizeAndUpsertWorkouts(params: {
           workout.calories ?? null,
           workout.distanceM ?? null,
           workout.intensity ?? null,
+          workout.source ?? null,
         ],
       );
 

@@ -203,6 +203,7 @@ describe('normalizeAndUpsertWorkouts', () => {
         calories: 380,
         distanceM: 7500,
         intensity: 'moderate',
+        source: 'confirmed',
       }),
     });
 
@@ -230,6 +231,7 @@ describe('normalizeAndUpsertWorkouts', () => {
       380,
       7500,
       'moderate',
+      'confirmed',
     ]);
   });
 

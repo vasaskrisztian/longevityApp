@@ -1,3 +1,4 @@
+import { countDistinctWorkouts } from '@/modules/wearable/domain/workout-count';
 import { prisma } from '@/lib/db/prisma';
 import type { WearableProviderId } from '@/modules/wearable/domain/wearable-provider.types';
 
@@ -161,7 +162,7 @@ export async function getTrend(userId: string, rangeDays: TrendRangeDays): Promi
 }
 
 /**
- * How many workouts landed in the trailing 7-day window [today - 6, today]
+ * How many distinct workouts (see workout-count.ts for what counts) landed in the trailing 7-day window [today - 6, today]
  * (inclusive) — the "actual" the Protocols feature's targetWeeklyWorkouts
  * compares against on the dashboard. Lives here rather than in
  * modules/protocols since it reads Workout, a wearable-sync table this
@@ -174,7 +175,9 @@ export async function getWeeklyWorkoutCount(userId: string): Promise<number> {
   const to = new Date(today);
   to.setUTCDate(to.getUTCDate() + 1);
 
-  return prisma.workout.count({
+  const workouts = await prisma.workout.findMany({
     where: { userId, startedAt: { gte: from, lt: to } },
+    select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
   });
+  return countDistinctWorkouts(workouts);
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
-import { NAV_ITEMS } from './nav-items';
+import { NAV_ITEMS, findActiveNavHref } from './nav-items';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -34,6 +34,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'ADMIN';
+  const visibleItems = NAV_ITEMS.filter((item) => !item.hidden && (!item.adminOnly || isAdmin));
+  const activeHref = findActiveNavHref(pathname, visibleItems);
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-card-border bg-gradient-to-b from-white via-white to-muted px-4 py-6">
@@ -50,8 +52,8 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1.5">
-        {NAV_ITEMS.filter((item) => !item.hidden && (!item.adminOnly || isAdmin)).map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        {visibleItems.map((item) => {
+          const active = item.href === activeHref;
           const Icon = item.icon;
           return (
             <Link

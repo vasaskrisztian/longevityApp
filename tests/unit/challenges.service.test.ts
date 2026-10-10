@@ -12,11 +12,23 @@ const prismaMock = {
     count: vi.fn(),
   },
   workout: {
-    count: vi.fn(),
+    findMany: vi.fn(),
   },
 };
 
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
+
+/** n distinct 30-minute running sessions, three hours apart — countDistinctWorkouts counts exactly n. */
+function sessions(n: number) {
+  const base = new Date('2026-06-01T08:00:00Z').getTime();
+  return Array.from({ length: n }, (_, i) => ({
+    startedAt: new Date(base + i * 3 * 3_600_000),
+    endedAt: new Date(base + i * 3 * 3_600_000 + 30 * 60_000),
+    durationMin: 30,
+    activityType: 'running',
+    source: 'confirmed',
+  }));
+}
 
 const {
   computeProgress,
@@ -143,7 +155,7 @@ describe('computeProgress', () => {
     it('counts a chunk as qualifying as soon as its workout count exceeds the threshold', async () => {
       const activatedAt = new Date(NOW.getTime() - 14 * DAY_MS);
       const expiresAt = new Date(NOW.getTime() + 14 * DAY_MS);
-      prismaMock.workout.count.mockResolvedValue(5); // exceeds threshold on every chunk
+      prismaMock.workout.findMany.mockResolvedValue(sessions(5)); // exceeds threshold on every chunk
 
       const progress = await computeProgress({
         ...DRAFT_SLEEP_CHALLENGE,
@@ -154,7 +166,7 @@ describe('computeProgress', () => {
         expiresAt,
       } as never);
 
-      const chunkCalls = prismaMock.workout.count.mock.calls.length;
+      const chunkCalls = prismaMock.workout.findMany.mock.calls.length;
       expect(chunkCalls).toBeGreaterThan(0);
       // Every chunk's mocked count (5) exceeds the threshold (2), so every
       // queried chunk should count toward currentCount.
@@ -164,7 +176,7 @@ describe('computeProgress', () => {
     it('does not count a chunk whose workout count is at or below the threshold', async () => {
       const activatedAt = new Date(NOW.getTime() - 14 * DAY_MS);
       const expiresAt = new Date(NOW.getTime() + 14 * DAY_MS);
-      prismaMock.workout.count.mockResolvedValue(1); // below threshold on every chunk
+      prismaMock.workout.findMany.mockResolvedValue(sessions(1)); // below threshold on every chunk
 
       const progress = await computeProgress({
         ...DRAFT_SLEEP_CHALLENGE,
@@ -178,10 +190,39 @@ describe('computeProgress', () => {
       expect(progress.currentCount).toBe(0);
     });
 
+    it('does not count unconfirmed auto-detected walks or duplicate recordings of one session as workouts', async () => {
+      const activatedAt = new Date(NOW.getTime() - 7 * DAY_MS);
+      const expiresAt = new Date(NOW.getTime() + 7 * DAY_MS);
+      const [run] = sessions(1);
+      prismaMock.workout.findMany.mockResolvedValue([
+        run,
+        { ...run, startedAt: new Date(run!.startedAt.getTime() + 60_000) }, // same session recorded twice
+        ...Array.from({ length: 6 }, (_, i) => ({
+          startedAt: new Date('2026-06-02T08:00:00Z').getTime() + i * 3_600_000,
+          endedAt: new Date('2026-06-02T08:30:00Z').getTime() + i * 3_600_000,
+          durationMin: 30,
+          activityType: 'walking',
+          source: 'autodetected',
+        })).map((w) => ({ ...w, startedAt: new Date(w.startedAt), endedAt: new Date(w.endedAt) })),
+      ]);
+
+      const progress = await computeProgress({
+        ...DRAFT_SLEEP_CHALLENGE,
+        type: 'WEEKLY_WORKOUTS',
+        threshold: 1,
+        requiredCount: 1,
+        activatedAt,
+        expiresAt,
+      } as never);
+
+      // Only one real session per chunk -> never exceeds the threshold of 1.
+      expect(progress.currentCount).toBe(0);
+    });
+
     it('scopes each chunk query to the challenge owner', async () => {
       const activatedAt = new Date(NOW.getTime() - 7 * DAY_MS);
       const expiresAt = new Date(NOW.getTime() + 7 * DAY_MS);
-      prismaMock.workout.count.mockResolvedValue(0);
+      prismaMock.workout.findMany.mockResolvedValue([]);
 
       await computeProgress({
         ...DRAFT_SLEEP_CHALLENGE,
@@ -191,7 +232,7 @@ describe('computeProgress', () => {
         expiresAt,
       } as never);
 
-      expect(prismaMock.workout.count).toHaveBeenCalledWith(
+      expect(prismaMock.workout.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ userId: 'u1' }) }),
       );
     });

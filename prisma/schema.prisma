@@ -728,6 +728,8 @@ model Workout {
   calories     Int?
   distanceM    Decimal?          @db.Decimal(10, 2)
   intensity    String?
+  // Provider's own origin label (Oura: manual | autodetected | confirmed | workout_heart_rate).
+  source       String?
 
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
