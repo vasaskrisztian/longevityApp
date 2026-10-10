@@ -22,10 +22,20 @@ export const RegisterSchema = z
     privacyAccepted: z.literal(true, {
       errorMap: () => ({ message: 'You must accept the Privacy Policy' }),
     }),
+    // Corporate wellbeing: registering from a group invitation link. The
+    // token proves the person controls the invited address (so the account
+    // starts email-verified) and joining the group needs explicit consent to
+    // the group's administrators seeing their health data.
+    inviteToken: z.string().min(1).max(200).optional(),
+    groupConsent: z.boolean().optional(),
   })
   .refine((data) => data.password === data.passwordConfirmation, {
     message: 'Passwords do not match',
     path: ['passwordConfirmation'],
+  })
+  .refine((data) => !data.inviteToken || data.groupConsent === true, {
+    message: 'You must agree to share your health data with the group administrators',
+    path: ['groupConsent'],
   });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;

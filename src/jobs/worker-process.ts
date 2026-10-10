@@ -3,6 +3,10 @@ import { startOuraInitialSyncWorker } from './oura-initial-sync.job';
 import { startOuraDailySyncWorker } from './oura-daily-sync.job';
 import { startOuraManualSyncWorker } from './oura-manual-sync.job';
 import { startDailySyncScanWorker, scheduleDailySyncScan } from './scheduler';
+import {
+  startGroupChallengeFinalizeWorker,
+  scheduleGroupChallengeFinalize,
+} from './group-challenge-finalize.job';
 import { logger } from '@/lib/logging/logger';
 
 /**
@@ -27,8 +31,10 @@ export async function startWorkerProcess(): Promise<void> {
   startOuraManualSyncWorker();
   startDailySyncScanWorker();
   await scheduleDailySyncScan();
+  startGroupChallengeFinalizeWorker();
+  await scheduleGroupChallengeFinalize();
   logger.info('worker_process_started', {
-    queues: ['oura-initial-sync', 'oura-daily-sync', 'oura-manual-sync', 'oura-daily-sync-scan'].join(
+    queues: ['oura-initial-sync', 'oura-daily-sync', 'oura-manual-sync', 'oura-daily-sync-scan', 'group-challenge-finalize'].join(
       ', ',
     ),
   });

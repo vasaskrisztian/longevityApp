@@ -140,6 +140,23 @@ enum ChallengeType {
   WEEKLY_WORKOUTS
 }
 
+/// Corporate wellbeing: where a group invitation stands. "Expired" is not a
+/// stored status — a PENDING invitation past `expiresAt` is simply treated as
+/// expired when read, so nothing has to flip rows on a timer.
+enum GroupInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+/// What an in-app notification is about; the row's `data` JSON carries the ids
+/// the client needs to act on it (invitation id, group id, challenge id).
+enum NotificationType {
+  GROUP_INVITATION
+  GROUP_CHALLENGE_NEW
+  GROUP_CHALLENGE_SUMMARY
+}
+
 enum SupplementFrequency {
   DAILY
   TWICE_DAILY
@@ -276,6 +293,15 @@ model User {
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   mobileRefreshTokens MobileRefreshToken[]
+
+  // Corporate wellbeing groups (admin-created) and in-app notifications.
+  createdGroups               WellbeingGroup[]            @relation("GroupCreator")
+  groupMemberships            GroupMembership[]
+  sentGroupInvitations        GroupInvitation[]           @relation("GroupInvitedBy")
+  acceptedGroupInvitations    GroupInvitation[]           @relation("GroupInvitationAcceptedBy")
+  createdGroupChallenges      GroupChallenge[]            @relation("GroupChallengeCreator")
+  groupChallengeParticipations GroupChallengeParticipant[]
+  notifications               Notification[]
 
   // Auth.js (NextAuth) linkage — enables Google OAuth later without a schema change.
   accounts Account[]
@@ -737,6 +763,150 @@ model Workout {
   @@unique([provider, externalId])
   @@index([userId, startedAt])
   @@map("workouts")
+}
+
+// ------------------------------------------------------------------
+// Corporate wellbeing: groups, invitations, group challenges, notifications
+// ------------------------------------------------------------------
+
+/// A company/team group, created by an admin. Name + logo only; the logo is
+/// stored in Postgres like InBody scans (no blob storage is configured) and is
+/// served publicly by group id (it appears in invitation emails).
+model WellbeingGroup {
+  id              String   @id @default(uuid())
+  name            String
+  logoData        Bytes?
+  logoContentType String?
+
+  createdById String
+  createdBy   User   @relation("GroupCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  members     GroupMembership[]
+  invitations GroupInvitation[]
+  challenges  GroupChallenge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wellbeing_groups")
+}
+
+/// A user belonging to a group. Exists only after the person accepted the
+/// invitation AND gave explicit consent (`consentAcceptedAt`) to the group's
+/// administrators seeing their health data; leaving deletes the row.
+model GroupMembership {
+  id      String         @id @default(uuid())
+  groupId String
+  group   WellbeingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  consentAcceptedAt DateTime
+  createdAt         DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_memberships")
+}
+
+/// An email invitation. Only the SHA-256 hash of the secret link token is
+/// stored (like password-reset tokens). One row per (group, email): re-inviting
+/// the same address refreshes the token and expiry instead of adding rows.
+model GroupInvitation {
+  id      String         @id @default(uuid())
+  groupId String
+  group   WellbeingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  email     String
+  tokenHash String                @unique
+  status    GroupInvitationStatus @default(PENDING)
+
+  invitedById String
+  invitedBy   User   @relation("GroupInvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  expiresAt  DateTime
+  lastSentAt DateTime
+  acceptedAt DateTime?
+
+  acceptedUserId String?
+  acceptedUser   User?   @relation("GroupInvitationAcceptedBy", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, email])
+  @@index([email])
+  @@map("group_invitations")
+}
+
+/// A challenge set for a whole group over a fixed period. Same qualifying-
+/// period rules as a personal Challenge (`type`, `threshold`, `requiredCount`),
+/// counted from `startsAt` until `endsAt`. Progress is always computed on read;
+/// only `summarySentAt` is stored (the end-of-challenge notifications go out
+/// exactly once).
+model GroupChallenge {
+  id      String         @id @default(uuid())
+  groupId String
+  group   WellbeingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation("GroupChallengeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  name        String
+  description String?
+
+  type          ChallengeType
+  threshold     Int
+  requiredCount Int
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  summarySentAt DateTime?
+
+  participants GroupChallengeParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([endsAt])
+  @@map("group_challenges")
+}
+
+/// A member who voluntarily joined a group challenge.
+model GroupChallengeParticipant {
+  id          String         @id @default(uuid())
+  challengeId String
+  challenge   GroupChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([challengeId, userId])
+  @@index([userId])
+  @@map("group_challenge_participants")
+}
+
+/// In-app notification (web bell + mobile). `data` carries the ids needed to
+/// act on it; `readAt` null = unread.
+model Notification {
+  id     String           @id @default(uuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  title String
+  body  String
+  data  Json?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("notifications")
 }
 
 // ------------------------------------------------------------------

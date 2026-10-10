@@ -60,6 +60,8 @@ export const MANUAL_SYNC_RATE_LIMIT = { windowMs: 5 * 60 * 1000, max: 1 };
 // actually prevents duplicate jobs; this only bounds how often one user can
 // make the endpoint do its (cheap) DB lookups.
 export const SESSION_SYNC_RATE_LIMIT = { windowMs: 60 * 1000, max: 10 };
+// Public invitation preview (token lookup) — generous for real use, tight enough to make guessing pointless.
+export const INVITATION_PREVIEW_RATE_LIMIT = { windowMs: 60 * 1000, max: 30 };
 export const APPLE_HEALTH_INGEST_RATE_LIMIT = { windowMs: 60 * 1000, max: 2 };
 
 export function getClientIdentifier(request: Request): string {

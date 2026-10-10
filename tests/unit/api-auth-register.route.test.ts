@@ -21,6 +21,16 @@ vi.mock('@/modules/auth/auth.service', () => ({
   EmailAlreadyRegisteredError,
 }));
 
+class InvitationError extends Error {
+  constructor(public readonly reason: string) {
+    super(reason);
+  }
+}
+vi.mock('@/modules/groups/invitations.service', () => ({ InvitationError }));
+
+const sendEmailMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/email/mailer', () => ({ sendEmail: sendEmailMock }));
+
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -120,5 +130,50 @@ describe('POST /api/auth/register', () => {
 
     expect(response.status).toBe(201);
     process.env.APP_URL = original;
+  });
+
+  describe('with a group invitation token', () => {
+    const WITH_INVITE = { ...VALID_REGISTRATION, inviteToken: 'tok', groupConsent: true };
+
+    it('requires the explicit consent to share health data (400, service never called)', async () => {
+      const response = await POST(postRequest({ ...WITH_INVITE, groupConsent: false }));
+      expect(response.status).toBe(400);
+      const response2 = await POST(postRequest({ ...VALID_REGISTRATION, inviteToken: 'tok' }));
+      expect(response2.status).toBe(400);
+      expect(registerUserMock).not.toHaveBeenCalled();
+    });
+
+    it('creates an already-verified account: 201, no verification email', async () => {
+      sendEmailMock.mockClear();
+      registerUserMock.mockResolvedValue({ userId: 'u1', verificationToken: null });
+
+      const response = await POST(postRequest(WITH_INVITE));
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ verified: true });
+      expect(sendEmailMock).not.toHaveBeenCalled();
+      expect(registerUserMock).toHaveBeenCalledWith(expect.objectContaining({ inviteToken: 'tok', groupConsent: true }));
+    });
+
+    it.each([
+      ['expired', /expired/i],
+      ['email_mismatch', /different email/i],
+      ['invalid', /not valid/i],
+      ['accepted', /already been accepted/i],
+    ])('maps a %s invitation to a specific 400', async (reason, message) => {
+      registerUserMock.mockRejectedValue(new InvitationError(reason));
+      const response = await POST(postRequest(WITH_INVITE));
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.code).toBe(reason);
+      expect(body.error).toMatch(message);
+    });
+
+    it('tells the holder of a valid invitation that the account exists (409 account_exists)', async () => {
+      registerUserMock.mockRejectedValue(new EmailAlreadyRegisteredError());
+      const response = await POST(postRequest(WITH_INVITE));
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe('account_exists');
+    });
   });
 });

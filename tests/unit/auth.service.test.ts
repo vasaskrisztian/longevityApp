@@ -20,6 +20,13 @@ const prismaMock = {
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+  groupInvitation: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
+  groupMembership: {
+    upsert: vi.fn(),
+  },
   // auth.service.ts passes an array of already-invoked Prisma call
   // promises, matching real Prisma's `$transaction([...])` array form.
   $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
@@ -70,7 +77,8 @@ describe('registerUser', () => {
 
     expect(result.userId).toBe('new-user-id');
     expect(result.verificationToken).toEqual(expect.any(String));
-    expect(result.verificationToken.length).toBeGreaterThan(20);
+    const verificationToken = result.verificationToken as string;
+    expect(verificationToken.length).toBeGreaterThan(20);
 
     // The password hash handed to Prisma is a real argon2id hash, never
     // the plaintext.
@@ -83,11 +91,76 @@ describe('registerUser', () => {
     // Only the HASH of the verification token is persisted.
     const tokenArgs = prismaMock.emailVerificationToken.create.mock.calls[0]![0];
     expect(tokenArgs.data.userId).toBe('new-user-id');
-    expect(tokenArgs.data.tokenHash).toBe(hashToken(result.verificationToken));
+    expect(tokenArgs.data.tokenHash).toBe(hashToken(verificationToken));
 
     const profileArgs = prismaMock.profile.create.mock.calls[0]![0];
     expect(profileArgs.data.userId).toBe('new-user-id');
     expect(profileArgs.data.fullName).toBe('Jane Doe');
+  });
+});
+
+describe('registerUser with a group invitation', () => {
+  const invitationRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'inv-1',
+    groupId: 'group-1',
+    email: 'jane@example.com',
+    status: 'PENDING',
+    expiresAt: new Date(Date.now() + 60_000),
+    group: { id: 'group-1', name: 'Acme', logoContentType: null, updatedAt: new Date() },
+    ...overrides,
+  });
+  const WITH_INVITE = { ...VALID_INPUT, inviteToken: 'raw-invite-token', groupConsent: true };
+
+  it('creates an already-verified account, no verification token, and joins the group with the consent timestamp', async () => {
+    prismaMock.groupInvitation.findUnique.mockResolvedValue(invitationRow());
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'new-user-id' });
+    prismaMock.profile.create.mockResolvedValue({});
+
+    const result = await registerUser(WITH_INVITE);
+
+    expect(result).toEqual({ userId: 'new-user-id', verificationToken: null });
+    expect(prismaMock.groupInvitation.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tokenHash: hashToken('raw-invite-token') } }),
+    );
+    expect(prismaMock.user.create.mock.calls[0]![0].data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(prismaMock.emailVerificationToken.create).not.toHaveBeenCalled();
+    expect(prismaMock.groupMembership.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { groupId_userId: { groupId: 'group-1', userId: 'new-user-id' } },
+        create: expect.objectContaining({ groupId: 'group-1', userId: 'new-user-id', consentAcceptedAt: expect.any(Date) }),
+      }),
+    );
+    expect(prismaMock.groupInvitation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'inv-1' },
+        data: expect.objectContaining({ status: 'ACCEPTED', acceptedUserId: 'new-user-id' }),
+      }),
+    );
+  });
+
+  it('rejects an invitation sent to a different address and creates nothing', async () => {
+    prismaMock.groupInvitation.findUnique.mockResolvedValue(invitationRow({ email: 'someone.else@example.com' }));
+    await expect(registerUser(WITH_INVITE)).rejects.toMatchObject({ name: 'InvitationError', reason: 'email_mismatch' });
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unknown token', null, 'invalid'],
+    ['expired', invitationRow({ expiresAt: new Date(Date.now() - 1000) }), 'expired'],
+    ['revoked', invitationRow({ status: 'REVOKED' }), 'revoked'],
+    ['already accepted', invitationRow({ status: 'ACCEPTED' }), 'accepted'],
+  ])('rejects a %s invitation', async (_label, row, reason) => {
+    prismaMock.groupInvitation.findUnique.mockResolvedValue(row);
+    await expect(registerUser(WITH_INVITE)).rejects.toMatchObject({ name: 'InvitationError', reason });
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it('checks the invitation before the existing-account check (a valid link + existing account = EmailAlreadyRegistered)', async () => {
+    prismaMock.groupInvitation.findUnique.mockResolvedValue(invitationRow());
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'existing-user' });
+    await expect(registerUser(WITH_INVITE)).rejects.toBeInstanceOf(EmailAlreadyRegisteredError);
+    expect(prismaMock.groupMembership.upsert).not.toHaveBeenCalled();
   });
 });
 

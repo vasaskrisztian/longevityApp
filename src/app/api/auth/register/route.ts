@@ -3,6 +3,7 @@ import { registerUser, EmailAlreadyRegisteredError } from '@/modules/auth/auth.s
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
 import { logger } from '@/lib/logging/logger';
 import { sendEmail } from '@/lib/email/mailer';
+import { InvitationError } from '@/modules/groups/invitations.service';
 
 // Real sending goes through lib/email/mailer.ts (Resend, with a
 // console-log fallback when RESEND_API_KEY isn't configured) — this
@@ -17,6 +18,20 @@ async function sendVerificationEmail(email: string, token: string) {
     html: `<p>Welcome to Longevity Klub! Confirm your email address to finish creating your account:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>`,
     text: `Welcome to Longevity Klub! Confirm your email address to finish creating your account:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create this account, you can ignore this email.`,
   });
+}
+
+function invitationErrorMessage(error: InvitationError): string {
+  switch (error.reason) {
+    case 'expired':
+      return 'This invitation has expired. Ask the group administrator to send a new one.';
+    case 'revoked':
+    case 'invalid':
+      return 'This invitation link is not valid.';
+    case 'accepted':
+      return 'This invitation has already been accepted — sign in instead.';
+    case 'email_mismatch':
+      return 'This invitation was sent to a different email address.';
+  }
 }
 
 export async function POST(request: Request) {
@@ -37,9 +52,27 @@ export async function POST(request: Request) {
     // Awaited (not fire-and-forget): sendEmail() never throws, and without
     // awaiting here this handler's response could be sent — and the
     // function/request lifecycle torn down — before the outbound call to
-    // Resend actually completes.
-    await sendVerificationEmail(parsed.data.email, verificationToken);
+    // Resend actually completes. No token = registered from a group
+    // invitation, which already proved the address (account is verified).
+    if (verificationToken) {
+      await sendVerificationEmail(parsed.data.email, verificationToken);
+    } else {
+      return Response.json({ message: 'Account created.', verified: true }, { status: 201 });
+    }
   } catch (error) {
+    if (error instanceof InvitationError) {
+      // Only reachable with an invite token, which the holder received by
+      // email, so being specific here leaks nothing an attacker could use.
+      return Response.json({ error: invitationErrorMessage(error), code: error.reason }, { status: 400 });
+    }
+    if (error instanceof EmailAlreadyRegisteredError && parsed.data.inviteToken) {
+      // The invitation was valid for this address (checked first), so the
+      // holder may be told to sign in instead of registering.
+      return Response.json(
+        { error: 'This email already has an account — sign in to accept the invitation.', code: 'account_exists' },
+        { status: 409 },
+      );
+    }
     if (!(error instanceof EmailAlreadyRegisteredError)) {
       logger.error('registration_failed', { message: (error as Error).message });
       return Response.json({ error: 'Registration failed' }, { status: 500 });

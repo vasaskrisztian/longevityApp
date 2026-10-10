@@ -89,19 +89,41 @@ async function countQualifyingWeeks(
   return counts.filter((count: number) => count > threshold).length;
 }
 
-async function countQualifyingPeriods(challenge: Challenge, from: Date, to: Date): Promise<number> {
-  switch (challenge.type) {
+/**
+ * How many qualifying periods (days/weeks per `type`) `userId` reached in
+ * [from, to]. Shared by personal challenges (below) and group challenges
+ * (modules/groups/group-challenges.service.ts) so both count identically.
+ */
+export async function countQualifyingPeriodsFor(params: {
+  userId: string;
+  type: Challenge['type'];
+  threshold: number;
+  from: Date;
+  to: Date;
+}): Promise<number> {
+  const { userId, type, threshold, from, to } = params;
+  switch (type) {
     case 'SLEEP_SCORE':
-      return countQualifyingDays(challenge.userId, 'sleepScore', from, to, challenge.threshold);
+      return countQualifyingDays(userId, 'sleepScore', from, to, threshold);
     case 'DAILY_STEPS':
-      return countQualifyingDays(challenge.userId, 'steps', from, to, challenge.threshold);
+      return countQualifyingDays(userId, 'steps', from, to, threshold);
     case 'WEEKLY_WORKOUTS':
-      return countQualifyingWeeks(challenge.userId, from, to, challenge.threshold);
+      return countQualifyingWeeks(userId, from, to, threshold);
     default:
       // Exhaustiveness guard — a new ChallengeType added to the enum without
       // a case here would otherwise silently return 0 forever.
-      throw new Error(`Unhandled challenge type: ${challenge.type as string}`);
+      throw new Error(`Unhandled challenge type: ${type as string}`);
   }
+}
+
+async function countQualifyingPeriods(challenge: Challenge, from: Date, to: Date): Promise<number> {
+  return countQualifyingPeriodsFor({
+    userId: challenge.userId,
+    type: challenge.type,
+    threshold: challenge.threshold,
+    from,
+    to,
+  });
 }
 
 /** DRAFT/ACTIVE/COMPLETED/FAILED and the current qualifying-period count are

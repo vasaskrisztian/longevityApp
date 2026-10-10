@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { generateRawToken, hashToken } from '@/lib/auth/tokens';
 import { logger } from '@/lib/logging/logger';
 import type { RegisterInput } from '@/lib/validation/auth.schemas';
+import { completeInvitation, requireUsableInvitationForEmail } from '@/modules/groups/invitations.service';
 
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1h
@@ -21,11 +22,22 @@ export class EmailAlreadyRegisteredError extends Error {
  * being checked at some earlier point in the client. Returns the raw email
  * verification token so the caller (the API route) can send it by email;
  * only the HASH is ever persisted.
+ *
+ * With `inviteToken` (a corporate-wellbeing group invitation) the token must
+ * be valid and addressed to exactly this email: that proves ownership of the
+ * address, so the account is created already email-verified (no verification
+ * token — `verificationToken` is null), and the person joins the group in the
+ * same call. The invitation is checked BEFORE the existing-account check so
+ * the caller can tell a bad link from an already-registered address.
  */
 export async function registerUser(input: RegisterInput): Promise<{
   userId: string;
-  verificationToken: string;
+  verificationToken: string | null;
 }> {
+  const invitation = input.inviteToken
+    ? await requireUsableInvitationForEmail(input.inviteToken, input.email)
+    : null;
+
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
     // The API route deliberately returns a generic "check your email"
@@ -42,17 +54,21 @@ export async function registerUser(input: RegisterInput): Promise<{
       passwordHash,
       termsAcceptedAt: now,
       privacyAcceptedAt: now,
+      ...(invitation ? { emailVerifiedAt: now } : {}),
     },
   });
 
-  const verificationToken = generateRawToken();
-  await prisma.emailVerificationToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(verificationToken),
-      expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
-    },
-  });
+  let verificationToken: string | null = null;
+  if (!invitation) {
+    verificationToken = generateRawToken();
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(verificationToken),
+        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+      },
+    });
+  }
 
   // Profile.fullName is required by the schema but onboarding (Phase 2) is
   // where height/weight/timezone etc. are collected; we stash fullName here
@@ -68,6 +84,10 @@ export async function registerUser(input: RegisterInput): Promise<{
       timezone: 'UTC',
     },
   });
+
+  if (invitation) {
+    await completeInvitation({ invitation, userId: user.id });
+  }
 
   logger.info('user_registered', { userId: user.id });
 

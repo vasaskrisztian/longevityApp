@@ -21,6 +21,9 @@ export const SYNC_QUEUE_NAMES = {
 /** The scheduler's own queue (see jobs/scheduler.ts) — distinct from the three above, which only ever carry one real connection's sync per job. */
 export const DAILY_SCAN_QUEUE_NAME = 'oura-daily-sync-scan';
 
+/** Hourly end-of-challenge summaries for corporate wellbeing group challenges (jobs/group-challenge-finalize.job.ts). */
+export const GROUP_CHALLENGE_FINALIZE_QUEUE_NAME = 'group-challenge-finalize';
+
 const queuesByName = new Map<string, Queue>();
 
 export function getQueue(name: string): Queue {
