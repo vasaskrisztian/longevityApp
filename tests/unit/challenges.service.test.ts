@@ -266,8 +266,8 @@ describe('activateChallenge', () => {
 
     const result = await activateChallenge('c1', 21);
 
-    expect(result.activatedAt.getTime()).toBe(NOW.getTime());
-    expect(result.expiresAt.getTime()).toBe(NOW.getTime() + 21 * DAY_MS);
+    expect(result.activatedAt?.getTime()).toBe(NOW.getTime());
+    expect(result.expiresAt?.getTime()).toBe(NOW.getTime() + 21 * DAY_MS);
     expect(prismaMock.challenge.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { activatedAt: expect.any(Date), expiresAt: expect.any(Date) },
