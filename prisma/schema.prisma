@@ -164,6 +164,8 @@ enum NotificationType {
   GROUP_INVITATION
   GROUP_CHALLENGE_NEW
   GROUP_CHALLENGE_SUMMARY
+  /// A team-total challenge's shared target was reached before the end.
+  GROUP_CHALLENGE_GOAL_REACHED
 }
 
 enum SupplementFrequency {
@@ -878,6 +880,8 @@ model GroupChallenge {
   endsAt   DateTime
 
   summarySentAt DateTime?
+  /// COLLECTIVE only: when the "goal reached" notifications went out (once, mid-challenge).
+  goalReachedAt DateTime?
 
   participants GroupChallengeParticipant[]
 

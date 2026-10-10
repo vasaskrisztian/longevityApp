@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   countDistinctWorkouts,
+  distinctWorkoutSessions,
   isCountableWorkout,
   MIN_COUNTED_WORKOUT_MINUTES,
   WORKOUT_MERGE_GAP_MINUTES,
@@ -72,5 +73,25 @@ describe('countDistinctWorkouts', () => {
   it('survives an end time before the start (bad provider data)', () => {
     const bad: CountableWorkout = { ...at('2026-10-01T08:00:00Z', 30), endedAt: new Date('2026-10-01T07:00:00Z') };
     expect(countDistinctWorkouts([bad])).toBe(1);
+  });
+});
+
+describe('distinctWorkoutSessions', () => {
+  it('returns the merged sessions, earliest first, consistent with the count', () => {
+    const workouts = [
+      at('2026-10-02T18:00:00Z', 30),
+      at('2026-10-01T08:00:00Z', 30),
+      at('2026-10-01T08:20:00Z', 30), // overlaps the first → one session 08:00–08:50
+      at('2026-10-01T12:00:00Z', 5), // too short
+    ];
+    const sessions = distinctWorkoutSessions(workouts);
+    expect(sessions).toHaveLength(countDistinctWorkouts(workouts));
+    expect(sessions.map((s) => [s.start.toISOString(), s.end.toISOString()])).toEqual([
+      ['2026-10-01T08:00:00.000Z', '2026-10-01T08:50:00.000Z'],
+      ['2026-10-02T18:00:00.000Z', '2026-10-02T18:30:00.000Z'],
+    ]);
+  });
+  it('is empty for no workouts', () => {
+    expect(distinctWorkoutSessions([])).toEqual([]);
   });
 });

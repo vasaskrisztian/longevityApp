@@ -53,6 +53,39 @@ export function contributionLine(type: GroupChallengeType, contribution: number,
   return `${collectiveAmountLabel(type, contribution)} · ${percent}% of the team target`;
 }
 
+/** "2026-10-10" → "10 Oct" — the short x-axis label of the team chart (UTC). */
+export function chartDayLabel(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return day;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+/** 100000 → "100k", 1500 → "1.5k", 2000000 → "2M", 40 → "40" — compact y-axis ticks. */
+export function compactAmount(value: number): string {
+  const abs = Math.abs(value);
+  const trim = (n: number) => String(Math.round(n * 10) / 10).replace(/\.0$/, '');
+  if (abs >= 1_000_000) return `${trim(value / 1_000_000)}M`;
+  if (abs >= 1000) return `${trim(value / 1000)}k`;
+  return String(Math.round(value));
+}
+
+/**
+ * The top of a chart's y axis: the smallest "round" value at or above `value`
+ * whose quarters (the four gridline steps) are also whole, round numbers —
+ * 105 000 → 120 000 (ticks 30k, 60k, 90k, 120k), 42 → 48 (12, 24, 36, 48).
+ */
+export function niceAxisMax(value: number): number {
+  const needed = Math.max(4, Math.ceil(value));
+  for (let power = 0; power < 12; power += 1) {
+    for (const multiplier of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8]) {
+      const step = multiplier * 10 ** power;
+      if (!Number.isInteger(step)) continue;
+      if (step * 4 >= needed) return step * 4;
+    }
+  }
+  return needed;
+}
+
 const PROVIDER_LABEL: Record<string, string> = {
   OURA: 'Oura',
   APPLE_HEALTH: 'Apple Health',

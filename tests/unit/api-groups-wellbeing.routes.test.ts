@@ -60,7 +60,7 @@ const challengesService = {
   listMyGroupChallenges: vi.fn(),
   joinGroupChallenge: vi.fn(),
   leaveGroupChallenge: vi.fn(),
-  finalizeEndedGroupChallenges: vi.fn().mockResolvedValue({ finalized: 0 }),
+  lazyGroupChallengeChecks: vi.fn().mockResolvedValue(undefined),
   GroupChallengeError,
 };
 vi.mock('@/modules/groups/group-challenges.service', () => challengesService);
@@ -103,7 +103,7 @@ beforeEach(() => {
   requireAdminMock.mockResolvedValue({ id: 'admin1', role: 'ADMIN' });
   requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'MEMBER' });
   rateLimit.checkRateLimit.mockReturnValue({ allowed: true, remaining: 5, resetAt: 0 });
-  challengesService.finalizeEndedGroupChallenges.mockResolvedValue({ finalized: 0 });
+  challengesService.lazyGroupChallengeChecks.mockResolvedValue(undefined);
 });
 
 describe('every admin group endpoint is admin-only (403/401 before any service call)', () => {
@@ -227,7 +227,7 @@ describe('admin group CRUD', () => {
   it('listing challenges lazily sends overdue summaries first', async () => {
     challengesService.listGroupChallengesForAdmin.mockResolvedValue([]);
     await adminChallenges.GET(get(), G);
-    expect(challengesService.finalizeEndedGroupChallenges).toHaveBeenCalled();
+    expect(challengesService.lazyGroupChallengeChecks).toHaveBeenCalled();
   });
 });
 
@@ -345,11 +345,11 @@ describe('notifications', () => {
     expect(notificationsService.listNotifications).toHaveBeenLastCalledWith('u1', 30);
     await notifications.GET(new Request('https://example.com/api/notifications?limit=5'));
     expect(notificationsService.listNotifications).toHaveBeenLastCalledWith('u1', 5);
-    expect(challengesService.finalizeEndedGroupChallenges).toHaveBeenCalled();
+    expect(challengesService.lazyGroupChallengeChecks).toHaveBeenCalled();
   });
 
   it('still lists when the lazy finalize fails', async () => {
-    challengesService.finalizeEndedGroupChallenges.mockRejectedValue(new Error('db'));
+    challengesService.lazyGroupChallengeChecks.mockRejectedValue(new Error('db'));
     notificationsService.listNotifications.mockResolvedValue({ items: [], unreadCount: 2 });
     const res = await notifications.GET(new Request('https://example.com/api/notifications'));
     expect(res.status).toBe(200);

@@ -1,10 +1,12 @@
 import { prisma } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
-import { countQualifyingPeriodsFor, sumMetricFor } from '@/modules/challenges/challenges.service';
+import { countQualifyingPeriodsFor, dailyTotalsFor, sumMetricFor } from '@/modules/challenges/challenges.service';
 import { createNotification, createNotificationsForUsers } from '@/modules/notifications/notifications.service';
 import { listMemberIds } from './groups.service';
 import {
+  buildCollectiveSeries,
+  goalReachedNotification,
   collectiveCreatorSummaryNotification,
   collectiveParticipantSummaryNotification,
   collectiveProgress,
@@ -18,6 +20,7 @@ import {
   summarizeCollective,
   summarizeTeam,
   type CollectiveProgress,
+  type CollectiveSeries,
   type GroupChallengeMode,
   type GroupChallengeStatus,
   type GroupChallengeType,
@@ -237,6 +240,28 @@ async function teamProgress(challenge: any, participantIds: string[], memberCoun
   return { progresses, collective, team: summarizeCollective(collective, participantIds.length, memberCount) };
 }
 
+/**
+ * The team's running total per day, for the chart — COLLECTIVE challenges
+ * only. Aggregate numbers only (nothing per person), so members may see it.
+ */
+async function collectiveSeriesFor(challenge: any, participantIds: string[], now: Date): Promise<CollectiveSeries | null> {
+  if (!isCollectiveChallenge(challenge)) return null;
+  const window = countingWindow(challenge, now);
+  if (!window) return { targetTotal: challenge.targetTotal, points: [] };
+  const amounts = await dailyTotalsFor({
+    userIds: participantIds,
+    type: challenge.type as 'DAILY_STEPS' | 'WEEKLY_WORKOUTS',
+    from: window.from,
+    to: window.to,
+  });
+  return buildCollectiveSeries(
+    challenge.startsAt.toISOString().slice(0, 10),
+    window.to.toISOString().slice(0, 10),
+    amounts,
+    challenge.targetTotal,
+  );
+}
+
 export interface AdminGroupChallengeListItem extends GroupChallengeDTO {
   team: TeamSummary;
   /** The shared total and its progress — COLLECTIVE challenges only, else null. */
@@ -278,6 +303,8 @@ export interface AdminGroupChallengeDetail {
   team: TeamSummary;
   /** The shared total and its progress — COLLECTIVE challenges only, else null. */
   collective: CollectiveProgress | null;
+  /** The team's running total per day (the chart) — COLLECTIVE only, else null. */
+  series: CollectiveSeries | null;
   /** Who joined and how far each person is — best first. */
   participants: AdminParticipantRow[];
   /** Group members who have not joined this challenge. */
@@ -311,6 +338,11 @@ export async function getGroupChallengeDetailForAdmin(
     memberships.length,
     now,
   );
+  const series = await collectiveSeriesFor(
+    challenge,
+    participantUsers.map((user) => user.id),
+    now,
+  );
   const participants: AdminParticipantRow[] = participantUsers
     .map((user, index) => ({
       userId: user.id,
@@ -330,6 +362,7 @@ export async function getGroupChallengeDetailForAdmin(
     challenge: toChallengeDTO(challenge, now),
     team,
     collective,
+    series,
     participants,
     notJoined,
   };
@@ -341,6 +374,8 @@ export interface MyGroupChallengeDTO extends GroupChallengeDTO {
   me: MemberProgress | null;
   /** The shared total and its progress — COLLECTIVE challenges only, else null. No other person's data. */
   collective: CollectiveProgress | null;
+  /** The team's running total per day (the chart) — COLLECTIVE only; aggregate numbers, nothing per person. */
+  series: CollectiveSeries | null;
   /** Aggregate only: how many joined, how many reached the goal, mean progress. No other person's data. */
   team: TeamSummary;
 }
@@ -373,12 +408,14 @@ export async function listMyGroupChallenges(
     challenges.map(async (challenge) => {
       const participantIds: string[] = challenge.participants.map((p: any) => p.userId);
       const { progresses, collective, team } = await teamProgress(challenge, participantIds, memberCount, now);
+      const series = await collectiveSeriesFor(challenge, participantIds, now);
       const myIndex = participantIds.indexOf(userId);
       return {
         ...toChallengeDTO(challenge, now),
         joined: myIndex >= 0,
         me: myIndex >= 0 ? (progresses[myIndex] as MemberProgress) : null,
         collective,
+        series,
         team,
       };
     }),
@@ -494,4 +531,82 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
     }
   }
   return { finalized };
+}
+
+let lastGoalCheckAt = 0;
+
+/**
+ * Sends the "team goal reached" notifications for every ACTIVE team-total
+ * challenge whose shared target has been reached and not announced yet. Like
+ * the end-of-challenge summaries it is idempotent and safe to call from
+ * anywhere: each challenge is claimed with a conditional `goalReachedAt`
+ * update, so exactly one caller notifies. A challenge announces its goal once
+ * even if the total later drops (someone leaves) — the final summary tells
+ * the real result.
+ *
+ * `minIntervalMs` throttles the (read-heavy) check per process for the lazy
+ * callers that run on frequent reads; the hourly worker passes nothing.
+ */
+export async function notifyReachedCollectiveGoals(
+  now: Date = new Date(),
+  options: { minIntervalMs?: number } = {},
+): Promise<{ announced: number }> {
+  if (options.minIntervalMs && now.getTime() - lastGoalCheckAt < options.minIntervalMs) return { announced: 0 };
+  lastGoalCheckAt = now.getTime();
+
+  const candidates: any[] = await prisma.groupChallenge.findMany({
+    where: { mode: 'COLLECTIVE', goalReachedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
+    include: { group: { select: { name: true } }, participants: { select: { userId: true } } },
+  });
+
+  let announced = 0;
+  for (const challenge of candidates) {
+    if (!isCollectiveChallenge(challenge) || groupChallengeStatus(challenge, now) !== 'ACTIVE') continue;
+    try {
+      const participantIds: string[] = challenge.participants.map((p: any) => p.userId);
+      if (participantIds.length === 0) continue;
+      const memberCount = await prisma.groupMembership.count({ where: { groupId: challenge.groupId } });
+      const { collective } = await teamProgress(challenge, participantIds, memberCount, now);
+      if (!collective || !collective.reached) continue;
+
+      const claim = await prisma.groupChallenge.updateMany({
+        where: { id: challenge.id, goalReachedAt: null },
+        data: { goalReachedAt: now },
+      });
+      if (claim.count !== 1) continue;
+
+      const daysRemaining = Math.max(1, Math.ceil((challenge.endsAt.getTime() - now.getTime()) / DAY_MS));
+      const common = { groupName: challenge.group.name, name: challenge.name, type: challenge.type, collective, daysRemaining };
+      const data = { groupId: challenge.groupId, challengeId: challenge.id };
+      await createNotificationsForUsers(participantIds, {
+        type: 'GROUP_CHALLENGE_GOAL_REACHED',
+        ...goalReachedNotification({ ...common, audience: 'participant' }),
+        data,
+      });
+      if (!participantIds.includes(challenge.createdById)) {
+        await createNotification(challenge.createdById, {
+          type: 'GROUP_CHALLENGE_GOAL_REACHED',
+          ...goalReachedNotification({ ...common, audience: 'creator' }),
+          data,
+        });
+      }
+      announced += 1;
+    } catch (error) {
+      logger.error('group_challenge_goal_check_failed', { message: (error as Error).message });
+    }
+  }
+  return { announced };
+}
+
+const LAZY_GOAL_CHECK_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * What the read endpoints run before answering: the due end-of-challenge
+ * summaries, plus the "team goal reached" check (at most every five minutes
+ * per process — it sums everyone's numbers). A failure is the caller's to log;
+ * the hourly worker repeats both anyway.
+ */
+export async function lazyGroupChallengeChecks(now: Date = new Date()): Promise<void> {
+  await notifyReachedCollectiveGoals(now, { minIntervalMs: LAZY_GOAL_CHECK_INTERVAL_MS });
+  await finalizeEndedGroupChallenges(now);
 }

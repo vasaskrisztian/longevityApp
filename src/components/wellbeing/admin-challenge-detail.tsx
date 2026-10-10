@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { deleteAdminGroupChallenge, getAdminGroupChallenge } from '@/lib/wellbeing/groups-api';
 import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/lib/wellbeing/format';
 import { CollectiveBar, ContributionLine, LoadingLine, PageTitle, ProgressBar, ProgressLine, StatusBadge } from './parts';
+import { TeamChart } from './team-chart';
 import { useLoad } from './use-load';
 
 /** Corporate wellbeing — admin: where everyone stands in one group challenge, and the team as a whole. */
@@ -20,7 +21,7 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
 
   if (error) return <Alert variant="destructive">{error}</Alert>;
   if (!data) return <LoadingLine />;
-  const { challenge, team, collective, participants, notJoined } = data;
+  const { challenge, team, collective, series, participants, notJoined } = data;
   const left = daysLeftLabel(challenge.daysRemaining);
 
   async function remove() {
@@ -60,7 +61,10 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
         </CardHeader>
         <CardContent className="space-y-2">
           {collective ? (
-            <CollectiveBar type={challenge.type} collective={collective} />
+            <>
+              <CollectiveBar type={challenge.type} collective={collective} />
+              {series && <TeamChart type={challenge.type} series={series} />}
+            </>
           ) : (
             <>
               <ProgressBar percent={team.averagePercent} />

@@ -82,6 +82,72 @@ export function summarizeCollective(collective: CollectiveProgress, participants
   };
 }
 
+/** One day of a team-total chart. */
+export interface SeriesPoint {
+  /** `yyyy-mm-dd` (UTC). */
+  date: string;
+  /** What the team added that day. */
+  amount: number;
+  /** Running total up to and including that day. */
+  cumulative: number;
+}
+
+export interface CollectiveSeries {
+  targetTotal: number;
+  points: SeriesPoint[];
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The team's running total, one point per day from the first day up to
+ * `lastDay` (inclusive), days without data counting 0. `lastDay` is the last
+ * day with real numbers (today, or the challenge's last day) — the chart never
+ * extends into the future.
+ */
+export function buildCollectiveSeries(
+  firstDay: string,
+  lastDay: string,
+  amountsByDay: Map<string, number>,
+  targetTotal: number,
+): CollectiveSeries {
+  const points: SeriesPoint[] = [];
+  let cumulative = 0;
+  const end = Date.parse(`${lastDay}T00:00:00Z`);
+  for (let t = Date.parse(`${firstDay}T00:00:00Z`); t <= end; t += DAY_MS) {
+    const date = new Date(t).toISOString().slice(0, 10);
+    const amount = amountsByDay.get(date) ?? 0;
+    cumulative += amount;
+    points.push({ date, amount, cumulative });
+  }
+  return { targetTotal, points };
+}
+
+export function goalReachedNotification(params: {
+  groupName: string;
+  name: string;
+  type: GroupChallengeType;
+  collective: CollectiveProgress;
+  daysRemaining: number;
+  /** The admin who set the challenge gets a slightly different line than the participants. */
+  audience: 'participant' | 'creator';
+}): { title: string; body: string } {
+  const { collective } = params;
+  const total = describeCollectiveAmount(params.type, collective.total);
+  const target = formatNumber(collective.targetTotal);
+  const left =
+    params.daysRemaining <= 1
+      ? 'on the last day'
+      : `with ${params.daysRemaining} days still to go`;
+  return {
+    title: `Team goal reached: ${params.name}`,
+    body:
+      params.audience === 'participant'
+        ? `${params.groupName} — together you have added up ${total} (target ${target}) ${left}. Thank you for taking part — keep going if you like, everything you add still counts towards the final result.`
+        : `${params.groupName} — the team has reached the target of "${params.name}": ${total} of ${target} ${left}.`,
+  };
+}
+
 const formatNumber = (value: number) => value.toLocaleString('en-US').replace(/,/g, ' ');
 
 /** "100 000 steps" / "40 workouts" — the unit of a team total. */

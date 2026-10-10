@@ -26,6 +26,10 @@ export interface LineChartSeries {
   name: string;
   color: string;
   values: Array<number | null>;
+  /** Draw the line dashed (e.g. a target line). */
+  dashed?: boolean;
+  /** Dot markers on the points; default true. */
+  markers?: boolean;
 }
 
 interface LineChartProps {
@@ -118,7 +122,7 @@ export function LineChart({ labels, series, height = 180, yMin, yMax, formatY }:
                 key={label + index}
                 x={xAt(index)}
                 y={height - 4}
-                textAnchor="middle"
+                textAnchor={index === labels.length - 1 && labels.length > 1 ? 'end' : 'middle'}
                 {...TICK_PROPS}
               >
                 {label}
@@ -127,12 +131,19 @@ export function LineChart({ labels, series, height = 180, yMin, yMax, formatY }:
           })}
 
           {series.map((s) => (
-            <Path key={s.key} d={pathFor(s.values)} stroke={s.color} strokeWidth={2} fill="none" />
+            <Path
+              key={s.key}
+              d={pathFor(s.values)}
+              stroke={s.color}
+              strokeWidth={2}
+              fill="none"
+              strokeDasharray={s.dashed ? '5 5' : undefined}
+            />
           ))}
 
           {series.map((s) =>
             s.values.map((value, index) =>
-              value === null ? null : (
+              value === null || s.markers === false ? null : (
                 <Circle
                   key={`${s.key}-${index}`}
                   cx={xAt(index)}

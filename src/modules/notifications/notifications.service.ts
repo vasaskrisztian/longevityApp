@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 
-export type NotificationKind = 'GROUP_INVITATION' | 'GROUP_CHALLENGE_NEW' | 'GROUP_CHALLENGE_SUMMARY';
+export type NotificationKind = 'GROUP_INVITATION' | 'GROUP_CHALLENGE_NEW' | 'GROUP_CHALLENGE_SUMMARY' | 'GROUP_CHALLENGE_GOAL_REACHED';
 
 export interface NotificationInput {
   type: NotificationKind;

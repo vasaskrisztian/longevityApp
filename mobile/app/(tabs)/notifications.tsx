@@ -15,6 +15,7 @@ const ICON: Record<AppNotification['type'], React.ComponentProps<typeof Ionicons
   GROUP_INVITATION: 'mail-outline',
   GROUP_CHALLENGE_NEW: 'flag-outline',
   GROUP_CHALLENGE_SUMMARY: 'trophy-outline',
+  GROUP_CHALLENGE_GOAL_REACHED: 'ribbon-outline',
 };
 
 /**

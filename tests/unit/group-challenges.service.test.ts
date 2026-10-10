@@ -12,7 +12,8 @@ const recordAuditLog = vi.fn();
 vi.mock('@/lib/audit/audit-log.service', () => ({ recordAuditLog }));
 const countQualifyingPeriodsFor = vi.fn();
 const sumMetricFor = vi.fn();
-vi.mock('@/modules/challenges/challenges.service', () => ({ countQualifyingPeriodsFor, sumMetricFor }));
+const dailyTotalsFor = vi.fn();
+vi.mock('@/modules/challenges/challenges.service', () => ({ countQualifyingPeriodsFor, sumMetricFor, dailyTotalsFor }));
 const createNotification = vi.fn();
 const createNotificationsForUsers = vi.fn();
 vi.mock('@/modules/notifications/notifications.service', () => ({ createNotification, createNotificationsForUsers }));
@@ -30,6 +31,8 @@ const {
   joinGroupChallenge,
   leaveGroupChallenge,
   finalizeEndedGroupChallenges,
+  notifyReachedCollectiveGoals,
+  lazyGroupChallengeChecks,
 } = await import('@/modules/groups/group-challenges.service');
 
 const NOW = new Date('2026-10-12T09:00:00Z');
@@ -54,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   countQualifyingPeriodsFor.mockResolvedValue(0);
   sumMetricFor.mockResolvedValue(0);
+  dailyTotalsFor.mockResolvedValue(new Map());
 });
 
 describe('toChallengeDTO', () => {
@@ -432,5 +436,145 @@ describe('collective (team total) group challenges', () => {
     expect(bodies.some((body) => body.includes('Goal reached') && body.includes('Your share: 60 000'))).toBe(true);
     expect(bodies.some((body) => body.includes('Your share: 50 000'))).toBe(true);
     expect(bodies.some((body) => body.includes('goal reached: 110 000 steps of 100 000 (100%)'))).toBe(true);
+  });
+
+  it('admin detail and member view carry the team chart series (aggregate per day), individual challenges none', async () => {
+    dailyTotalsFor.mockResolvedValue(new Map([['2026-10-10', 10_000], ['2026-10-12', 5_000]]));
+    prismaMock.groupChallenge.findUnique.mockResolvedValue(collectiveRow({ participants: [{ user: user('u1') }, { user: user('u2') }] }));
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ user: user('u1') }, { user: user('u2') }]);
+
+    const detail = await getGroupChallengeDetailForAdmin('g1', 'c1', NOW);
+
+    expect(dailyTotalsFor).toHaveBeenCalledWith({
+      userIds: ['u1', 'u2'],
+      type: 'DAILY_STEPS',
+      from: new Date('2026-10-10T00:00:00Z'),
+      to: NOW,
+    });
+    expect(detail!.series).toEqual({
+      targetTotal: 100_000,
+      points: [
+        { date: '2026-10-10', amount: 10_000, cumulative: 10_000 },
+        { date: '2026-10-11', amount: 0, cumulative: 10_000 },
+        { date: '2026-10-12', amount: 5_000, cumulative: 15_000 },
+      ],
+    });
+
+    prismaMock.groupMembership.findUnique.mockResolvedValue({ id: 'm' });
+    prismaMock.groupMembership.count.mockResolvedValue(2);
+    prismaMock.groupChallenge.findMany.mockResolvedValue([
+      collectiveRow({ participants: [{ userId: 'u1' }] }),
+      challengeRow({ id: 'c2', participants: [{ userId: 'u1' }] }),
+    ]);
+    const [team, personal] = await listMyGroupChallenges('u1', 'g1', NOW);
+    expect(team!.series!.points).toHaveLength(3);
+    expect(personal!.series).toBeNull();
+  });
+
+  it('the series is empty before the challenge starts', async () => {
+    prismaMock.groupMembership.findUnique.mockResolvedValue({ id: 'm' });
+    prismaMock.groupMembership.count.mockResolvedValue(1);
+    prismaMock.groupChallenge.findMany.mockResolvedValue([collectiveRow({ startsAt: new Date('2026-10-20T00:00:00Z'), endsAt: new Date('2026-10-27T00:00:00Z') })]);
+    const [item] = await listMyGroupChallenges('u1', 'g1', NOW);
+    expect(item!.series).toEqual({ targetTotal: 100_000, points: [] });
+    expect(dailyTotalsFor).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyReachedCollectiveGoals', () => {
+  const active = (overrides: Record<string, unknown> = {}) =>
+    challengeRow({
+      mode: 'COLLECTIVE',
+      targetTotal: 100_000,
+      threshold: 0,
+      requiredCount: 1,
+      goalReachedAt: null,
+      group: { name: 'Acme' },
+      participants: [{ userId: 'u1' }, { userId: 'u2' }],
+      ...overrides,
+    });
+
+  it('announces a reached goal once: participants and the creator, claimed with a conditional update', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([active()]);
+    prismaMock.groupChallenge.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.groupMembership.count.mockResolvedValue(3);
+    sumMetricFor.mockImplementation(async ({ userId }: { userId: string }) => (userId === 'u1' ? 60_000 : 45_000));
+
+    const result = await notifyReachedCollectiveGoals(NOW);
+
+    expect(result).toEqual({ announced: 1 });
+    expect(prismaMock.groupChallenge.updateMany).toHaveBeenCalledWith({ where: { id: 'c1', goalReachedAt: null }, data: { goalReachedAt: NOW } });
+    expect(createNotificationsForUsers).toHaveBeenCalledWith(
+      ['u1', 'u2'],
+      expect.objectContaining({
+        type: 'GROUP_CHALLENGE_GOAL_REACHED',
+        title: 'Team goal reached: Steps',
+        data: { groupId: 'g1', challengeId: 'c1' },
+      }),
+    );
+    expect(createNotification).toHaveBeenCalledWith('admin', expect.objectContaining({ type: 'GROUP_CHALLENGE_GOAL_REACHED' }));
+    expect(createNotificationsForUsers.mock.calls[0]![1].body).toContain('105 000 steps (target 100 000)');
+  });
+
+  it('does not notify the creator twice when they are a participant', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([active({ participants: [{ userId: 'admin' }, { userId: 'u2' }] })]);
+    prismaMock.groupChallenge.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.groupMembership.count.mockResolvedValue(2);
+    sumMetricFor.mockResolvedValue(60_000);
+    await notifyReachedCollectiveGoals(NOW);
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it('stays silent while the target is not reached, and when another caller already claimed it', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([active()]);
+    prismaMock.groupMembership.count.mockResolvedValue(3);
+    sumMetricFor.mockResolvedValue(10_000);
+    expect(await notifyReachedCollectiveGoals(NOW)).toEqual({ announced: 0 });
+    expect(prismaMock.groupChallenge.updateMany).not.toHaveBeenCalled();
+
+    sumMetricFor.mockResolvedValue(60_000);
+    prismaMock.groupChallenge.updateMany.mockResolvedValue({ count: 0 });
+    expect(await notifyReachedCollectiveGoals(NOW)).toEqual({ announced: 0 });
+    expect(createNotificationsForUsers).not.toHaveBeenCalled();
+  });
+
+  it('only looks at active team-total challenges that were not announced yet', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([]);
+    await notifyReachedCollectiveGoals(NOW);
+    expect(prismaMock.groupChallenge.findMany.mock.calls[0]![0].where).toEqual({
+      mode: 'COLLECTIVE',
+      goalReachedAt: null,
+      startsAt: { lte: NOW },
+      endsAt: { gt: NOW },
+    });
+  });
+
+  it('ignores a challenge nobody has joined, and a row that turns out not to be active/collective', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([
+      active({ participants: [] }),
+      active({ id: 'c9', mode: 'INDIVIDUAL' }),
+      active({ id: 'c8', endsAt: new Date('2026-10-11T00:00:00Z') }),
+    ]);
+    expect(await notifyReachedCollectiveGoals(NOW)).toEqual({ announced: 0 });
+    expect(sumMetricFor).not.toHaveBeenCalled();
+  });
+
+  it('a failure on one challenge is logged and does not stop the others', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([active({ id: 'bad' }), active({ id: 'good' })]);
+    prismaMock.groupChallenge.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.groupMembership.count.mockResolvedValueOnce(3).mockResolvedValue(3);
+    sumMetricFor.mockRejectedValueOnce(new Error('db')).mockRejectedValueOnce(new Error('db')).mockResolvedValue(60_000);
+    const result = await notifyReachedCollectiveGoals(NOW);
+    expect(result).toEqual({ announced: 1 });
+  });
+
+  it('the lazy variant is throttled: a second call within five minutes does not query again', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([]);
+    const later = new Date(NOW.getTime() + 10 * 60_000);
+    await lazyGroupChallengeChecks(later); // findMany for goals + for finalize
+    const callsAfterFirst = prismaMock.groupChallenge.findMany.mock.calls.length;
+    await lazyGroupChallengeChecks(new Date(later.getTime() + 60_000));
+    // only the finalize query ran the second time
+    expect(prismaMock.groupChallenge.findMany.mock.calls.length).toBe(callsAfterFirst + 1);
   });
 });

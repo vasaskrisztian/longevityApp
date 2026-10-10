@@ -7,7 +7,8 @@ vi.mock('@/lib/queue/queues', () => ({
 }));
 vi.mock('@/lib/queue/connection', () => ({ getRedisConnection: vi.fn(() => ({})) }));
 const finalizeEndedGroupChallenges = vi.fn().mockResolvedValue({ finalized: 0 });
-vi.mock('@/modules/groups/group-challenges.service', () => ({ finalizeEndedGroupChallenges }));
+const notifyReachedCollectiveGoals = vi.fn().mockResolvedValue({ announced: 2 });
+vi.mock('@/modules/groups/group-challenges.service', () => ({ finalizeEndedGroupChallenges, notifyReachedCollectiveGoals }));
 
 const workerCtor = vi.fn();
 vi.mock('bullmq', () => ({
@@ -30,11 +31,12 @@ describe('group challenge finalize job', () => {
     expect(upsertJobScheduler).toHaveBeenCalledWith('group-challenge-finalize', { pattern: '5 * * * *' }, { name: 'finalize' });
   });
 
-  it('the worker runs the idempotent finalize on the dedicated queue', async () => {
+  it('the worker announces reached team goals, then runs the idempotent finalize, on the dedicated queue', async () => {
     startGroupChallengeFinalizeWorker();
     const [name, processor] = workerCtor.mock.calls[0]!;
     expect(name).toBe('group-challenge-finalize');
-    await processor();
+    expect(await processor()).toEqual({ finalized: 0, goalsAnnounced: 2 });
+    expect(notifyReachedCollectiveGoals).toHaveBeenCalledTimes(1);
     expect(finalizeEndedGroupChallenges).toHaveBeenCalledTimes(1);
   });
 });

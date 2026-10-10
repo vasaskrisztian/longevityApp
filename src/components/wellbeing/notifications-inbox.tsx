@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Mail, Trophy, type LucideIcon } from 'lucide-react';
+import { Flag, Mail, PartyPopper, Trophy, type LucideIcon } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,6 +16,7 @@ const ICON: Record<AppNotification['type'], LucideIcon> = {
   GROUP_INVITATION: Mail,
   GROUP_CHALLENGE_NEW: Flag,
   GROUP_CHALLENGE_SUMMARY: Trophy,
+  GROUP_CHALLENGE_GOAL_REACHED: PartyPopper,
 };
 
 /**

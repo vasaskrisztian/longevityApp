@@ -2,7 +2,7 @@ import { requireAdmin, toErrorResponse } from '@/lib/auth/authorization';
 import { CreateGroupChallengeSchema } from '@/lib/validation/group.schemas';
 import {
   createGroupChallenge,
-  finalizeEndedGroupChallenges,
+  lazyGroupChallengeChecks,
   GroupChallengeError,
   listGroupChallengesForAdmin,
 } from '@/modules/groups/group-challenges.service';
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   } catch (error) {
     return toErrorResponse(error);
   }
-  await finalizeEndedGroupChallenges().catch((error: Error) =>
+  await lazyGroupChallengeChecks().catch((error: Error) =>
     logger.error('group_challenge_lazy_finalize_failed', { message: error.message }),
   );
   return Response.json({ challenges: await listGroupChallengesForAdmin(params.id) }, { status: 200 });

@@ -6,6 +6,7 @@ import { deleteAdminGroupChallenge, getAdminGroupChallenge, type AdminChallengeD
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
@@ -68,7 +69,7 @@ export default function AdminGroupChallengeScreen() {
     );
   }
 
-  const { challenge, team, collective, participants, notJoined } = detail;
+  const { challenge, team, collective, series, participants, notJoined } = detail;
   const left = daysLeftLabel(challenge.daysRemaining);
 
   return (
@@ -88,7 +89,10 @@ export default function AdminGroupChallengeScreen() {
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Team</Text>
         {collective ? (
-          <CollectiveBar type={challenge.type} collective={collective} />
+          <>
+            <CollectiveBar type={challenge.type} collective={collective} />
+            {series ? <TeamChart type={challenge.type} series={series} /> : null}
+          </>
         ) : (
           <>
             <ProgressBar percent={team.averagePercent} />

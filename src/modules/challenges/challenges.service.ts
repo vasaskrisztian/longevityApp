@@ -1,4 +1,4 @@
-import { countDistinctWorkouts } from '@/modules/wearable/domain/workout-count';
+import { countDistinctWorkouts, distinctWorkoutSessions } from '@/modules/wearable/domain/workout-count';
 import { prisma } from '@/lib/db/prisma';
 import type { Challenge } from '@prisma/client';
 import type { CreateChallengeInput, UpdateChallengeInput } from '@/lib/validation/challenge.schemas';
@@ -141,6 +141,52 @@ export async function sumMetricFor(params: {
     select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
   });
   return countDistinctWorkouts(workouts);
+}
+
+/**
+ * Per-day totals of a metric, added up over several people, for the team chart
+ * of a collective group challenge: `yyyy-mm-dd` (UTC) → steps, or distinct
+ * workouts started that day. Uses the same window and the same workout rule as
+ * `sumMetricFor`, so the days add up to the team total shown next to the chart.
+ */
+export async function dailyTotalsFor(params: {
+  userIds: string[];
+  type: 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
+  from: Date;
+  to: Date;
+}): Promise<Map<string, number>> {
+  const { userIds, type, from, to } = params;
+  const totals = new Map<string, number>();
+  if (userIds.length === 0) return totals;
+  const add = (day: string, amount: number) => totals.set(day, (totals.get(day) ?? 0) + amount);
+
+  if (type === 'DAILY_STEPS') {
+    const rows = await prisma.dailyHealthMetric.groupBy({
+      by: ['date'],
+      where: { userId: { in: userIds }, date: { gte: utcMidnight(from), lte: utcMidnight(to) } },
+      _sum: { steps: true },
+    });
+    for (const row of rows) add(row.date.toISOString().slice(0, 10), row._sum.steps ?? 0);
+    return totals;
+  }
+
+  const workouts = await prisma.workout.findMany({
+    where: {
+      userId: { in: userIds },
+      startedAt: { gte: utcMidnight(from), lt: new Date(utcMidnight(to).getTime() + DAY_MS) },
+    },
+    select: { userId: true, startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
+  });
+  const byUser = new Map<string, typeof workouts>();
+  for (const workout of workouts) {
+    const list = byUser.get(workout.userId) ?? [];
+    list.push(workout);
+    byUser.set(workout.userId, list);
+  }
+  for (const list of byUser.values()) {
+    for (const session of distinctWorkoutSessions(list)) add(session.start.toISOString().slice(0, 10), 1);
+  }
+  return totals;
 }
 
 async function countQualifyingPeriods(challenge: Challenge, from: Date, to: Date): Promise<number> {

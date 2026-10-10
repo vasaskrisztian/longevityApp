@@ -1,5 +1,8 @@
 import {
   addDays,
+  niceAxisMax,
+  chartDayLabel,
+  compactAmount,
   collectiveAmountLabel,
   collectiveLine,
   contributionLine,
@@ -95,5 +98,37 @@ describe('team-total (collective) challenge labels', () => {
   it("shows a person's share of the target, capped at 100%", () => {
     expect(contributionLine('DAILY_STEPS', 12300, 100000)).toBe('12 300 steps · 12% of the team target');
     expect(contributionLine('DAILY_STEPS', 150000, 100000)).toBe('150 000 steps · 100% of the team target');
+  });
+});
+
+describe('team chart labels', () => {
+  it('shortens a day for the x axis', () => {
+    expect(chartDayLabel('2026-10-10')).toBe('10 Oct');
+    expect(chartDayLabel('nope')).toBe('nope');
+  });
+  it('compacts y-axis ticks', () => {
+    expect(compactAmount(0)).toBe('0');
+    expect(compactAmount(40)).toBe('40');
+    expect(compactAmount(999)).toBe('999');
+    expect(compactAmount(1500)).toBe('1.5k');
+    expect(compactAmount(25000)).toBe('25k');
+    expect(compactAmount(100000)).toBe('100k');
+    expect(compactAmount(2000000)).toBe('2M');
+  });
+});
+
+describe('niceAxisMax', () => {
+  it('rounds up to a value whose quarters are round numbers', () => {
+    expect(niceAxisMax(105000)).toBe(120000);
+    expect(niceAxisMax(100000)).toBe(100000);
+    expect(niceAxisMax(42)).toBe(48);
+    expect(niceAxisMax(0)).toBe(4);
+    expect(niceAxisMax(5.25)).toBe(8);
+    expect(niceAxisMax(2_100_000)).toBe(2_400_000);
+  });
+  it('never returns less than the value', () => {
+    for (const value of [1, 7, 39, 41, 99, 1234, 56789, 99999, 100001, 7_654_321]) {
+      expect(niceAxisMax(value)).toBeGreaterThanOrEqual(value);
+    }
   });
 });

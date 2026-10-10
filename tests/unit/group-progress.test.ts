@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildCollectiveSeries,
+  goalReachedNotification,
   collectiveCreatorSummaryNotification,
   collectiveParticipantSummaryNotification,
   collectiveProgress,
@@ -158,5 +160,39 @@ describe('collective (team total) challenges', () => {
     expect(missed.body).toContain('goal missed');
     expect(missed.body).toContain('80 000 steps of 100 000 (80%)');
     expect(missed.body).toContain('8 of 12 members');
+  });
+});
+
+describe('team chart series and the goal-reached notification', () => {
+  it('builds one point per day with a running total, days without data counting 0', () => {
+    const series = buildCollectiveSeries('2026-10-30', '2026-11-02', new Map([['2026-10-30', 4000], ['2026-11-01', 1000]]), 100000);
+    expect(series).toEqual({
+      targetTotal: 100000,
+      points: [
+        { date: '2026-10-30', amount: 4000, cumulative: 4000 },
+        { date: '2026-10-31', amount: 0, cumulative: 4000 },
+        { date: '2026-11-01', amount: 1000, cumulative: 5000 },
+        { date: '2026-11-02', amount: 0, cumulative: 5000 },
+      ],
+    });
+  });
+
+  it('a single day is one point; an end before the start is no points', () => {
+    expect(buildCollectiveSeries('2026-10-10', '2026-10-10', new Map(), 10).points).toHaveLength(1);
+    expect(buildCollectiveSeries('2026-10-11', '2026-10-10', new Map(), 10).points).toEqual([]);
+  });
+
+  it('the goal-reached text tells the total, the target and how long is left', () => {
+    const base = {
+      groupName: 'Acme',
+      name: 'October walk',
+      type: 'DAILY_STEPS' as const,
+      collective: collectiveProgress(103_500, 100_000),
+    };
+    const people = goalReachedNotification({ ...base, daysRemaining: 6, audience: 'participant' });
+    expect(people.title).toBe('Team goal reached: October walk');
+    expect(people.body).toContain('103 500 steps (target 100 000) with 6 days still to go');
+    expect(goalReachedNotification({ ...base, daysRemaining: 1, audience: 'participant' }).body).toContain('on the last day');
+    expect(goalReachedNotification({ ...base, daysRemaining: 2, audience: 'creator' }).body).toContain('has reached the target of "October walk"');
   });
 });

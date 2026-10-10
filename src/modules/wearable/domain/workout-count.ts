@@ -37,22 +37,26 @@ export function isCountableWorkout(workout: CountableWorkout): boolean {
   return true;
 }
 
-export function countDistinctWorkouts(workouts: CountableWorkout[]): number {
+/** The merged sessions (same rules as `countDistinctWorkouts`), earliest first. */
+export function distinctWorkoutSessions(workouts: CountableWorkout[]): { start: Date; end: Date }[] {
   const sessions = workouts
     .filter(isCountableWorkout)
     .map((w) => ({ start: w.startedAt.getTime(), end: Math.max(w.endedAt.getTime(), w.startedAt.getTime()) }))
     .sort((a, b) => a.start - b.start);
 
   const gapMs = WORKOUT_MERGE_GAP_MINUTES * 60_000;
-  let count = 0;
-  let currentEnd = Number.NEGATIVE_INFINITY;
+  const merged: { start: number; end: number }[] = [];
   for (const session of sessions) {
-    if (session.start > currentEnd + gapMs) {
-      count += 1;
-      currentEnd = session.end;
+    const last = merged[merged.length - 1];
+    if (last && session.start <= last.end + gapMs) {
+      last.end = Math.max(last.end, session.end);
     } else {
-      currentEnd = Math.max(currentEnd, session.end);
+      merged.push({ ...session });
     }
   }
-  return count;
+  return merged.map((m) => ({ start: new Date(m.start), end: new Date(m.end) }));
+}
+
+export function countDistinctWorkouts(workouts: CountableWorkout[]): number {
+  return distinctWorkoutSessions(workouts).length;
 }

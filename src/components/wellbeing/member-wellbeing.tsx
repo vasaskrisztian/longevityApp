@@ -16,6 +16,7 @@ import {
   type PendingInvitation,
 } from '@/lib/wellbeing/groups-api';
 import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/lib/wellbeing/format';
+import { TeamChart } from './team-chart';
 import { CollectiveBar, ContributionLine, GroupLogo, LoadingLine, ProgressLine, StatusBadge } from './parts';
 import { useLoad } from './use-load';
 
@@ -103,6 +104,7 @@ function ChallengeCard({ challenge, groupId, onChanged }: { challenge: MyGroupCh
       {challenge.collective ? (
         <>
           <CollectiveBar type={challenge.type} collective={challenge.collective} />
+          {challenge.series && <TeamChart type={challenge.type} series={challenge.series} />}
           {challenge.joined && challenge.me && <ContributionLine label="Your share" type={challenge.type} progress={challenge.me} />}
           <p className="text-xs text-muted-foreground">
             {challenge.team.participants} of {challenge.team.members} members are adding to the total

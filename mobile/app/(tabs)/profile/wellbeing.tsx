@@ -17,6 +17,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { Checkbox } from '@/src/components/ui/Checkbox';
+import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
@@ -111,6 +112,7 @@ function ChallengeCard({
       {challenge.collective ? (
         <>
           <CollectiveBar type={challenge.type} collective={challenge.collective} />
+          {challenge.series ? <TeamChart type={challenge.type} series={challenge.series} /> : null}
           {challenge.joined && challenge.me ? <ContributionLine label="Your share" type={challenge.type} progress={challenge.me} /> : null}
           <Text style={styles.muted}>
             {challenge.team.participants} of {challenge.team.members} members are adding to the total

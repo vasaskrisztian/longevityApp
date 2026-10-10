@@ -1,6 +1,6 @@
 import { apiFetchJson } from './http';
 
-export type NotificationKind = 'GROUP_INVITATION' | 'GROUP_CHALLENGE_NEW' | 'GROUP_CHALLENGE_SUMMARY';
+export type NotificationKind = 'GROUP_INVITATION' | 'GROUP_CHALLENGE_NEW' | 'GROUP_CHALLENGE_SUMMARY' | 'GROUP_CHALLENGE_GOAL_REACHED';
 
 export interface AppNotification {
   id: string;

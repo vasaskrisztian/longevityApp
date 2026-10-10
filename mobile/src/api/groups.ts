@@ -119,6 +119,18 @@ export interface CollectiveProgress {
   reached: boolean;
 }
 
+/** One day of the team chart: what the team added that day and the running total. */
+export interface SeriesPoint {
+  date: string;
+  amount: number;
+  cumulative: number;
+}
+
+export interface CollectiveSeries {
+  targetTotal: number;
+  points: SeriesPoint[];
+}
+
 export interface GroupChallenge {
   id: string;
   groupId: string;
@@ -168,6 +180,8 @@ export interface AdminChallengeDetail {
   challenge: GroupChallenge;
   team: TeamSummary;
   collective: CollectiveProgress | null;
+  /** The team's running total per day — COLLECTIVE only. */
+  series: CollectiveSeries | null;
   participants: { userId: string; email: string; fullName: string | null; progress: MemberProgress }[];
   notJoined: { userId: string; email: string; fullName: string | null }[];
 }
@@ -252,6 +266,8 @@ export interface MyGroupChallenge extends GroupChallenge {
   /** INDIVIDUAL: own progress. COLLECTIVE: own contribution (currentCount) against the team target. */
   me: MemberProgress | null;
   collective: CollectiveProgress | null;
+  /** The team's running total per day — COLLECTIVE only; aggregate numbers. */
+  series: CollectiveSeries | null;
   team: TeamSummary;
 }
 

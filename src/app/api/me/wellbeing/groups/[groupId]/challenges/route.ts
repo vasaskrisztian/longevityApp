@@ -1,5 +1,5 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
-import { finalizeEndedGroupChallenges, listMyGroupChallenges } from '@/modules/groups/group-challenges.service';
+import { lazyGroupChallengeChecks, listMyGroupChallenges } from '@/modules/groups/group-challenges.service';
 import { groupChallengeErrorResponse } from '@/modules/groups/group-challenge-http';
 import { logger } from '@/lib/logging/logger';
 
@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: { groupId: st
   } catch (error) {
     return toErrorResponse(error);
   }
-  await finalizeEndedGroupChallenges().catch((error: Error) =>
+  await lazyGroupChallengeChecks().catch((error: Error) =>
     logger.error('group_challenge_lazy_finalize_failed', { message: error.message }),
   );
   try {

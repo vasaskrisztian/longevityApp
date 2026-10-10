@@ -11,6 +11,7 @@ const prismaMock = {
   dailyHealthMetric: {
     count: vi.fn(),
     aggregate: vi.fn(),
+    groupBy: vi.fn(),
   },
   workout: {
     findMany: vi.fn(),
@@ -33,6 +34,7 @@ function sessions(n: number) {
 
 const {
   sumMetricFor,
+  dailyTotalsFor,
   computeProgress,
   listChallenges,
   getChallengeById,
@@ -365,6 +367,54 @@ describe('sumMetricFor (team-total group challenges)', () => {
     expect(prismaMock.workout.findMany.mock.calls[0]![0].where).toEqual({
       userId: 'u1',
       startedAt: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-13T00:00:00Z') },
+    });
+  });
+});
+
+describe('dailyTotalsFor (team chart of a collective group challenge)', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const from = new Date('2026-10-01T00:00:00Z');
+  const to = new Date('2026-10-03T09:00:00Z');
+
+  it('nobody joined → nothing to query', async () => {
+    expect((await dailyTotalsFor({ userIds: [], type: 'DAILY_STEPS', from, to })).size).toBe(0);
+    expect(prismaMock.dailyHealthMetric.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('adds the participants\' steps up per UTC day', async () => {
+    prismaMock.dailyHealthMetric.groupBy.mockResolvedValue([
+      { date: new Date('2026-10-01T00:00:00Z'), _sum: { steps: 20_000 } },
+      { date: new Date('2026-10-03T00:00:00Z'), _sum: { steps: null } },
+    ]);
+    const totals = await dailyTotalsFor({ userIds: ['u1', 'u2'], type: 'DAILY_STEPS', from, to });
+    expect(Object.fromEntries(totals)).toEqual({ '2026-10-01': 20_000, '2026-10-03': 0 });
+    expect(prismaMock.dailyHealthMetric.groupBy).toHaveBeenCalledWith({
+      by: ['date'],
+      where: { userId: { in: ['u1', 'u2'] }, date: { gte: new Date('2026-10-01T00:00:00Z'), lte: new Date('2026-10-03T00:00:00Z') } },
+      _sum: { steps: true },
+    });
+  });
+
+  it('counts each person\'s distinct workout sessions on the day they started, summed over people', async () => {
+    const at = (iso: string, minutes = 30) => ({
+      startedAt: new Date(iso),
+      endedAt: new Date(new Date(iso).getTime() + minutes * 60_000),
+      durationMin: minutes,
+      activityType: 'running',
+      source: 'confirmed',
+    });
+    prismaMock.workout.findMany.mockResolvedValue([
+      { userId: 'u1', ...at('2026-10-01T08:00:00Z') },
+      { userId: 'u1', ...at('2026-10-01T08:05:00Z') }, // same session recorded twice → merged
+      { userId: 'u1', ...at('2026-10-02T18:00:00Z') },
+      { userId: 'u2', ...at('2026-10-01T08:00:00Z') }, // another person, same time → counts separately
+      { userId: 'u2', ...at('2026-10-02T09:00:00Z', 5) }, // too short → ignored
+    ]);
+    const totals = await dailyTotalsFor({ userIds: ['u1', 'u2'], type: 'WEEKLY_WORKOUTS', from, to });
+    expect(Object.fromEntries(totals)).toEqual({ '2026-10-01': 2, '2026-10-02': 1 });
+    expect(prismaMock.workout.findMany.mock.calls[0]![0].where).toEqual({
+      userId: { in: ['u1', 'u2'] },
+      startedAt: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-04T00:00:00Z') },
     });
   });
 });
