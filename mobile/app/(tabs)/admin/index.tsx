@@ -127,6 +127,16 @@ export default function AdminDashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Pressable onPress={() => router.push('/admin/groups')} accessibilityRole="button">
+        <Card style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Corporate wellbeing</Text>
+            <Text style={styles.rowSubtitle}>Groups, invitations, members’ health data and group challenges</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
+        </Card>
+      </Pressable>
+
       {statsError ? <Alert variant="destructive">{statsError}</Alert> : null}
       {stats ? (
         <View style={styles.kpiGrid}>

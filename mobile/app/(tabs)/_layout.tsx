@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDeviceAutoSync } from '@/src/health/useDeviceAutoSync';
+import { useNotificationPolling } from '@/src/notifications/useNotificationPolling';
+import { useUnreadCount } from '@/src/notifications/unreadStore';
 
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
@@ -30,6 +32,8 @@ export default function TabLayout() {
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   useDeviceAutoSync(status === 'signedIn');
+  useNotificationPolling(status === 'signedIn');
+  const unread = useUnreadCount();
 
   // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
   // authenticated non-admin user who hasn't completed the onboarding wizard
@@ -119,6 +123,16 @@ export default function TabLayout() {
           ...headerlessScene,
           title: 'Devices',
           tabBarIcon: ({ color, size }) => <Ionicons name="watch-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          ...headerlessScene,
+          title: 'Notifications',
+          tabBarLabel: 'Alerts',
+          tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
+          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/Button';
 import { TextField } from '@/src/components/ui/TextField';
 import { useSession, InvalidCredentialsError } from '@/src/auth/useSession';
 import { colors, fontFamily } from '@/src/theme/tokens';
+import { safeNextPath } from '@/src/wellbeing/inviteFlow';
 
 // Mirrors the web app's LoginSchema (lib/validation/auth.schemas.ts) —
 // kept as a small duplicate rather than a cross-project import, since
@@ -27,7 +28,9 @@ export default function LoginScreen() {
   const router = useRouter();
   // The verify-email API route redirects here with ?verified=1 once the
   // emailed link has been opened — same banner the web login shows.
-  const { verified } = useLocalSearchParams<{ verified?: string }>();
+  const { verified, next } = useLocalSearchParams<{ verified?: string; next?: string }>();
+  // Invitation links send signed-out people here and expect them back afterwards.
+  const nextPath = safeNextPath(next);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export default function LoginScreen() {
   // signed-in user landing on /login (e.g. a stale bookmark/deep link)
   // goes straight to the app instead of seeing the form again.
   if (status === 'signedIn') {
-    return <Redirect href="/" />;
+    return <Redirect href={(nextPath ?? '/') as never} />;
   }
 
   async function handleSubmit() {

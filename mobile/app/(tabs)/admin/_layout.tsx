@@ -20,6 +20,10 @@ export default function AdminStackLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Admin' }} />
       <Stack.Screen name="users/[id]" options={{ title: 'User detail' }} />
+      <Stack.Screen name="groups/index" options={{ title: 'Wellbeing groups' }} />
+      <Stack.Screen name="groups/[id]/index" options={{ title: 'Group' }} />
+      <Stack.Screen name="groups/[id]/members/[userId]" options={{ title: 'Member health' }} />
+      <Stack.Screen name="groups/[id]/challenges/[challengeId]" options={{ title: 'Challenge' }} />
     </Stack>
   );
 }

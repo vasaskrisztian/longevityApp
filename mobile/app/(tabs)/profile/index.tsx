@@ -192,6 +192,8 @@ export default function ProfileHomeScreen() {
         <NavRow label="Challenges" onPress={() => router.push('/profile/challenges')} />
         <View style={styles.navDivider} />
         <NavRow label="Creators" onPress={() => router.push('/profile/creators')} />
+        <View style={styles.navDivider} />
+        <NavRow label="Wellbeing" onPress={() => router.push('/profile/wellbeing')} />
       </Card>
 
       {publicProfileStatus?.accountType === 'CREATOR' ? (

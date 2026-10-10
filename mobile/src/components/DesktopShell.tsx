@@ -4,6 +4,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSession } from '@/src/auth/useSession';
+import { useUnreadCount } from '@/src/notifications/unreadStore';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -21,6 +22,7 @@ const BASE_ITEMS: NavItem[] = [
   { label: 'Trends', href: '/trends', match: '/trends', icon: 'trending-up-outline' },
   { label: 'Profile', href: '/profile', match: '/profile', icon: 'person-outline' },
   { label: 'Devices', href: '/devices', match: '/devices', icon: 'watch-outline' },
+  { label: 'Notifications', href: '/notifications', match: '/notifications', icon: 'notifications-outline' },
 ];
 const ADMIN_ITEM: NavItem = { label: 'Admin', href: '/admin', match: '/admin', icon: 'shield-checkmark-outline' };
 
@@ -40,6 +42,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useSession();
+  const unread = useUnreadCount();
   const items = user?.role === 'ADMIN' ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
 
   return (
@@ -59,6 +62,11 @@ export function DesktopShell({ children }: { children: ReactNode }) {
               >
                 <Ionicons name={item.icon} size={20} color={active ? colors.primary.default : colors.muted.foreground} />
                 <Text style={[styles.itemLabel, active && styles.itemLabelActive]}>{item.label}</Text>
+                {item.match === '/notifications' && unread > 0 ? (
+                  <View style={styles.badge} accessibilityLabel={`${unread} unread`}>
+                    <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
@@ -100,6 +108,8 @@ const styles = StyleSheet.create({
   itemPressed: { opacity: 0.7 },
   itemLabel: { fontFamily: fontFamily.sansMedium, fontSize: 15, color: colors.muted.foreground },
   itemLabelActive: { color: colors.primary.default },
+  badge: { marginLeft: 'auto', minWidth: 20, paddingHorizontal: 6, height: 20, borderRadius: 10, backgroundColor: colors.accent.default, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: fontFamily.sansSemibold, fontSize: 11, color: colors.accent.foreground },
   footer: { gap: 8, paddingHorizontal: 8 },
   email: { fontFamily: fontFamily.sans, fontSize: 12, color: colors.muted.foreground },
   logout: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },

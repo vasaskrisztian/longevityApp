@@ -52,3 +52,34 @@ export async function confirmPasswordReset(
 ): Promise<AuthRequestResult> {
   return toResult(await postJson('/api/auth/reset-password', { token, password, passwordConfirmation }));
 }
+
+export type InviteRegistrationResult =
+  | { ok: true }
+  | { ok: false; reason: 'account_exists' | 'rate_limited' | 'invalid' | 'error'; message?: string };
+
+/**
+ * POST /api/auth/register with a group-invitation token. Unlike plain
+ * registration the answer is specific (the holder received the link by email
+ * at this very address, so nothing is leaked): the account starts
+ * email-verified and the person joins the group in the same call, so the
+ * caller can log in right away.
+ */
+export async function registerFromInvitation(input: {
+  fullName: string;
+  email: string;
+  password: string;
+  passwordConfirmation: string;
+  termsAccepted: true;
+  privacyAccepted: true;
+  inviteToken: string;
+  groupConsent: true;
+}): Promise<InviteRegistrationResult> {
+  const response = await postJson('/api/auth/register', input);
+  if (!response) return { ok: false, reason: 'error' };
+  if (response.ok) return { ok: true };
+  const body = await response.json().catch(() => null);
+  if (response.status === 409) return { ok: false, reason: 'account_exists', message: body?.error };
+  if (response.status === 429) return { ok: false, reason: 'rate_limited' };
+  if (response.status === 400) return { ok: false, reason: 'invalid', message: typeof body?.error === 'string' ? body.error : undefined };
+  return { ok: false, reason: 'error' };
+}
