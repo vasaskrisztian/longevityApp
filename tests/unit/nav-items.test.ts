@@ -27,4 +27,13 @@ describe('findActiveNavHref', () => {
   it('does not match a sibling that merely shares a prefix', () => {
     expect(findActiveNavHref('/profile-extra', visible)).toBeNull();
   });
+
+  it('selects Wellbeing and Notifications for their own pages, not Profile', () => {
+    expect(findActiveNavHref('/profile/wellbeing', visible)).toBe('/profile/wellbeing');
+    expect(findActiveNavHref('/notifications', visible)).toBe('/notifications');
+  });
+
+  it('keeps the groups admin pages under the Admin item', () => {
+    expect(findActiveNavHref('/admin/groups/g1/challenges/c1', visible)).toBe('/admin');
+  });
 });

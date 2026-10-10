@@ -24,7 +24,7 @@ const authMiddleware = auth((request) => {
   const { pathname } = request.nextUrl;
   const isLoggedIn = Boolean(request.auth?.user);
 
-  const protectedPrefixes = ['/dashboard', '/trends', '/profile', '/admin', '/onboarding'];
+  const protectedPrefixes = ['/dashboard', '/trends', '/profile', '/admin', '/onboarding', '/notifications'];
   const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   if (isProtected && !isLoggedIn) {

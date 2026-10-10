@@ -12,6 +12,8 @@ import {
   ClipboardList,
   Trophy,
   Compass,
+  Bell,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,6 +48,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'InBody', href: '/profile/inbody', icon: Scale },
   { label: 'Goals', href: '/profile/goals', icon: Target, hidden: true },
   { label: 'Devices', href: '/profile/devices', icon: Watch },
+  { label: 'Wellbeing', href: '/profile/wellbeing', icon: Users },
+  { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
 ];
 

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { listUsersForAdmin } from '@/modules/admin/admin.service';
@@ -48,6 +49,16 @@ export default async function AdminDashboardPage() {
         <Kpi label="Auth required" value={authRequired} />
         <Kpi label="Failed syncs today" value={failedSyncsToday} />
       </div>
+      <Link href="/admin/groups" className="block">
+        <Card className="transition-shadow hover:shadow-md">
+          <CardHeader>
+            <CardTitle>Corporate wellbeing</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Groups for companies and teams: invite people by email, follow their health data (with their consent) and run group challenges.
+            </p>
+          </CardHeader>
+        </Card>
+      </Link>
       <Card>
         <CardHeader>
           <CardTitle>Users</CardTitle>

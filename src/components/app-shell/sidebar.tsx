@@ -7,6 +7,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, findActiveNavHref } from './nav-items';
 import { Button } from '@/components/ui/button';
+import { useUnreadCount } from '@/lib/wellbeing/unread-store';
 
 /**
  * The real longevity.klub emblem (public/brand/longevity-klub-logo.png) --
@@ -36,6 +37,7 @@ export function Sidebar() {
   const isAdmin = session?.user?.role === 'ADMIN';
   const visibleItems = NAV_ITEMS.filter((item) => !item.hidden && (!item.adminOnly || isAdmin));
   const activeHref = findActiveNavHref(pathname, visibleItems);
+  const unread = useUnreadCount();
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-card-border bg-gradient-to-b from-white via-white to-muted px-4 py-6">
@@ -74,6 +76,14 @@ export function Sidebar() {
                 aria-hidden="true"
               />
               {item.label}
+              {item.href === '/notifications' && unread > 0 && (
+                <span
+                  className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-foreground"
+                  aria-label={`${unread} unread`}
+                >
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
             </Link>
           );
         })}

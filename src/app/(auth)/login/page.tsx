@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { safeNextPath } from '@/lib/wellbeing/invite-flow';
 
 // `useSearchParams()` opts this page out of static rendering, and Next.js
 // requires a Suspense boundary around any component that calls it (build
@@ -56,7 +57,8 @@ function LoginForm() {
       setServerError('Invalid email or password, or your account is not verified yet.');
       return;
     }
-    router.push('/dashboard');
+    // Invitation links send signed-out people here and expect them back afterwards.
+    router.push(safeNextPath(searchParams.get('callbackUrl')) ?? '/dashboard');
     router.refresh();
   }
 
