@@ -39,6 +39,17 @@ export function Sidebar() {
   const activeHref = findActiveNavHref(pathname, visibleItems);
   const unread = useUnreadCount();
 
+  // Never let Auth.js build the post-logout URL: behind Railway's proxy it
+  // resolves against the container's own localhost origin. Clear the session
+  // without its redirect, then navigate relative to the page's real origin.
+  async function handleLogout() {
+    try {
+      await signOut({ redirect: false });
+    } finally {
+      window.location.assign('/login');
+    }
+  }
+
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-card-border bg-gradient-to-b from-white via-white to-muted px-4 py-6">
       <div className="mb-8 flex items-center gap-3 px-2">
@@ -93,7 +104,7 @@ export function Sidebar() {
         {session?.user?.email && (
           <p className="truncate px-2 text-xs text-muted-foreground">{session.user.email}</p>
         )}
-        <Button variant="outline" size="sm" className="w-full" onClick={() => signOut({ callbackUrl: '/login' })}>
+        <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
           Log out
         </Button>
       </div>

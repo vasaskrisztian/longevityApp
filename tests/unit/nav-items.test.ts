@@ -33,7 +33,9 @@ describe('findActiveNavHref', () => {
     expect(findActiveNavHref('/notifications', visible)).toBe('/notifications');
   });
 
-  it('keeps the groups admin pages under the Admin item', () => {
-    expect(findActiveNavHref('/admin/groups/g1/challenges/c1', visible)).toBe('/admin');
+  it('selects Groups (not Admin) on the groups admin pages', () => {
+    expect(findActiveNavHref('/admin/groups', visible)).toBe('/admin/groups');
+    expect(findActiveNavHref('/admin/groups/g1/challenges/c1', visible)).toBe('/admin/groups');
+    expect(findActiveNavHref('/admin/users/1', visible)).toBe('/admin');
   });
 });

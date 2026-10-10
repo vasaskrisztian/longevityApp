@@ -13,6 +13,7 @@ import {
   Trophy,
   Compass,
   Bell,
+  Building2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Wellbeing', href: '/profile/wellbeing', icon: Users },
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
+  { label: 'Groups', href: '/admin/groups', icon: Building2, adminOnly: true },
 ];
 
 /**

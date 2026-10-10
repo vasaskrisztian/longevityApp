@@ -130,8 +130,8 @@ export default function AdminDashboardScreen() {
       <Pressable onPress={() => router.push('/admin/groups')} accessibilityRole="button">
         <Card style={styles.row}>
           <View style={styles.rowText}>
-            <Text style={styles.rowTitle}>Corporate wellbeing</Text>
-            <Text style={styles.rowSubtitle}>Groups, invitations, members’ health data and group challenges</Text>
+            <Text style={styles.rowTitle}>Corporate wellbeing · Create a group</Text>
+            <Text style={styles.rowSubtitle}>Create a group, invite people by email, see their health data and run group challenges</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
         </Card>
