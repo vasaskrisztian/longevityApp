@@ -16,7 +16,7 @@ import {
   type PendingInvitation,
 } from '@/lib/wellbeing/groups-api';
 import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/lib/wellbeing/format';
-import { GroupLogo, LoadingLine, ProgressLine, StatusBadge } from './parts';
+import { CollectiveBar, ContributionLine, GroupLogo, LoadingLine, ProgressLine, StatusBadge } from './parts';
 import { useLoad } from './use-load';
 
 export function ConsentCheckbox({ id, checked, onChange, children }: { id: string; checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
@@ -100,8 +100,20 @@ function ChallengeCard({ challenge, groupId, onChanged }: { challenge: MyGroupCh
         {left ? ` · ${left}` : ''}
       </p>
       {challenge.description && <p className="text-sm">{challenge.description}</p>}
-      {challenge.joined && challenge.me && <ProgressLine label="You" progress={challenge.me} />}
-      <p className="text-xs text-muted-foreground">Team: {teamStatusLine(challenge.team)}</p>
+      {challenge.collective ? (
+        <>
+          <CollectiveBar type={challenge.type} collective={challenge.collective} />
+          {challenge.joined && challenge.me && <ContributionLine label="Your share" type={challenge.type} progress={challenge.me} />}
+          <p className="text-xs text-muted-foreground">
+            {challenge.team.participants} of {challenge.team.members} members are adding to the total
+          </p>
+        </>
+      ) : (
+        <>
+          {challenge.joined && challenge.me && <ProgressLine label="You" progress={challenge.me} />}
+          <p className="text-xs text-muted-foreground">Team: {teamStatusLine(challenge.team)}</p>
+        </>
+      )}
       {error && <Alert variant="destructive">{error}</Alert>}
       {challenge.status !== 'ENDED' ? (
         <Button size="sm" variant={challenge.joined ? 'outline' : 'primary'} disabled={busy} onClick={toggle}>

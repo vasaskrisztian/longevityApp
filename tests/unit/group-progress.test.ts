@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  collectiveCreatorSummaryNotification,
+  collectiveParticipantSummaryNotification,
+  collectiveProgress,
+  describeCollectiveAmount,
+  describeCollectiveTarget,
+  summarizeCollective,
   creatorSummaryNotification,
   describeChallengeTarget,
   groupChallengeStatus,
@@ -90,5 +96,67 @@ describe('notification texts', () => {
     expect(creatorSummaryNotification({ groupName: 'Acme', name: 'C', team }).body).toContain(
       '1 of 4 members took part; 1 reached the goal, average progress 100%.',
     );
+  });
+});
+
+describe('collective (team total) challenges', () => {
+  it('collectiveProgress caps the percentage at 100 and flags the goal', () => {
+    expect(collectiveProgress(25_000, 100_000)).toEqual({ total: 25_000, targetTotal: 100_000, percent: 25, reached: false });
+    expect(collectiveProgress(130_000, 100_000)).toMatchObject({ percent: 100, reached: true });
+    expect(collectiveProgress(-5, 0)).toMatchObject({ total: 0, targetTotal: 1, percent: 0, reached: false });
+  });
+
+  it('summarizeCollective reports the team percentage and who shares the goal', () => {
+    expect(summarizeCollective(collectiveProgress(50_000, 100_000), 4, 10)).toEqual({ participants: 4, members: 10, completed: 0, averagePercent: 50 });
+    expect(summarizeCollective(collectiveProgress(100_000, 100_000), 4, 3)).toEqual({ participants: 4, members: 4, completed: 4, averagePercent: 100 });
+  });
+
+  it('describes the total with thousands separated by spaces and the right unit', () => {
+    expect(describeCollectiveAmount('DAILY_STEPS', 100000)).toBe('100 000 steps');
+    expect(describeCollectiveAmount('WEEKLY_WORKOUTS', 1)).toBe('1 workout');
+    expect(describeCollectiveAmount('WEEKLY_WORKOUTS', 40)).toBe('40 workouts');
+    expect(describeCollectiveTarget('DAILY_STEPS', 100000)).toBe('Together reach 100 000 steps');
+  });
+
+  it('the new-challenge notification names the shared target', () => {
+    const message = newChallengeNotification({
+      groupName: 'Acme',
+      name: 'October walk',
+      type: 'DAILY_STEPS',
+      threshold: 0,
+      requiredCount: 1,
+      mode: 'COLLECTIVE',
+      targetTotal: 100000,
+      startsAt: at('2026-10-01T00:00:00Z'),
+      endsAt: at('2026-10-31T00:00:00Z'),
+    });
+    expect(message.title).toBe('New team challenge: October walk');
+    expect(message.body).toContain('together reach 100 000 steps');
+    expect(message.body).toContain('from 2026-10-01 to 2026-10-31');
+  });
+
+  it('summaries tell the team result, and each person their own share', () => {
+    const reached = collectiveProgress(104_000, 100_000);
+    const person = collectiveParticipantSummaryNotification({
+      groupName: 'Acme',
+      name: 'October walk',
+      type: 'DAILY_STEPS',
+      collective: reached,
+      myContribution: 12_345,
+      participants: 8,
+    });
+    expect(person.body).toContain('Goal reached');
+    expect(person.body).toContain('Your share: 12 345');
+    const missed = collectiveCreatorSummaryNotification({
+      groupName: 'Acme',
+      name: 'October walk',
+      type: 'DAILY_STEPS',
+      collective: collectiveProgress(80_000, 100_000),
+      participants: 8,
+      members: 12,
+    });
+    expect(missed.body).toContain('goal missed');
+    expect(missed.body).toContain('80 000 steps of 100 000 (80%)');
+    expect(missed.body).toContain('8 of 12 members');
   });
 });

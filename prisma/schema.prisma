@@ -149,6 +149,15 @@ enum GroupInvitationStatus {
   REVOKED
 }
 
+/// How a group challenge is won. INDIVIDUAL: every participant has their own
+/// goal ("5 days above 8000 steps"). COLLECTIVE: the participants' results are
+/// added up and the team shares one total target ("100 000 steps together in a
+/// month") — `targetTotal` is set only then.
+enum GroupChallengeMode {
+  INDIVIDUAL
+  COLLECTIVE
+}
+
 /// What an in-app notification is about; the row's `data` JSON carries the ids
 /// the client needs to act on it (invitation id, group id, challenge id).
 enum NotificationType {
@@ -858,6 +867,12 @@ model GroupChallenge {
   type          ChallengeType
   threshold     Int
   requiredCount Int
+
+  /// INDIVIDUAL keeps using threshold/requiredCount per person. COLLECTIVE
+  /// ignores them (stored as 0 / 1) and sums the participants' steps or
+  /// workouts against `targetTotal`.
+  mode        GroupChallengeMode @default(INDIVIDUAL)
+  targetTotal Int?
 
   startsAt DateTime
   endsAt   DateTime

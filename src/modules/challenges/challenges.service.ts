@@ -116,6 +116,33 @@ export async function countQualifyingPeriodsFor(params: {
   }
 }
 
+/**
+ * The plain total of a metric over [from, to] (both inclusive, UTC) for one
+ * person — steps summed over the days, or distinct workouts — for team-total
+ * (collective) group challenges. Workouts use the same de-duplicating count as
+ * everywhere else, so a workout seen by two sources is counted once.
+ */
+export async function sumMetricFor(params: {
+  userId: string;
+  type: 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
+  from: Date;
+  to: Date;
+}): Promise<number> {
+  const { userId, type, from, to } = params;
+  if (type === 'DAILY_STEPS') {
+    const result = await prisma.dailyHealthMetric.aggregate({
+      where: { userId, date: { gte: utcMidnight(from), lte: utcMidnight(to) } },
+      _sum: { steps: true },
+    });
+    return result._sum.steps ?? 0;
+  }
+  const workouts = await prisma.workout.findMany({
+    where: { userId, startedAt: { gte: utcMidnight(from), lt: new Date(utcMidnight(to).getTime() + DAY_MS) } },
+    select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
+  });
+  return countDistinctWorkouts(workouts);
+}
+
 async function countQualifyingPeriods(challenge: Challenge, from: Date, to: Date): Promise<number> {
   return countQualifyingPeriodsFor({
     userId: challenge.userId,

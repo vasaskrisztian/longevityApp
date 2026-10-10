@@ -6,7 +6,7 @@ import { deleteAdminGroupChallenge, getAdminGroupChallenge, type AdminChallengeD
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
+import { CollectiveBar, ContributionLine, ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/src/wellbeing/format';
@@ -68,7 +68,7 @@ export default function AdminGroupChallengeScreen() {
     );
   }
 
-  const { challenge, team, participants, notJoined } = detail;
+  const { challenge, team, collective, participants, notJoined } = detail;
   const left = daysLeftLabel(challenge.daysRemaining);
 
   return (
@@ -87,15 +87,23 @@ export default function AdminGroupChallengeScreen() {
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Team</Text>
-        <ProgressBar percent={team.averagePercent} />
-        <Text style={styles.body}>{teamStatusLine(team)}</Text>
+        {collective ? (
+          <CollectiveBar type={challenge.type} collective={collective} />
+        ) : (
+          <>
+            <ProgressBar percent={team.averagePercent} />
+            <Text style={styles.body}>{teamStatusLine(team)}</Text>
+          </>
+        )}
         <Text style={styles.muted}>
           {team.participants} of {team.members} group members joined
         </Text>
       </Card>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Participants ({participants.length})</Text>
+        <Text style={styles.cardTitle}>
+          {collective ? 'Contributions' : 'Participants'} ({participants.length})
+        </Text>
         {participants.length === 0 ? <Text style={styles.muted}>Nobody has joined yet.</Text> : null}
         {participants.map((participant) => (
           <Pressable
@@ -105,7 +113,11 @@ export default function AdminGroupChallengeScreen() {
             onPress={() => router.push(`/admin/groups/${id}/members/${participant.userId}`)}
           >
             <Text style={styles.rowTitle}>{displayName(participant)}</Text>
-            <ProgressLine progress={participant.progress} />
+            {collective ? (
+              <ContributionLine type={challenge.type} progress={participant.progress} />
+            ) : (
+              <ProgressLine progress={participant.progress} />
+            )}
           </Pressable>
         ))}
       </Card>

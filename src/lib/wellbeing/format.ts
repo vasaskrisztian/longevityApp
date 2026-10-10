@@ -1,4 +1,4 @@
-import type { GroupChallengeStatus, TeamSummary } from './groups-api';
+import type { CollectiveProgress, GroupChallengeStatus, GroupChallengeType, TeamSummary } from './groups-api';
 
 /** "2026-10-10" → "10 Oct 2026" (UTC, so the date never shifts with the viewer's timezone). */
 export function formatDay(day: string): string {
@@ -28,6 +28,29 @@ export function teamStatusLine(team: TeamSummary): string {
   if (team.participants === 0) return 'Nobody has joined yet.';
   const who = team.participants === 1 ? '1 participant' : `${team.participants} participants`;
   return `${team.completed} of ${who} reached the goal · average progress ${team.averagePercent}%`;
+}
+
+/** 100000 → "100 000" (plain spaces, the same in every browser and locale). */
+export function formatAmount(value: number): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/** "100 000 steps" / "1 workout" / "40 workouts" — a count in the unit of a team total. */
+export function collectiveAmountLabel(type: GroupChallengeType, amount: number): string {
+  const unit = type === 'DAILY_STEPS' ? 'steps' : amount === 1 ? 'workout' : 'workouts';
+  return `${formatAmount(amount)} ${unit}`;
+}
+
+/** "75 000 of 100 000 steps · 75%" / "… · goal reached" — the team's shared total. */
+export function collectiveLine(type: GroupChallengeType, collective: CollectiveProgress): string {
+  const unit = collectiveAmountLabel(type, collective.targetTotal).split(' ').slice(-1)[0];
+  return `${formatAmount(collective.total)} of ${formatAmount(collective.targetTotal)} ${unit}${collective.reached ? ' · goal reached' : ` · ${collective.percent}%`}`;
+}
+
+/** "12 300 steps · 12% of the team target" — one person's share of a team total. */
+export function contributionLine(type: GroupChallengeType, contribution: number, targetTotal: number): string {
+  const percent = Math.min(100, Math.round((contribution / Math.max(1, targetTotal)) * 100));
+  return `${collectiveAmountLabel(type, contribution)} · ${percent}% of the team target`;
 }
 
 const PROVIDER_LABEL: Record<string, string> = {

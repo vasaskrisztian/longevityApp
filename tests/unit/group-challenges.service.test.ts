@@ -11,7 +11,8 @@ vi.mock('@/lib/logging/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(),
 const recordAuditLog = vi.fn();
 vi.mock('@/lib/audit/audit-log.service', () => ({ recordAuditLog }));
 const countQualifyingPeriodsFor = vi.fn();
-vi.mock('@/modules/challenges/challenges.service', () => ({ countQualifyingPeriodsFor }));
+const sumMetricFor = vi.fn();
+vi.mock('@/modules/challenges/challenges.service', () => ({ countQualifyingPeriodsFor, sumMetricFor }));
 const createNotification = vi.fn();
 const createNotificationsForUsers = vi.fn();
 vi.mock('@/modules/notifications/notifications.service', () => ({ createNotification, createNotificationsForUsers }));
@@ -52,6 +53,7 @@ const user = (id: string, fullName: string | null = null) => ({ id, email: `${id
 beforeEach(() => {
   vi.clearAllMocks();
   countQualifyingPeriodsFor.mockResolvedValue(0);
+  sumMetricFor.mockResolvedValue(0);
 });
 
 describe('toChallengeDTO', () => {
@@ -310,5 +312,125 @@ describe('finalizeEndedGroupChallenges', () => {
     countQualifyingPeriodsFor.mockRejectedValueOnce(new Error('db blip')).mockResolvedValue(1);
     const result = await finalizeEndedGroupChallenges(AFTER);
     expect(result.finalized).toBe(1);
+  });
+});
+
+describe('collective (team total) group challenges', () => {
+  const collectiveRow = (overrides: Record<string, unknown> = {}) =>
+    challengeRow({ mode: 'COLLECTIVE', targetTotal: 100_000, threshold: 0, requiredCount: 1, ...overrides });
+  const contributions: Record<string, number> = { u1: 30_000, u2: 45_000 };
+  const stepsOf = async ({ userId }: { userId: string }) => contributions[userId] ?? 0;
+
+  it('the DTO carries the mode, the team total and a readable target', () => {
+    expect(toChallengeDTO(collectiveRow(), NOW)).toMatchObject({
+      mode: 'COLLECTIVE',
+      targetTotal: 100_000,
+      target: 'Together reach 100 000 steps',
+    });
+    expect(toChallengeDTO(challengeRow(), NOW)).toMatchObject({ mode: 'INDIVIDUAL', targetTotal: null });
+    // A row without the new columns (created before the mode existed) is individual.
+    expect(toChallengeDTO(challengeRow({ mode: undefined, targetTotal: undefined }), NOW).mode).toBe('INDIVIDUAL');
+  });
+
+  it('a participant\'s result is their contribution against the team target, summed over the window up to now', async () => {
+    sumMetricFor.mockResolvedValue(30_000);
+    const progress = await computeParticipantProgress(collectiveRow() as never, 'u1', NOW);
+    expect(progress).toMatchObject({ currentCount: 30_000, requiredCount: 100_000, percent: 30 });
+    expect(sumMetricFor).toHaveBeenCalledWith({ userId: 'u1', type: 'DAILY_STEPS', from: new Date('2026-10-10T00:00:00Z'), to: NOW });
+    expect(countQualifyingPeriodsFor).not.toHaveBeenCalled();
+  });
+
+  it('counts nothing before the start', async () => {
+    const progress = await computeParticipantProgress(collectiveRow() as never, 'u1', new Date('2026-10-09T10:00:00Z'));
+    expect(progress.currentCount).toBe(0);
+    expect(sumMetricFor).not.toHaveBeenCalled();
+  });
+
+  it('creates a COLLECTIVE challenge with its team total and announces it as a team challenge', async () => {
+    prismaMock.wellbeingGroup.findUnique.mockResolvedValue({ id: 'g1', name: 'Acme' });
+    prismaMock.groupChallenge.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'c1', ...data }));
+    listMemberIds.mockResolvedValue(['u1']);
+
+    const dto = await createGroupChallenge(
+      'admin',
+      'g1',
+      { name: 'Together', type: 'DAILY_STEPS', threshold: 0, requiredCount: 1, mode: 'COLLECTIVE', targetTotal: 100_000, startDate: '2026-10-10', endDate: '2026-10-31' },
+      NOW,
+    );
+
+    const data = prismaMock.groupChallenge.create.mock.calls[0]![0].data;
+    expect(data).toMatchObject({ mode: 'COLLECTIVE', targetTotal: 100_000 });
+    expect(dto).toMatchObject({ mode: 'COLLECTIVE', targetTotal: 100_000 });
+    expect(createNotificationsForUsers).toHaveBeenCalledWith(
+      ['u1'],
+      expect.objectContaining({ title: 'New team challenge: Together' }),
+    );
+  });
+
+  it('an INDIVIDUAL challenge is stored with no team total', async () => {
+    prismaMock.wellbeingGroup.findUnique.mockResolvedValue({ id: 'g1', name: 'Acme' });
+    prismaMock.groupChallenge.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'c1', ...data }));
+    listMemberIds.mockResolvedValue([]);
+    await createGroupChallenge('admin', 'g1', { name: 'Steps', type: 'DAILY_STEPS', threshold: 8000, requiredCount: 5, startDate: '2026-10-10', endDate: '2026-10-16' }, NOW);
+    expect(prismaMock.groupChallenge.create.mock.calls[0]![0].data).toMatchObject({ mode: 'INDIVIDUAL', targetTotal: null });
+  });
+
+  it('admin list: the team percentage is the sum of the participants against the target', async () => {
+    prismaMock.groupMembership.count.mockResolvedValue(5);
+    prismaMock.groupChallenge.findMany.mockResolvedValue([collectiveRow({ participants: [{ userId: 'u1' }, { userId: 'u2' }] })]);
+    sumMetricFor.mockImplementation(stepsOf);
+
+    const [item] = await listGroupChallengesForAdmin('g1', NOW);
+
+    expect(item).toMatchObject({
+      mode: 'COLLECTIVE',
+      collective: { total: 75_000, targetTotal: 100_000, percent: 75, reached: false },
+      team: { participants: 2, members: 5, completed: 0, averagePercent: 75 },
+    });
+  });
+
+  it('admin detail: shows each participant\'s contribution, best first', async () => {
+    prismaMock.groupChallenge.findUnique.mockResolvedValue(
+      collectiveRow({ participants: [{ user: user('u1') }, { user: user('u2') }] }),
+    );
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ user: user('u1') }, { user: user('u2') }, { user: user('u3') }]);
+    sumMetricFor.mockImplementation(stepsOf);
+
+    const detail = await getGroupChallengeDetailForAdmin('g1', 'c1', NOW);
+
+    expect(detail!.collective).toMatchObject({ total: 75_000, percent: 75 });
+    expect(detail!.participants.map((p) => [p.userId, p.progress.currentCount])).toEqual([['u2', 45_000], ['u1', 30_000]]);
+    expect(detail!.notJoined.map((m) => m.userId)).toEqual(['u3']);
+  });
+
+  it('member view: own contribution and the team total, nobody else\'s numbers', async () => {
+    prismaMock.groupMembership.findUnique.mockResolvedValue({ id: 'm' });
+    prismaMock.groupMembership.count.mockResolvedValue(3);
+    prismaMock.groupChallenge.findMany.mockResolvedValue([collectiveRow({ participants: [{ userId: 'u1' }, { userId: 'u2' }] })]);
+    sumMetricFor.mockImplementation(stepsOf);
+
+    const [mine] = await listMyGroupChallenges('u1', 'g1', NOW);
+
+    expect(mine).toMatchObject({ joined: true, me: { currentCount: 30_000 }, collective: { total: 75_000, percent: 75 } });
+    expect(JSON.stringify(mine)).not.toContain('45000');
+    expect(JSON.stringify(mine)).not.toContain('u2');
+  });
+
+  it('finalize: sends the team result and each person\'s share, and flags a reached goal', async () => {
+    prismaMock.groupChallenge.findMany.mockResolvedValue([
+      collectiveRow({ endsAt: new Date('2026-10-12T00:00:00Z'), group: { name: 'Acme' }, participants: [{ userId: 'u1' }, { userId: 'u2' }] }),
+    ]);
+    prismaMock.groupChallenge.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.groupMembership.count.mockResolvedValue(2);
+    sumMetricFor.mockImplementation(async ({ userId }: { userId: string }) => (userId === 'u1' ? 60_000 : 50_000));
+
+    const result = await finalizeEndedGroupChallenges(NOW);
+
+    expect(result).toEqual({ finalized: 1 });
+    const bodies = createNotification.mock.calls.map((call) => call[1].body as string);
+    expect(bodies).toHaveLength(3); // two participants + the creator
+    expect(bodies.some((body) => body.includes('Goal reached') && body.includes('Your share: 60 000'))).toBe(true);
+    expect(bodies.some((body) => body.includes('Your share: 50 000'))).toBe(true);
+    expect(bodies.some((body) => body.includes('goal reached: 110 000 steps of 100 000 (100%)'))).toBe(true);
   });
 });

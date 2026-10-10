@@ -1,8 +1,14 @@
 /* eslint-disable @next/next/no-img-element -- logos are served by our own API with fixed small size */
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { groupLogoUri, type GroupChallengeStatus, type MemberProgress } from '@/lib/wellbeing/groups-api';
-import { STATUS_LABEL } from '@/lib/wellbeing/format';
+import {
+  groupLogoUri,
+  type CollectiveProgress,
+  type GroupChallengeStatus,
+  type GroupChallengeType,
+  type MemberProgress,
+} from '@/lib/wellbeing/groups-api';
+import { collectiveLine, contributionLine, STATUS_LABEL } from '@/lib/wellbeing/format';
 
 /** A group's logo, or a neutral placeholder when it has none. `src` overrides (a just-picked local preview). */
 export function GroupLogo({ logoUrl, src, size = 48 }: { logoUrl?: string | null; src?: string | null; size?: number }) {
@@ -70,6 +76,29 @@ export function ProgressLine({ progress, label }: { progress: MemberProgress; la
         </span>
       </div>
       <ProgressBar percent={progress.percent} completed={progress.completed} />
+    </div>
+  );
+}
+
+/** The team's shared total of a COLLECTIVE challenge, as a bar. */
+export function CollectiveBar({ type, collective }: { type: GroupChallengeType; collective: CollectiveProgress }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-medium">{collectiveLine(type, collective)}</p>
+      <ProgressBar percent={collective.percent} completed={collective.reached} />
+    </div>
+  );
+}
+
+/** One person's contribution to a COLLECTIVE challenge (`progress.currentCount` of the team target). */
+export function ContributionLine({ type, progress, label }: { type: GroupChallengeType; progress: MemberProgress; label?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between gap-2 text-sm">
+        {label ? <span className="font-medium">{label}</span> : <span />}
+        <span className="text-muted-foreground">{contributionLine(type, progress.currentCount, progress.requiredCount)}</span>
+      </div>
+      <ProgressBar percent={progress.percent} />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { Checkbox } from '@/src/components/ui/Checkbox';
-import { GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
+import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/src/wellbeing/format';
@@ -108,8 +108,20 @@ function ChallengeCard({
       </Text>
       {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
 
-      {challenge.joined && challenge.me ? <ProgressLine label="You" progress={challenge.me} /> : null}
-      <Text style={styles.muted}>Team: {teamStatusLine(challenge.team)}</Text>
+      {challenge.collective ? (
+        <>
+          <CollectiveBar type={challenge.type} collective={challenge.collective} />
+          {challenge.joined && challenge.me ? <ContributionLine label="Your share" type={challenge.type} progress={challenge.me} /> : null}
+          <Text style={styles.muted}>
+            {challenge.team.participants} of {challenge.team.members} members are adding to the total
+          </Text>
+        </>
+      ) : (
+        <>
+          {challenge.joined && challenge.me ? <ProgressLine label="You" progress={challenge.me} /> : null}
+          <Text style={styles.muted}>Team: {teamStatusLine(challenge.team)}</Text>
+        </>
+      )}
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {challenge.status !== 'ENDED' ? (

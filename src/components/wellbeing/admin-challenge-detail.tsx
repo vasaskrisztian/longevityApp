@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { deleteAdminGroupChallenge, getAdminGroupChallenge } from '@/lib/wellbeing/groups-api';
 import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/lib/wellbeing/format';
-import { LoadingLine, PageTitle, ProgressBar, ProgressLine, StatusBadge } from './parts';
+import { CollectiveBar, ContributionLine, LoadingLine, PageTitle, ProgressBar, ProgressLine, StatusBadge } from './parts';
 import { useLoad } from './use-load';
 
 /** Corporate wellbeing — admin: where everyone stands in one group challenge, and the team as a whole. */
@@ -20,7 +20,7 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
 
   if (error) return <Alert variant="destructive">{error}</Alert>;
   if (!data) return <LoadingLine />;
-  const { challenge, team, participants, notJoined } = data;
+  const { challenge, team, collective, participants, notJoined } = data;
   const left = daysLeftLabel(challenge.daysRemaining);
 
   async function remove() {
@@ -59,8 +59,14 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
           <CardTitle>Team</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <ProgressBar percent={team.averagePercent} />
-          <p className="text-sm">{teamStatusLine(team)}</p>
+          {collective ? (
+            <CollectiveBar type={challenge.type} collective={collective} />
+          ) : (
+            <>
+              <ProgressBar percent={team.averagePercent} />
+              <p className="text-sm">{teamStatusLine(team)}</p>
+            </>
+          )}
           <p className="text-xs text-muted-foreground">
             {team.participants} of {team.members} group members joined
           </p>
@@ -69,7 +75,7 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
 
       <Card>
         <CardHeader>
-          <CardTitle>Participants ({participants.length})</CardTitle>
+          <CardTitle>{collective ? 'Contributions' : 'Participants'} ({participants.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {participants.length === 0 && <p className="text-sm text-muted-foreground">Nobody has joined yet.</p>}
@@ -80,7 +86,11 @@ export function AdminChallengeDetail({ groupId, challengeId }: { groupId: string
               className="block space-y-1.5 border-t border-card-border pt-3 first:border-t-0 first:pt-0"
             >
               <p className="font-medium">{displayName(participant)}</p>
-              <ProgressLine progress={participant.progress} />
+              {collective ? (
+                <ContributionLine type={challenge.type} progress={participant.progress} />
+              ) : (
+                <ProgressLine progress={participant.progress} />
+              )}
             </Link>
           ))}
         </CardContent>

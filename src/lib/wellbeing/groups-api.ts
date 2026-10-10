@@ -10,6 +10,8 @@ import { apiFetch, apiFetchJson } from './http';
 
 export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
 export type GroupChallengeStatus = 'UPCOMING' | 'ACTIVE' | 'ENDED';
+/** INDIVIDUAL: everyone has their own goal. COLLECTIVE: one shared team total (steps or workouts). */
+export type GroupChallengeMode = 'INDIVIDUAL' | 'COLLECTIVE';
 
 export interface GroupSummary {
   id: string;
@@ -109,6 +111,14 @@ export interface MemberProgress {
   completed: boolean;
 }
 
+/** Team-total progress of a COLLECTIVE challenge. */
+export interface CollectiveProgress {
+  total: number;
+  targetTotal: number;
+  percent: number;
+  reached: boolean;
+}
+
 export interface GroupChallenge {
   id: string;
   groupId: string;
@@ -117,6 +127,9 @@ export interface GroupChallenge {
   type: GroupChallengeType;
   threshold: number;
   requiredCount: number;
+  mode: GroupChallengeMode;
+  /** The team total to reach — COLLECTIVE only, else null. */
+  targetTotal: number | null;
   startDate: string;
   endDate: string;
   status: GroupChallengeStatus;
@@ -126,14 +139,19 @@ export interface GroupChallenge {
 
 export interface AdminGroupChallengeListItem extends GroupChallenge {
   team: TeamSummary;
+  collective: CollectiveProgress | null;
 }
 
 export interface CreateGroupChallengeInput {
   name: string;
   description?: string;
   type: GroupChallengeType;
-  threshold: number;
-  requiredCount: number;
+  /** INDIVIDUAL (default): per-person goal. */
+  mode?: GroupChallengeMode;
+  threshold?: number;
+  requiredCount?: number;
+  /** COLLECTIVE: the total (steps or workouts) the whole team has to reach. */
+  targetTotal?: number;
   startDate: string;
   endDate: string;
 }
@@ -149,6 +167,7 @@ export const createAdminGroupChallenge = (groupId: string, input: CreateGroupCha
 export interface AdminChallengeDetail {
   challenge: GroupChallenge;
   team: TeamSummary;
+  collective: CollectiveProgress | null;
   participants: { userId: string; email: string; fullName: string | null; progress: MemberProgress }[];
   notJoined: { userId: string; email: string; fullName: string | null }[];
 }
@@ -230,7 +249,9 @@ export const leaveGroup = (groupId: string) => expectNoContent(`/api/me/wellbein
 
 export interface MyGroupChallenge extends GroupChallenge {
   joined: boolean;
+  /** INDIVIDUAL: own progress. COLLECTIVE: own contribution (currentCount) against the team target. */
   me: MemberProgress | null;
+  collective: CollectiveProgress | null;
   team: TeamSummary;
 }
 

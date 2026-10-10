@@ -20,6 +20,7 @@ import {
   removeGroupMember,
   revokeGroupInvitation,
   updateAdminGroup,
+  type GroupChallengeMode,
   type GroupChallengeType,
   type GroupDetail,
   type InviteResult,
@@ -37,7 +38,7 @@ import {
   timeAgo,
   todayDay,
 } from '@/lib/wellbeing/format';
-import { GroupLogo, LoadingLine, PageTitle, ProgressBar, StatusBadge } from './parts';
+import { CollectiveBar, GroupLogo, LoadingLine, PageTitle, ProgressBar, StatusBadge } from './parts';
 import { LogoPickerButton } from './logo-field';
 import { useLoad } from './use-load';
 
@@ -309,11 +310,32 @@ const TYPE_FIELDS: Record<GroupChallengeType, { label: string; threshold: string
   },
 };
 
+/** Team-total challenges: what the shared number is called and a sensible starting value, per metric. */
+const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { label: string; hint: string; default: string }>> = {
+  DAILY_STEPS: {
+    label: 'Team total of steps',
+    hint: 'The steps of everyone who joins are added up over the whole period.',
+    default: '100000',
+  },
+  WEEKLY_WORKOUTS: {
+    label: 'Team total of workouts',
+    hint: 'The workouts of everyone who joins are added up over the whole period.',
+    default: '40',
+  },
+};
+
+const MODE_LABEL: Record<GroupChallengeMode, string> = {
+  INDIVIDUAL: 'Personal goals — everyone has to reach their own target',
+  COLLECTIVE: 'Team total — everyone’s results are added up to one shared target',
+};
+
 function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [mode, setMode] = useState<GroupChallengeMode>('INDIVIDUAL');
   const [type, setType] = useState<GroupChallengeType>('DAILY_STEPS');
+  const [targetTotal, setTargetTotal] = useState('100000');
   const [threshold, setThreshold] = useState('8000');
   const [requiredCount, setRequiredCount] = useState('10');
   const [startDate, setStartDate] = useState(todayDay());
@@ -326,6 +348,13 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
     setType(value);
     setThreshold(TYPE_FIELDS[value].defaults[0]);
     setRequiredCount(TYPE_FIELDS[value].defaults[1]);
+    setTargetTotal(COLLECTIVE_FIELDS[value]?.default ?? '');
+  }
+
+  function changeMode(value: GroupChallengeMode) {
+    setMode(value);
+    // Sleep scores cannot be added up — fall back to steps when switching to a team total.
+    if (value === 'COLLECTIVE' && !COLLECTIVE_FIELDS[type]) changeType('DAILY_STEPS');
   }
 
   async function create(event: React.FormEvent) {
@@ -334,8 +363,13 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
     if (!name.trim()) next.name = 'Give the challenge a name.';
     const thresholdNumber = Number(threshold);
     const countNumber = Number(requiredCount);
-    if (!Number.isInteger(thresholdNumber) || thresholdNumber < 1) next.threshold = 'Enter a whole number, at least 1.';
-    if (!Number.isInteger(countNumber) || countNumber < 1) next.requiredCount = 'Enter a whole number, at least 1.';
+    const totalNumber = Number(targetTotal.replace(/\s/g, ''));
+    if (mode === 'COLLECTIVE') {
+      if (!Number.isInteger(totalNumber) || totalNumber < 1) next.targetTotal = 'Enter a whole number, at least 1.';
+    } else {
+      if (!Number.isInteger(thresholdNumber) || thresholdNumber < 1) next.threshold = 'Enter a whole number, at least 1.';
+      if (!Number.isInteger(countNumber) || countNumber < 1) next.requiredCount = 'Enter a whole number, at least 1.';
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) next.startDate = 'Pick a date.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) next.endDate = 'Pick a date.';
     if (!next.startDate && !next.endDate && endDate < startDate) next.endDate = 'The end cannot be before the start.';
@@ -349,8 +383,9 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         type,
-        threshold: thresholdNumber,
-        requiredCount: countNumber,
+        ...(mode === 'COLLECTIVE'
+          ? { mode, targetTotal: totalNumber }
+          : { mode, threshold: thresholdNumber, requiredCount: countNumber }),
         startDate,
         endDate,
       });
@@ -373,6 +408,8 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
     );
   }
   const fields = TYPE_FIELDS[type];
+  const collectiveFields = COLLECTIVE_FIELDS[type];
+  const typeKeys = (Object.keys(TYPE_FIELDS) as GroupChallengeType[]).filter((key) => mode === 'INDIVIDUAL' || COLLECTIVE_FIELDS[key]);
   const err = (key: string) => (errors[key] ? <p className="text-sm text-danger">{errors[key]}</p> : null);
   return (
     <Card>
@@ -393,27 +430,47 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
             <Textarea id="ch-desc" value={description} maxLength={1000} rows={2} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="ch-mode">How is it won?</Label>
+            <Select id="ch-mode" value={mode} onChange={(e) => changeMode(e.target.value as GroupChallengeMode)}>
+              {(Object.keys(MODE_LABEL) as GroupChallengeMode[]).map((key) => (
+                <option key={key} value={key}>
+                  {MODE_LABEL[key]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="ch-type">Type</Label>
             <Select id="ch-type" value={type} onChange={(e) => changeType(e.target.value as GroupChallengeType)}>
-              {(Object.keys(TYPE_FIELDS) as GroupChallengeType[]).map((key) => (
+              {typeKeys.map((key) => (
                 <option key={key} value={key}>
                   {TYPE_FIELDS[key].label}
                 </option>
               ))}
             </Select>
-            <p className="text-xs text-muted-foreground">{fields.hint}</p>
+            <p className="text-xs text-muted-foreground">{mode === 'COLLECTIVE' && collectiveFields ? collectiveFields.hint : fields.hint}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="ch-threshold">{fields.threshold}</Label>
-              <Input id="ch-threshold" inputMode="numeric" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
-              {err('threshold')}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ch-count">{fields.count}</Label>
-              <Input id="ch-count" inputMode="numeric" value={requiredCount} onChange={(e) => setRequiredCount(e.target.value)} />
-              {err('requiredCount')}
-            </div>
+            {mode === 'COLLECTIVE' && collectiveFields ? (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="ch-total">{collectiveFields.label}</Label>
+                <Input id="ch-total" inputMode="numeric" value={targetTotal} onChange={(e) => setTargetTotal(e.target.value)} />
+                {err('targetTotal')}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="ch-threshold">{fields.threshold}</Label>
+                  <Input id="ch-threshold" inputMode="numeric" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+                  {err('threshold')}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ch-count">{fields.count}</Label>
+                  <Input id="ch-count" inputMode="numeric" value={requiredCount} onChange={(e) => setRequiredCount(e.target.value)} />
+                  {err('requiredCount')}
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="ch-start">First day</Label>
               <Input id="ch-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -505,8 +562,14 @@ export function AdminGroupDetail({ groupId }: { groupId: string }) {
                 {formatDateRange(challenge.startDate, challenge.endDate)}
                 {daysLeftLabel(challenge.daysRemaining) ? ` · ${daysLeftLabel(challenge.daysRemaining)}` : ''}
               </p>
-              <ProgressBar percent={challenge.team.averagePercent} />
-              <p className="text-xs text-muted-foreground">{teamStatusLine(challenge.team)}</p>
+              {challenge.collective ? (
+                <CollectiveBar type={challenge.type} collective={challenge.collective} />
+              ) : (
+                <>
+                  <ProgressBar percent={challenge.team.averagePercent} />
+                  <p className="text-xs text-muted-foreground">{teamStatusLine(challenge.team)}</p>
+                </>
+              )}
               <p className="text-xs text-muted-foreground">
                 {challenge.team.participants} of {challenge.team.members} members joined
               </p>

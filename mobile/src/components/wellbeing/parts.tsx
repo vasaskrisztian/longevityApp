@@ -1,9 +1,15 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { groupLogoUri, type GroupChallengeStatus, type MemberProgress } from '@/src/api/groups';
+import {
+  groupLogoUri,
+  type CollectiveProgress,
+  type GroupChallengeStatus,
+  type GroupChallengeType,
+  type MemberProgress,
+} from '@/src/api/groups';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
-import { STATUS_LABEL } from '@/src/wellbeing/format';
+import { collectiveLine, contributionLine, STATUS_LABEL } from '@/src/wellbeing/format';
 
 /** A group's logo, or a neutral placeholder when it has none. `uri` overrides (a just-picked local preview). */
 export function GroupLogo({ logoUrl, uri, size = 48 }: { logoUrl?: string | null; uri?: string | null; size?: number }) {
@@ -66,6 +72,29 @@ export function ProgressLine({ progress, label }: { progress: MemberProgress; la
         </Text>
       </View>
       <ProgressBar percent={progress.percent} completed={progress.completed} />
+    </View>
+  );
+}
+
+/** The team's shared total of a COLLECTIVE challenge, as a bar. */
+export function CollectiveBar({ type, collective }: { type: GroupChallengeType; collective: CollectiveProgress }) {
+  return (
+    <View style={styles.progressLine}>
+      <Text style={styles.progressLabel}>{collectiveLine(type, collective)}</Text>
+      <ProgressBar percent={collective.percent} completed={collective.reached} />
+    </View>
+  );
+}
+
+/** One person's contribution to a COLLECTIVE challenge (`progress.currentCount` of the team target). */
+export function ContributionLine({ type, progress, label }: { type: GroupChallengeType; progress: MemberProgress; label?: string }) {
+  return (
+    <View style={styles.progressLine}>
+      <View style={styles.progressText}>
+        {label ? <Text style={styles.progressLabel}>{label}</Text> : null}
+        <Text style={styles.progressValue}>{contributionLine(type, progress.currentCount, progress.requiredCount)}</Text>
+      </View>
+      <ProgressBar percent={progress.percent} />
     </View>
   );
 }

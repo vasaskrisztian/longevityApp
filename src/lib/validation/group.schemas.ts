@@ -64,15 +64,32 @@ const DayString = z
 
 export const MAX_GROUP_CHALLENGE_DAYS = 366;
 
+export const GroupChallengeModeEnum = z.enum(['INDIVIDUAL', 'COLLECTIVE']);
+export type GroupChallengeModeInput = z.infer<typeof GroupChallengeModeEnum>;
+
+/** The metrics whose results can be added up across people. Sleep scores cannot. */
+export const COLLECTIVE_CHALLENGE_TYPES = ['DAILY_STEPS', 'WEEKLY_WORKOUTS'] as const;
+export const MAX_COLLECTIVE_TARGET = 100_000_000;
+
+/**
+ * `mode` INDIVIDUAL (default, the original shape): every participant has their
+ * own goal — `threshold` ("above Y") and `requiredCount` ("X times").
+ * `mode` COLLECTIVE: the participants' steps / workouts are summed and the team
+ * shares one `targetTotal` ("100 000 steps together in a month"); `threshold`
+ * and `requiredCount` do not apply and come out normalised as 0 / 1.
+ */
 export const CreateGroupChallengeSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required').max(200),
     description: z.string().trim().max(1000).optional(),
+    mode: GroupChallengeModeEnum.default('INDIVIDUAL'),
     type: ChallengeTypeEnum,
     // "above Y" — sleep score points / steps / workouts-per-week depending on `type`.
-    threshold: z.coerce.number().int().min(1, 'Must be at least 1').max(100_000),
+    threshold: z.coerce.number().int().min(1, 'Must be at least 1').max(100_000).optional(),
     // "X times" — nights / days / weeks depending on `type`.
-    requiredCount: z.coerce.number().int().min(1, 'Must be at least 1').max(1000),
+    requiredCount: z.coerce.number().int().min(1, 'Must be at least 1').max(1000).optional(),
+    // COLLECTIVE only: the team's total (steps, or workouts) to reach.
+    targetTotal: z.coerce.number().int().min(1, 'Must be at least 1').max(MAX_COLLECTIVE_TARGET).optional(),
     /** First day of the challenge (inclusive). */
     startDate: DayString,
     /** Last day of the challenge (inclusive). */
@@ -88,7 +105,31 @@ export const CreateGroupChallengeSchema = z
       return days <= MAX_GROUP_CHALLENGE_DAYS;
     },
     { message: `A challenge can last at most ${MAX_GROUP_CHALLENGE_DAYS} days`, path: ['endDate'] },
-  );
+  )
+  .superRefine((data, ctx) => {
+    if (data.mode === 'COLLECTIVE') {
+      if (!(COLLECTIVE_CHALLENGE_TYPES as readonly string[]).includes(data.type)) {
+        ctx.addIssue({ code: 'custom', path: ['type'], message: 'A team total can only be set for steps or workouts' });
+      }
+      if (data.targetTotal === undefined) {
+        ctx.addIssue({ code: 'custom', path: ['targetTotal'], message: 'Enter the team total to reach' });
+      }
+      return;
+    }
+    if (data.threshold === undefined) ctx.addIssue({ code: 'custom', path: ['threshold'], message: 'Required' });
+    if (data.requiredCount === undefined) ctx.addIssue({ code: 'custom', path: ['requiredCount'], message: 'Required' });
+  })
+  .transform((data) => ({
+    name: data.name,
+    description: data.description,
+    mode: data.mode,
+    type: data.type,
+    threshold: data.mode === 'COLLECTIVE' ? 0 : (data.threshold as number),
+    requiredCount: data.mode === 'COLLECTIVE' ? 1 : (data.requiredCount as number),
+    targetTotal: data.mode === 'COLLECTIVE' ? (data.targetTotal as number) : null,
+    startDate: data.startDate,
+    endDate: data.endDate,
+  }));
 
 export type CreateGroupChallengeInput = z.infer<typeof CreateGroupChallengeSchema>;
 

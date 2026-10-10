@@ -65,6 +65,23 @@ describe('group schemas', () => {
     expect(CreateGroupChallengeSchema.safeParse({ ...challenge, requiredCount: '0' }).success).toBe(false);
     expect(CreateGroupChallengeSchema.safeParse({ ...challenge, startDate: '2026-02-31' }).success).toBe(false);
   });
+  it('defaults to INDIVIDUAL and normalises the team total away', () => {
+    expect(CreateGroupChallengeSchema.parse(challenge)).toMatchObject({ mode: 'INDIVIDUAL', targetTotal: null });
+  });
+  it('COLLECTIVE needs a team total, not a per-person goal, and normalises threshold/requiredCount', () => {
+    const collective = { name: 'Together', type: 'DAILY_STEPS', mode: 'COLLECTIVE', targetTotal: '100000', startDate: '2026-10-01', endDate: '2026-10-31' };
+    expect(CreateGroupChallengeSchema.parse(collective)).toMatchObject({ mode: 'COLLECTIVE', targetTotal: 100000, threshold: 0, requiredCount: 1 });
+    expect(CreateGroupChallengeSchema.safeParse({ ...collective, type: 'WEEKLY_WORKOUTS', targetTotal: 40 }).success).toBe(true);
+    expect(CreateGroupChallengeSchema.safeParse({ ...collective, targetTotal: undefined }).success).toBe(false);
+    expect(CreateGroupChallengeSchema.safeParse({ ...collective, targetTotal: 0 }).success).toBe(false);
+    expect(CreateGroupChallengeSchema.safeParse({ ...collective, targetTotal: 100_000_001 }).success).toBe(false);
+    // Sleep scores cannot be added up.
+    expect(CreateGroupChallengeSchema.safeParse({ ...collective, type: 'SLEEP_SCORE' }).success).toBe(false);
+  });
+  it('INDIVIDUAL still requires threshold and requiredCount', () => {
+    const { threshold: _t, ...withoutThreshold } = challenge as Record<string, unknown>;
+    expect(CreateGroupChallengeSchema.safeParse(withoutThreshold).success).toBe(false);
+  });
   it('a one-day challenge (start = end) is valid', () => {
     expect(CreateGroupChallengeSchema.safeParse({ ...challenge, endDate: '2026-10-10' }).success).toBe(true);
   });

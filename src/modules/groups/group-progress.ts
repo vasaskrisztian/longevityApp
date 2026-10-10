@@ -6,6 +6,7 @@
  */
 
 export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
+export type GroupChallengeMode = 'INDIVIDUAL' | 'COLLECTIVE';
 export type GroupChallengeStatus = 'UPCOMING' | 'ACTIVE' | 'ENDED';
 
 export function groupChallengeStatus(
@@ -55,6 +56,45 @@ export function summarizeTeam(progresses: MemberProgress[], memberCount: number)
   return { participants, members: Math.max(memberCount, participants), completed, averagePercent };
 }
 
+/** Team-total progress of a COLLECTIVE challenge. */
+export interface CollectiveProgress {
+  /** Everything the participants have added up so far (steps, or workouts). */
+  total: number;
+  targetTotal: number;
+  /** 0–100, capped. */
+  percent: number;
+  reached: boolean;
+}
+
+export function collectiveProgress(total: number, targetTotal: number): CollectiveProgress {
+  const target = Math.max(1, targetTotal);
+  const sum = Math.max(0, total);
+  return { total: sum, targetTotal: target, percent: Math.min(100, Math.round((sum / target) * 100)), reached: sum >= target };
+}
+
+/** The team aggregate of a COLLECTIVE challenge, in the same shape the individual mode uses. */
+export function summarizeCollective(collective: CollectiveProgress, participants: number, memberCount: number): TeamSummary {
+  return {
+    participants,
+    members: Math.max(memberCount, participants),
+    completed: collective.reached ? participants : 0,
+    averagePercent: collective.percent,
+  };
+}
+
+const formatNumber = (value: number) => value.toLocaleString('en-US').replace(/,/g, ' ');
+
+/** "100 000 steps" / "40 workouts" — the unit of a team total. */
+export function describeCollectiveAmount(type: GroupChallengeType, amount: number): string {
+  const word = type === 'DAILY_STEPS' ? 'steps' : amount === 1 ? 'workout' : 'workouts';
+  return `${formatNumber(amount)} ${word}`;
+}
+
+/** "Together reach 100 000 steps" — what a COLLECTIVE challenge asks for. */
+export function describeCollectiveTarget(type: GroupChallengeType, targetTotal: number): string {
+  return `Together reach ${describeCollectiveAmount(type, targetTotal)}`;
+}
+
 /** "5 nights with a sleep score above 80" — what the challenge asks for. */
 export function describeChallengeTarget(type: GroupChallengeType, threshold: number, requiredCount: number): string {
   switch (type) {
@@ -75,12 +115,55 @@ export function newChallengeNotification(params: {
   type: GroupChallengeType;
   threshold: number;
   requiredCount: number;
+  /** COLLECTIVE challenges only. */
+  mode?: GroupChallengeMode;
+  targetTotal?: number | null;
   startsAt: Date;
   endsAt: Date;
 }): { title: string; body: string } {
+  const range = `from ${formatDay(params.startsAt)} to ${formatDay(params.endsAt)}`;
+  if (params.mode === 'COLLECTIVE' && params.targetTotal) {
+    return {
+      title: `New team challenge: ${params.name}`,
+      body: `${params.groupName} started a team challenge — ${describeCollectiveTarget(params.type, params.targetTotal).toLowerCase()}, ${range}. Everyone who joins adds to the shared total. Join it from the Wellbeing page if you want to take part.`,
+    };
+  }
   return {
     title: `New group challenge: ${params.name}`,
-    body: `${params.groupName} started a challenge — ${describeChallengeTarget(params.type, params.threshold, params.requiredCount)}, from ${formatDay(params.startsAt)} to ${formatDay(params.endsAt)}. Join it from the Wellbeing page if you want to take part.`,
+    body: `${params.groupName} started a challenge — ${describeChallengeTarget(params.type, params.threshold, params.requiredCount)}, ${range}. Join it from the Wellbeing page if you want to take part.`,
+  };
+}
+
+export function collectiveParticipantSummaryNotification(params: {
+  groupName: string;
+  name: string;
+  type: GroupChallengeType;
+  collective: CollectiveProgress;
+  myContribution: number;
+  participants: number;
+}): { title: string; body: string } {
+  const { collective } = params;
+  const result = collective.reached
+    ? `Goal reached: the team added up ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)}.`
+    : `The team added up ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)} (${collective.percent}%).`;
+  return {
+    title: `Team challenge finished: ${params.name}`,
+    body: `${params.groupName} — ${result} Your share: ${formatNumber(params.myContribution)}. ${params.participants} ${params.participants === 1 ? 'person' : 'people'} took part.`,
+  };
+}
+
+export function collectiveCreatorSummaryNotification(params: {
+  groupName: string;
+  name: string;
+  type: GroupChallengeType;
+  collective: CollectiveProgress;
+  participants: number;
+  members: number;
+}): { title: string; body: string } {
+  const { collective } = params;
+  return {
+    title: `Team challenge finished: ${params.name}`,
+    body: `${params.groupName} — ${collective.reached ? 'goal reached' : 'goal missed'}: ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)} (${collective.percent}%), ${params.participants} of ${params.members} members took part.`,
   };
 }
 

@@ -10,6 +10,7 @@ const prismaMock = {
   },
   dailyHealthMetric: {
     count: vi.fn(),
+    aggregate: vi.fn(),
   },
   workout: {
     findMany: vi.fn(),
@@ -31,6 +32,7 @@ function sessions(n: number) {
 }
 
 const {
+  sumMetricFor,
   computeProgress,
   listChallenges,
   getChallengeById,
@@ -325,5 +327,44 @@ describe('deleteChallenge', () => {
     prismaMock.challenge.delete.mockResolvedValue({});
     await deleteChallenge('c1');
     expect(prismaMock.challenge.delete).toHaveBeenCalledWith({ where: { id: 'c1' } });
+  });
+});
+
+describe('sumMetricFor (team-total group challenges)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('sums a person\'s steps over the inclusive UTC day range', async () => {
+    prismaMock.dailyHealthMetric.aggregate.mockResolvedValue({ _sum: { steps: 54_321 } });
+    const total = await sumMetricFor({
+      userId: 'u1',
+      type: 'DAILY_STEPS',
+      from: new Date('2026-10-01T00:00:00Z'),
+      to: new Date('2026-10-12T09:00:00Z'),
+    });
+    expect(total).toBe(54_321);
+    expect(prismaMock.dailyHealthMetric.aggregate).toHaveBeenCalledWith({
+      where: { userId: 'u1', date: { gte: new Date('2026-10-01T00:00:00Z'), lte: new Date('2026-10-12T00:00:00Z') } },
+      _sum: { steps: true },
+    });
+  });
+
+  it('is 0 when there is no step data at all', async () => {
+    prismaMock.dailyHealthMetric.aggregate.mockResolvedValue({ _sum: { steps: null } });
+    expect(await sumMetricFor({ userId: 'u1', type: 'DAILY_STEPS', from: new Date('2026-10-01T00:00:00Z'), to: new Date('2026-10-02T00:00:00Z') })).toBe(0);
+  });
+
+  it('counts distinct workouts over the whole window, through the last day inclusive', async () => {
+    prismaMock.workout.findMany.mockResolvedValue(sessions(3));
+    const total = await sumMetricFor({
+      userId: 'u1',
+      type: 'WEEKLY_WORKOUTS',
+      from: new Date('2026-10-01T00:00:00Z'),
+      to: new Date('2026-10-12T09:00:00Z'),
+    });
+    expect(total).toBe(3);
+    expect(prismaMock.workout.findMany.mock.calls[0]![0].where).toEqual({
+      userId: 'u1',
+      startedAt: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-13T00:00:00Z') },
+    });
   });
 });

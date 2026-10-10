@@ -1,23 +1,34 @@
 import { prisma } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
-import { countQualifyingPeriodsFor } from '@/modules/challenges/challenges.service';
+import { countQualifyingPeriodsFor, sumMetricFor } from '@/modules/challenges/challenges.service';
 import { createNotification, createNotificationsForUsers } from '@/modules/notifications/notifications.service';
 import { listMemberIds } from './groups.service';
 import {
+  collectiveCreatorSummaryNotification,
+  collectiveParticipantSummaryNotification,
+  collectiveProgress,
   creatorSummaryNotification,
   describeChallengeTarget,
+  describeCollectiveTarget,
   groupChallengeStatus,
   memberProgress,
   newChallengeNotification,
   participantSummaryNotification,
+  summarizeCollective,
   summarizeTeam,
+  type CollectiveProgress,
+  type GroupChallengeMode,
   type GroupChallengeStatus,
   type GroupChallengeType,
   type MemberProgress,
   type TeamSummary,
 } from './group-progress';
-import type { CreateGroupChallengeInput } from '@/lib/validation/group.schemas';
+import type { CreateGroupChallengeInput as ParsedGroupChallengeInput } from '@/lib/validation/group.schemas';
+
+/** The parsed request body; `mode` and `targetTotal` may be left out (= INDIVIDUAL, no team total). */
+type CreateGroupChallengeInput = Omit<ParsedGroupChallengeInput, 'mode' | 'targetTotal' | 'description'> &
+  Partial<Pick<ParsedGroupChallengeInput, 'mode' | 'targetTotal' | 'description'>>;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,6 +52,10 @@ export interface GroupChallengeDTO {
   type: GroupChallengeType;
   threshold: number;
   requiredCount: number;
+  /** INDIVIDUAL: every participant has their own goal. COLLECTIVE: one shared team total. */
+  mode: GroupChallengeMode;
+  /** The team total to reach (steps or workouts) — COLLECTIVE only, else null. */
+  targetTotal: number | null;
   /** First and last day, both inclusive (`yyyy-mm-dd`, UTC). */
   startDate: string;
   endDate: string;
@@ -51,8 +66,14 @@ export interface GroupChallengeDTO {
   daysRemaining: number | null;
 }
 
+/** A COLLECTIVE challenge always carries its `targetTotal`; rows from before the mode existed have neither. */
+export function isCollectiveChallenge(row: { mode?: string; targetTotal?: number | null }): boolean {
+  return row.mode === 'COLLECTIVE' && typeof row.targetTotal === 'number' && row.targetTotal > 0;
+}
+
 export function toChallengeDTO(row: any, now: Date = new Date()): GroupChallengeDTO {
   const status = groupChallengeStatus(row, now);
+  const collective = isCollectiveChallenge(row);
   return {
     id: row.id,
     groupId: row.groupId,
@@ -61,29 +82,62 @@ export function toChallengeDTO(row: any, now: Date = new Date()): GroupChallenge
     type: row.type,
     threshold: row.threshold,
     requiredCount: row.requiredCount,
+    mode: collective ? 'COLLECTIVE' : 'INDIVIDUAL',
+    targetTotal: collective ? row.targetTotal : null,
     startDate: row.startsAt.toISOString().slice(0, 10),
     endDate: new Date(row.endsAt.getTime() - DAY_MS).toISOString().slice(0, 10),
     status,
-    target: describeChallengeTarget(row.type, row.threshold, row.requiredCount),
+    target: collective
+      ? describeCollectiveTarget(row.type, row.targetTotal)
+      : describeChallengeTarget(row.type, row.threshold, row.requiredCount),
     daysRemaining: status === 'ACTIVE' ? Math.max(1, Math.ceil((row.endsAt.getTime() - now.getTime()) / DAY_MS)) : null,
   };
 }
 
-/** The qualifying-period count for one person, over [startsAt, min(now, last day)]. 0 before the start. */
+/** Counting window for a challenge: [startsAt, min(now, last moment)], or null before the start. */
+function countingWindow(challenge: { startsAt: Date; endsAt: Date }, now: Date): { from: Date; to: Date } | null {
+  if (now.getTime() < challenge.startsAt.getTime()) return null;
+  const lastMoment = new Date(challenge.endsAt.getTime() - 1);
+  return { from: challenge.startsAt, to: now.getTime() < lastMoment.getTime() ? now : lastMoment };
+}
+
+/**
+ * One person's result: the qualifying-period count towards their own goal
+ * (INDIVIDUAL), or their contribution to the shared total, shown against the
+ * team target (COLLECTIVE). 0 before the start.
+ */
 export async function computeParticipantProgress(
-  challenge: { type: GroupChallengeType; threshold: number; requiredCount: number; startsAt: Date; endsAt: Date },
+  challenge: {
+    type: GroupChallengeType;
+    threshold: number;
+    requiredCount: number;
+    mode?: GroupChallengeMode;
+    targetTotal?: number | null;
+    startsAt: Date;
+    endsAt: Date;
+  },
   userId: string,
   now: Date = new Date(),
 ): Promise<MemberProgress> {
-  if (now.getTime() < challenge.startsAt.getTime()) return memberProgress(0, challenge.requiredCount);
-  const lastMoment = new Date(challenge.endsAt.getTime() - 1);
-  const to = now.getTime() < lastMoment.getTime() ? now : lastMoment;
+  const window = countingWindow(challenge, now);
+  if (isCollectiveChallenge(challenge)) {
+    const target = challenge.targetTotal as number;
+    if (!window) return memberProgress(0, target);
+    const contribution = await sumMetricFor({
+      userId,
+      type: challenge.type as 'DAILY_STEPS' | 'WEEKLY_WORKOUTS',
+      from: window.from,
+      to: window.to,
+    });
+    return memberProgress(contribution, target);
+  }
+  if (!window) return memberProgress(0, challenge.requiredCount);
   const count = await countQualifyingPeriodsFor({
     userId,
     type: challenge.type,
     threshold: challenge.threshold,
-    from: challenge.startsAt,
-    to,
+    from: window.from,
+    to: window.to,
   });
   return memberProgress(count, challenge.requiredCount);
 }
@@ -116,6 +170,8 @@ export async function createGroupChallenge(
       type: input.type,
       threshold: input.threshold,
       requiredCount: input.requiredCount,
+      mode: input.mode ?? 'INDIVIDUAL',
+      targetTotal: input.targetTotal ?? null,
       startsAt,
       endsAt,
     },
@@ -128,6 +184,8 @@ export async function createGroupChallenge(
     type: row.type,
     threshold: row.threshold,
     requiredCount: row.requiredCount,
+    mode: row.mode,
+    targetTotal: row.targetTotal,
     startsAt,
     endsAt: new Date(endsAt.getTime() - DAY_MS),
   });
@@ -161,13 +219,28 @@ export async function deleteGroupChallenge(adminId: string, groupId: string, cha
   return true;
 }
 
-async function teamProgress(challenge: any, participantIds: string[], now: Date) {
+interface TeamProgress {
+  /** One entry per participant, in `participantIds` order. */
+  progresses: MemberProgress[];
+  /** The shared total — COLLECTIVE challenges only, else null. */
+  collective: CollectiveProgress | null;
+  team: TeamSummary;
+}
+
+async function teamProgress(challenge: any, participantIds: string[], memberCount: number, now: Date): Promise<TeamProgress> {
   const progresses = await Promise.all(participantIds.map((userId) => computeParticipantProgress(challenge, userId, now)));
-  return progresses;
+  if (!isCollectiveChallenge(challenge)) {
+    return { progresses, collective: null, team: summarizeTeam(progresses, memberCount) };
+  }
+  const total = progresses.reduce((sum, p) => sum + p.currentCount, 0);
+  const collective = collectiveProgress(total, challenge.targetTotal);
+  return { progresses, collective, team: summarizeCollective(collective, participantIds.length, memberCount) };
 }
 
 export interface AdminGroupChallengeListItem extends GroupChallengeDTO {
   team: TeamSummary;
+  /** The shared total and its progress — COLLECTIVE challenges only, else null. */
+  collective: CollectiveProgress | null;
 }
 
 /** All of a group's challenges (newest first) with the team aggregate — the admin overview. */
@@ -182,12 +255,13 @@ export async function listGroupChallengesForAdmin(groupId: string, now: Date = n
   ]);
   return Promise.all(
     challenges.map(async (challenge) => {
-      const progresses = await teamProgress(
+      const { team, collective } = await teamProgress(
         challenge,
         challenge.participants.map((p: any) => p.userId),
+        memberCount,
         now,
       );
-      return { ...toChallengeDTO(challenge, now), team: summarizeTeam(progresses, memberCount) };
+      return { ...toChallengeDTO(challenge, now), team, collective };
     }),
   );
 }
@@ -202,6 +276,8 @@ export interface AdminParticipantRow {
 export interface AdminGroupChallengeDetail {
   challenge: GroupChallengeDTO;
   team: TeamSummary;
+  /** The shared total and its progress — COLLECTIVE challenges only, else null. */
+  collective: CollectiveProgress | null;
   /** Who joined and how far each person is — best first. */
   participants: AdminParticipantRow[];
   /** Group members who have not joined this challenge. */
@@ -229,9 +305,10 @@ export async function getGroupChallengeDetailForAdmin(
   });
 
   const participantUsers: any[] = challenge.participants.map((p: any) => p.user);
-  const progresses = await teamProgress(
+  const { progresses, collective, team } = await teamProgress(
     challenge,
     participantUsers.map((user) => user.id),
+    memberships.length,
     now,
   );
   const participants: AdminParticipantRow[] = participantUsers
@@ -251,7 +328,8 @@ export async function getGroupChallengeDetailForAdmin(
 
   return {
     challenge: toChallengeDTO(challenge, now),
-    team: summarizeTeam(participants.map((p) => p.progress), memberships.length),
+    team,
+    collective,
     participants,
     notJoined,
   };
@@ -259,8 +337,10 @@ export async function getGroupChallengeDetailForAdmin(
 
 export interface MyGroupChallengeDTO extends GroupChallengeDTO {
   joined: boolean;
-  /** The caller's own progress — null until they join. */
+  /** The caller's own progress — null until they join. COLLECTIVE: their contribution, against the team target. */
   me: MemberProgress | null;
+  /** The shared total and its progress — COLLECTIVE challenges only, else null. No other person's data. */
+  collective: CollectiveProgress | null;
   /** Aggregate only: how many joined, how many reached the goal, mean progress. No other person's data. */
   team: TeamSummary;
 }
@@ -292,13 +372,14 @@ export async function listMyGroupChallenges(
   return Promise.all(
     challenges.map(async (challenge) => {
       const participantIds: string[] = challenge.participants.map((p: any) => p.userId);
-      const progresses = await teamProgress(challenge, participantIds, now);
+      const { progresses, collective, team } = await teamProgress(challenge, participantIds, memberCount, now);
       const myIndex = participantIds.indexOf(userId);
       return {
         ...toChallengeDTO(challenge, now),
         joined: myIndex >= 0,
         me: myIndex >= 0 ? (progresses[myIndex] as MemberProgress) : null,
-        team: summarizeTeam(progresses, memberCount),
+        collective,
+        team,
       };
     }),
   );
@@ -351,10 +432,42 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
 
     try {
       const participantIds: string[] = challenge.participants.map((p: any) => p.userId);
-      const progresses = await teamProgress(challenge, participantIds, now);
       const memberCount = await prisma.groupMembership.count({ where: { groupId: challenge.groupId } });
-      const team = summarizeTeam(progresses, memberCount);
+      const { progresses, collective, team } = await teamProgress(challenge, participantIds, memberCount, now);
       const data = { groupId: challenge.groupId, challengeId: challenge.id };
+
+      if (collective) {
+        await Promise.all(
+          participantIds.map((userId, index) =>
+            createNotification(userId, {
+              type: 'GROUP_CHALLENGE_SUMMARY',
+              ...collectiveParticipantSummaryNotification({
+                groupName: challenge.group.name,
+                name: challenge.name,
+                type: challenge.type,
+                collective,
+                myContribution: (progresses[index] as MemberProgress).currentCount,
+                participants: team.participants,
+              }),
+              data,
+            }),
+          ),
+        );
+        await createNotification(challenge.createdById, {
+          type: 'GROUP_CHALLENGE_SUMMARY',
+          ...collectiveCreatorSummaryNotification({
+            groupName: challenge.group.name,
+            name: challenge.name,
+            type: challenge.type,
+            collective,
+            participants: team.participants,
+            members: team.members,
+          }),
+          data,
+        });
+        finalized += 1;
+        continue;
+      }
 
       await Promise.all(
         participantIds.map((userId, index) =>

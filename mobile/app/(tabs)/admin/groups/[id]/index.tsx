@@ -13,6 +13,7 @@ import {
   revokeGroupInvitation,
   updateAdminGroup,
   type AdminGroupChallengeListItem,
+  type GroupChallengeMode,
   type GroupChallengeType,
   type GroupDetail,
   type InviteResult,
@@ -22,8 +23,15 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
-import { GroupLogo, ProgressBar, StatusBadge } from '@/src/components/wellbeing/parts';
+import { CollectiveBar, GroupLogo, ProgressBar, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
+import {
+  COLLECTIVE_FIELDS,
+  INDIVIDUAL_DEFAULTS,
+  goalPayload,
+  typeForMode,
+  validateGoal,
+} from '@/src/wellbeing/challengeForm';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { pickLogo, type PickedLogo } from '@/src/utils/logoPicker';
 import {
@@ -275,6 +283,16 @@ function InvitationsCard({ group, onChanged }: { group: GroupDetail; onChanged: 
   );
 }
 
+const MODE_OPTIONS = [
+  { value: 'INDIVIDUAL', label: 'Personal goals' },
+  { value: 'COLLECTIVE', label: 'Team total' },
+];
+
+const MODE_HINT: Record<GroupChallengeMode, string> = {
+  INDIVIDUAL: 'Everyone has to reach their own target.',
+  COLLECTIVE: 'Everyone’s results are added up to one shared target.',
+};
+
 const TYPE_OPTIONS = [
   { value: 'DAILY_STEPS', label: 'Daily steps' },
   { value: 'SLEEP_SCORE', label: 'Sleep score' },
@@ -295,7 +313,9 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [mode, setMode] = useState<GroupChallengeMode>('INDIVIDUAL');
   const [type, setType] = useState<GroupChallengeType>('DAILY_STEPS');
+  const [targetTotal, setTargetTotal] = useState(COLLECTIVE_FIELDS.DAILY_STEPS?.default ?? '');
   const [threshold, setThreshold] = useState('8000');
   const [requiredCount, setRequiredCount] = useState('10');
   const [startDate, setStartDate] = useState(todayDay());
@@ -307,17 +327,24 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   function changeType(next: string) {
     const value = next as GroupChallengeType;
     setType(value);
-    setThreshold(value === 'DAILY_STEPS' ? '8000' : value === 'SLEEP_SCORE' ? '80' : '2');
-    setRequiredCount(value === 'WEEKLY_WORKOUTS' ? '4' : '10');
+    setThreshold(INDIVIDUAL_DEFAULTS[value][0]);
+    setRequiredCount(INDIVIDUAL_DEFAULTS[value][1]);
+    setTargetTotal(COLLECTIVE_FIELDS[value]?.default ?? '');
+  }
+
+  function changeMode(next: string) {
+    const value = next as GroupChallengeMode;
+    setMode(value);
+    // Sleep scores cannot be added up — fall back to steps when switching to a team total.
+    const adjusted = typeForMode(value, type);
+    if (adjusted !== type) changeType(adjusted);
   }
 
   async function create() {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = 'Give the challenge a name.';
-    const thresholdNumber = Number(threshold);
-    const countNumber = Number(requiredCount);
-    if (!Number.isInteger(thresholdNumber) || thresholdNumber < 1) next.threshold = 'Enter a whole number, at least 1.';
-    if (!Number.isInteger(countNumber) || countNumber < 1) next.requiredCount = 'Enter a whole number, at least 1.';
+    const goal = { mode, type, threshold, requiredCount, targetTotal };
+    Object.assign(next, validateGoal(goal));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) next.startDate = 'Use yyyy-mm-dd.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) next.endDate = 'Use yyyy-mm-dd.';
     if (!next.startDate && !next.endDate && endDate < startDate) next.endDate = 'The end cannot be before the start.';
@@ -331,8 +358,7 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         type,
-        threshold: thresholdNumber,
-        requiredCount: countNumber,
+        ...goalPayload(goal),
         startDate,
         endDate,
       });
@@ -351,6 +377,8 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
     return <Button title="New challenge" variant="outline" onPress={() => setOpen(true)} />;
   }
   const fields = TYPE_FIELDS[type];
+  const collectiveFields = mode === 'COLLECTIVE' ? COLLECTIVE_FIELDS[type] : undefined;
+  const typeOptions = mode === 'COLLECTIVE' ? TYPE_OPTIONS.filter((option) => COLLECTIVE_FIELDS[option.value as GroupChallengeType]) : TYPE_OPTIONS;
   return (
     <Card style={styles.card}>
       <Text style={styles.cardTitle}>New challenge</Text>
@@ -358,10 +386,18 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
       <TextField label="Name" value={name} onChangeText={setName} error={errors.name} maxLength={200} />
       <TextField label="Description (optional)" value={description} onChangeText={setDescription} multiline numberOfLines={2} maxLength={1000} />
-      <ChipSingleSelect label="Type" options={TYPE_OPTIONS} value={type} onChange={changeType} />
-      <Text style={styles.muted}>{fields.hint}</Text>
-      <TextField label={fields.threshold} value={threshold} onChangeText={setThreshold} keyboardType="numeric" error={errors.threshold} />
-      <TextField label={fields.count} value={requiredCount} onChangeText={setRequiredCount} keyboardType="numeric" error={errors.requiredCount} />
+      <ChipSingleSelect label="How is it won?" options={MODE_OPTIONS} value={mode} onChange={changeMode} />
+      <Text style={styles.muted}>{MODE_HINT[mode]}</Text>
+      <ChipSingleSelect label="Type" options={typeOptions} value={type} onChange={changeType} />
+      <Text style={styles.muted}>{collectiveFields ? collectiveFields.hint : fields.hint}</Text>
+      {collectiveFields ? (
+        <TextField label={collectiveFields.label} value={targetTotal} onChangeText={setTargetTotal} keyboardType="numeric" error={errors.targetTotal} />
+      ) : (
+        <>
+          <TextField label={fields.threshold} value={threshold} onChangeText={setThreshold} keyboardType="numeric" error={errors.threshold} />
+          <TextField label={fields.count} value={requiredCount} onChangeText={setRequiredCount} keyboardType="numeric" error={errors.requiredCount} />
+        </>
+      )}
       <TextField label="First day (yyyy-mm-dd)" value={startDate} onChangeText={setStartDate} autoCapitalize="none" error={errors.startDate} />
       <TextField label="Last day (yyyy-mm-dd)" value={endDate} onChangeText={setEndDate} autoCapitalize="none" error={errors.endDate} />
       <View style={styles.buttonRow}>
@@ -403,8 +439,14 @@ function ChallengesCard({
               {formatDateRange(challenge.startDate, challenge.endDate)}
               {daysLeftLabel(challenge.daysRemaining) ? ` · ${daysLeftLabel(challenge.daysRemaining)}` : ''}
             </Text>
-            <ProgressBar percent={challenge.team.averagePercent} />
-            <Text style={styles.muted}>{teamStatusLine(challenge.team)}</Text>
+            {challenge.collective ? (
+              <CollectiveBar type={challenge.type} collective={challenge.collective} />
+            ) : (
+              <>
+                <ProgressBar percent={challenge.team.averagePercent} />
+                <Text style={styles.muted}>{teamStatusLine(challenge.team)}</Text>
+              </>
+            )}
             <Text style={styles.muted}>
               {challenge.team.participants} of {challenge.team.members} members joined
             </Text>

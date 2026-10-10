@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addDays,
+  collectiveAmountLabel,
+  collectiveLine,
+  contributionLine,
   daysLeftLabel,
+  formatAmount,
   displayName,
   formatDateRange,
   formatDay,
@@ -57,6 +61,29 @@ describe('format helpers', () => {
     expect(parseEmails('A@x.hu, b@x.hu;\n a@X.hu  c@x.hu')).toEqual(['a@x.hu', 'b@x.hu', 'c@x.hu']);
     expect(isLikelyEmail('a@b.hu')).toBe(true);
     expect(isLikelyEmail('a@b')).toBe(false);
+  });
+});
+
+describe('team-total (collective) challenge labels', () => {
+  it('groups thousands with plain spaces', () => {
+    expect(formatAmount(0)).toBe('0');
+    expect(formatAmount(999)).toBe('999');
+    expect(formatAmount(1000)).toBe('1 000');
+    expect(formatAmount(100000)).toBe('100 000');
+    expect(formatAmount(12345678)).toBe('12 345 678');
+  });
+  it('uses the right unit', () => {
+    expect(collectiveAmountLabel('DAILY_STEPS', 100000)).toBe('100 000 steps');
+    expect(collectiveAmountLabel('WEEKLY_WORKOUTS', 1)).toBe('1 workout');
+    expect(collectiveAmountLabel('WEEKLY_WORKOUTS', 40)).toBe('40 workouts');
+  });
+  it('shows the team total and whether the goal is reached', () => {
+    expect(collectiveLine('DAILY_STEPS', { total: 75000, targetTotal: 100000, percent: 75, reached: false })).toBe('75 000 of 100 000 steps · 75%');
+    expect(collectiveLine('WEEKLY_WORKOUTS', { total: 41, targetTotal: 40, percent: 100, reached: true })).toBe('41 of 40 workouts · goal reached');
+  });
+  it('shows a person\'s share of the target, capped at 100%', () => {
+    expect(contributionLine('DAILY_STEPS', 12300, 100000)).toBe('12 300 steps · 12% of the team target');
+    expect(contributionLine('DAILY_STEPS', 150000, 100000)).toBe('150 000 steps · 100% of the team target');
   });
 });
 
