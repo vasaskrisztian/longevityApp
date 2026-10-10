@@ -56,6 +56,10 @@ export const MANUAL_SYNC_RATE_LIMIT = { windowMs: 5 * 60 * 1000, max: 1 };
 // design, see claude/phase-15-mobile-migration-plan.md). A background sync
 // plus an occasional manual "sync now" tap is the expected traffic shape;
 // generous enough for both without leaving the endpoint unbounded.
+// Login-time auto sync: the staleness gate in session-sync.service.ts is what
+// actually prevents duplicate jobs; this only bounds how often one user can
+// make the endpoint do its (cheap) DB lookups.
+export const SESSION_SYNC_RATE_LIMIT = { windowMs: 60 * 1000, max: 10 };
 export const APPLE_HEALTH_INGEST_RATE_LIMIT = { windowMs: 60 * 1000, max: 2 };
 
 export function getClientIdentifier(request: Request): string {

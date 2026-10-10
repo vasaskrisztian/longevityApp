@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useDeviceDataVersion } from '@/src/health/deviceSyncStore';
 import { getTrends, type TrendPoint, type TrendRangeDays } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
@@ -88,9 +89,17 @@ export default function TrendsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
 
+  // Goes up when the login-time device sync has brought in new data: reload quietly (no spinner).
+  const deviceDataVersion = useDeviceDataVersion();
+  const lastLoad = useRef<{ range: TrendRangeDays; version: number } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // The first load and range changes show the spinner; only a device-sync bump of the same range is quiet.
+    const previous = lastLoad.current;
+    const silent = previous !== null && previous.range === range && previous.version !== deviceDataVersion;
+    lastLoad.current = { range, version: deviceDataVersion };
+    if (!silent) setLoading(true);
     setError(null);
     getTrends(range)
       .then((data) => {
@@ -105,7 +114,7 @@ export default function TrendsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [range, deviceDataVersion]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

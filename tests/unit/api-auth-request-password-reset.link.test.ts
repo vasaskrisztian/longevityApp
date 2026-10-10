@@ -38,13 +38,13 @@ describe('password-reset email link target', () => {
     process.env.APP_URL = 'https://api.example.com';
     process.env.WEB_APP_URL = 'https://web.example.com';
     await post();
-    expect(sendEmailMock.mock.calls[0][0].text).toContain('https://web.example.com/reset-password?token=tok123');
+    expect(sendEmailMock.mock.calls[0]?.[0]?.text).toContain('https://web.example.com/reset-password?token=tok123');
   });
 
   it('keeps using APP_URL when WEB_APP_URL is unset', async () => {
     process.env.APP_URL = 'https://api.example.com';
     delete process.env.WEB_APP_URL;
     await post();
-    expect(sendEmailMock.mock.calls[0][0].text).toContain('https://api.example.com/reset-password?token=tok123');
+    expect(sendEmailMock.mock.calls[0]?.[0]?.text).toContain('https://api.example.com/reset-password?token=tok123');
   });
 });

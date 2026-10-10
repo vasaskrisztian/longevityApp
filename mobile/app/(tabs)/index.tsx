@@ -4,6 +4,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { getDashboardSnapshot, getProtocolOverlay, type DashboardSnapshot, type ProtocolOverlay } from '@/src/api/dashboard';
 import { getConnections, type ConnectionSummary } from '@/src/api/wearables';
 import { getProfileBundle } from '@/src/api/profile';
+import { useDeviceDataVersion, useDeviceSyncing } from '@/src/health/deviceSyncStore';
 import { Card } from '@/src/components/ui/Card';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
@@ -20,6 +21,10 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  * model — Readiness/Activity/HRV/Resting HR/Steps never show a target,
  * same as web).
  */
+
+function describeDevice(name: string, connection: ConnectionSummary): string {
+  return `${name}: connected${connection.lastSyncAt ? ` · last synced ${new Date(connection.lastSyncAt).toLocaleString()}` : ''}`;
+}
 
 function formatSleepDuration(totalMinutes: number | null): string | null {
   if (totalMinutes === null) return null;
@@ -71,6 +76,7 @@ function ScoreCard({
 interface DashboardState {
   snapshot: DashboardSnapshot | null;
   ouraConnection: ConnectionSummary | null;
+  appleHealthConnection: ConnectionSummary | null;
   firstName: string | null;
   protocolOverlay: ProtocolOverlay | null;
 }
@@ -80,9 +86,14 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Goes up when the login-time device sync (health/useDeviceAutoSync) has brought in new data.
+  const deviceDataVersion = useDeviceDataVersion();
+  const deviceSyncing = useDeviceSyncing();
 
-  const load = useCallback(async (isRefresh: boolean) => {
-    if (isRefresh) {
+  const load = useCallback(async (isRefresh: boolean, silent = false) => {
+    if (silent) {
+      // Background reload after a device sync: no spinner, keep what is on screen.
+    } else if (isRefresh) {
       setRefreshing(true);
     } else {
       setLoading(true);
@@ -98,13 +109,16 @@ export default function DashboardScreen() {
       setState({
         snapshot,
         ouraConnection: connections.find((c) => c.provider === 'OURA') ?? null,
+        appleHealthConnection: connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null,
         firstName: profileBundle.profile?.fullName?.split(' ')[0] ?? null,
         protocolOverlay,
       });
     } catch {
       setError('Could not load your dashboard. Pull down to try again.');
     } finally {
-      if (isRefresh) {
+      if (silent) {
+        // nothing to reset
+      } else if (isRefresh) {
         setRefreshing(false);
       } else {
         setLoading(false);
@@ -113,8 +127,9 @@ export default function DashboardScreen() {
   }, []);
 
   useEffect(() => {
-    load(false);
-  }, [load]);
+    // First mount loads with the spinner; later bumps (fresh device data) reload silently.
+    load(false, deviceDataVersion > 0);
+  }, [load, deviceDataVersion]);
 
   if (loading) {
     return (
@@ -126,6 +141,11 @@ export default function DashboardScreen() {
 
   const snapshot = state?.snapshot ?? null;
   const connection = state?.ouraConnection ?? null;
+  const appleConnection = state?.appleHealthConnection ?? null;
+  const deviceLines = [
+    connection?.status === 'CONNECTED' ? describeDevice('Oura', connection) : null,
+    appleConnection?.status === 'CONNECTED' ? describeDevice('Apple Health', appleConnection) : null,
+  ].filter((line): line is string => line !== null);
   const activeProtocol = state?.protocolOverlay?.activeProtocol ?? null;
   const weeklyWorkoutCount = state?.protocolOverlay?.weeklyWorkoutCount ?? null;
   const sleepDuration = formatSleepDuration(snapshot?.totalSleepMinutes ?? null);
@@ -140,10 +160,9 @@ export default function DashboardScreen() {
       <View>
         <Text style={styles.title}>{state?.firstName ? `Hi, ${state.firstName}` : 'Dashboard'}</Text>
         <Text style={styles.subtitle}>
-          {connection?.status === 'CONNECTED'
-            ? `Oura: connected${connection.lastSyncAt ? ` · last synced ${new Date(connection.lastSyncAt).toLocaleString()}` : ''}`
-            : 'No wearable connected yet.'}
+          {deviceLines.length > 0 ? deviceLines.join('\n') : 'No wearable connected yet.'}
         </Text>
+        {deviceSyncing ? <Text style={styles.scoreHint}>Syncing your devices…</Text> : null}
       </View>
 
       {error ? (

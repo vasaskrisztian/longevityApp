@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchJson } from '@/src/api/client';
+import type { SessionSyncResponse } from '@/src/health/sessionSyncFlow';
 
 /** Mirrors modules/wearable/domain/wearable-provider.types.ts's ConnectionSummary. */
 export interface ConnectionSummary {
@@ -46,4 +47,14 @@ export async function disconnectOura(): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to disconnect Oura (${response.status}).`);
   }
+}
+
+/**
+ * POST /api/wearables/session-sync — "the user just opened the app": the
+ * server queues a sync for every stale server-pulled device (Oura) and tells
+ * a connected Apple Health (status `device_push`) that this phone should
+ * push now. See health/useDeviceAutoSync.ts.
+ */
+export function requestSessionSync(): Promise<SessionSyncResponse> {
+  return apiFetchJson<SessionSyncResponse>('/api/wearables/session-sync', { method: 'POST' });
 }

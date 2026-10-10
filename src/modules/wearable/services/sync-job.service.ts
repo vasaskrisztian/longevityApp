@@ -109,6 +109,26 @@ export async function getLatestSyncJobForConnection(
   return job ?? null;
 }
 
+/**
+ * The newest QUEUED/RUNNING job for a connection that was created at or after
+ * `since` — used by the login-time auto sync to avoid piling a second job on
+ * top of one that is already waiting for / inside the worker. Jobs older than
+ * `since` that never settled are treated as abandoned (the watchdog in
+ * sync-job-runner.service.ts normally closes them, but a lost queue message
+ * would otherwise block every future auto sync).
+ */
+export async function findActiveSyncJobForConnection(
+  connectionId: string,
+  since: Date,
+): Promise<{ id: string } | null> {
+  const job = await prisma.syncJob.findFirst({
+    where: { connectionId, status: { in: ['QUEUED', 'RUNNING'] }, createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  return job ?? null;
+}
+
 /** Marks a job RUNNING and stamps startedAt — called once per attempt, including retries. */
 export async function markSyncJobRunning(jobId: string): Promise<void> {
   await prisma.syncJob.update({

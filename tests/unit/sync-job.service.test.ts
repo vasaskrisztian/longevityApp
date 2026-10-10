@@ -284,3 +284,27 @@ describe('completeSyncJobIfStillRunning', () => {
     expect(applied).toBe(false);
   });
 });
+
+describe('findActiveSyncJobForConnection', () => {
+  it('looks for QUEUED/RUNNING jobs of the connection created since the cutoff', async () => {
+    const { findActiveSyncJobForConnection } = await import('@/modules/wearable/services/sync-job.service');
+    prismaMock.syncJob.findFirst.mockResolvedValue({ id: 'job-live' });
+    const since = new Date('2026-10-10T11:45:00.000Z');
+
+    const result = await findActiveSyncJobForConnection('conn-1', since);
+
+    expect(result).toEqual({ id: 'job-live' });
+    expect(prismaMock.syncJob.findFirst).toHaveBeenCalledWith({
+      where: { connectionId: 'conn-1', status: { in: ['QUEUED', 'RUNNING'] }, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+  });
+
+  it('returns null when nothing is in flight', async () => {
+    const { findActiveSyncJobForConnection } = await import('@/modules/wearable/services/sync-job.service');
+    prismaMock.syncJob.findFirst.mockResolvedValue(null);
+
+    expect(await findActiveSyncJobForConnection('conn-1', new Date())).toBeNull();
+  });
+});
