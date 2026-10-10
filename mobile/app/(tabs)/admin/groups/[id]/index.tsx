@@ -30,6 +30,7 @@ import {
   INDIVIDUAL_DEFAULTS,
   goalPayload,
   typeForMode,
+  typeOptionsFor,
   validateGoal,
 } from '@/src/wellbeing/challengeForm';
 import { confirmDestructive } from '@/src/utils/confirm';
@@ -378,7 +379,7 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   }
   const fields = TYPE_FIELDS[type];
   const collectiveFields = mode === 'COLLECTIVE' ? COLLECTIVE_FIELDS[type] : undefined;
-  const typeOptions = mode === 'COLLECTIVE' ? TYPE_OPTIONS.filter((option) => COLLECTIVE_FIELDS[option.value as GroupChallengeType]) : TYPE_OPTIONS;
+  const typeOptions = typeOptionsFor(mode, TYPE_OPTIONS);
   return (
     <Card style={styles.card}>
       <Text style={styles.cardTitle}>New challenge</Text>

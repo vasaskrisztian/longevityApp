@@ -311,15 +311,17 @@ const TYPE_FIELDS: Record<GroupChallengeType, { label: string; threshold: string
 };
 
 /** Team-total challenges: what the shared number is called and a sensible starting value, per metric. */
-const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { label: string; hint: string; default: string }>> = {
+const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { typeLabel: string; label: string; hint: string; default: string }>> = {
   DAILY_STEPS: {
+    typeLabel: 'Steps',
     label: 'Team total of steps',
-    hint: 'The steps of everyone who joins are added up over the whole period.',
+    hint: 'All steps of everyone who joins are added up between the first and the last day — there is no daily target, only the total counts.',
     default: '100000',
   },
   WEEKLY_WORKOUTS: {
+    typeLabel: 'Workouts',
     label: 'Team total of workouts',
-    hint: 'The workouts of everyone who joins are added up over the whole period.',
+    hint: 'All workouts of everyone who joins are added up between the first and the last day — there is no weekly target, only the total counts.',
     default: '40',
   },
 };
@@ -444,7 +446,7 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
             <Select id="ch-type" value={type} onChange={(e) => changeType(e.target.value as GroupChallengeType)}>
               {typeKeys.map((key) => (
                 <option key={key} value={key}>
-                  {TYPE_FIELDS[key].label}
+                  {mode === 'COLLECTIVE' ? (COLLECTIVE_FIELDS[key]?.typeLabel ?? TYPE_FIELDS[key].label) : TYPE_FIELDS[key].label}
                 </option>
               ))}
             </Select>

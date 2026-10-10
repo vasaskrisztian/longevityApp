@@ -3,15 +3,17 @@ import type { CreateGroupChallengeInput, GroupChallengeMode, GroupChallengeType 
 /** Metrics whose results can be added up across people (sleep scores cannot). */
 export const COLLECTIVE_TYPES: GroupChallengeType[] = ['DAILY_STEPS', 'WEEKLY_WORKOUTS'];
 
-export const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { label: string; hint: string; default: string }>> = {
+export const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { typeLabel: string; label: string; hint: string; default: string }>> = {
   DAILY_STEPS: {
+    typeLabel: 'Steps',
     label: 'Team total of steps',
-    hint: 'The steps of everyone who joins are added up over the whole period.',
+    hint: 'All steps of everyone who joins are added up between the first and the last day — there is no daily target, only the total counts.',
     default: '100000',
   },
   WEEKLY_WORKOUTS: {
+    typeLabel: 'Workouts',
     label: 'Team total of workouts',
-    hint: 'The workouts of everyone who joins are added up over the whole period.',
+    hint: 'All workouts of everyone who joins are added up between the first and the last day — there is no weekly target, only the total counts.',
     default: '40',
   },
 };
@@ -22,6 +24,17 @@ export const INDIVIDUAL_DEFAULTS: Record<GroupChallengeType, [string, string]> =
   SLEEP_SCORE: ['80', '10'],
   WEEKLY_WORKOUTS: ['2', '4'],
 };
+
+/** The type chips of the create form: a team total is "Steps" / "Workouts", not "Daily steps" / "Weekly workouts" (there is no per-day or per-week target). */
+export function typeOptionsFor(
+  mode: GroupChallengeMode,
+  options: { value: string; label: string }[],
+): { value: string; label: string }[] {
+  if (mode !== 'COLLECTIVE') return options;
+  return options
+    .filter((option) => COLLECTIVE_FIELDS[option.value as GroupChallengeType])
+    .map((option) => ({ value: option.value, label: COLLECTIVE_FIELDS[option.value as GroupChallengeType]!.typeLabel }));
+}
 
 /** The type to use after switching the mode: a team total cannot be a sleep score. */
 export function typeForMode(mode: GroupChallengeMode, type: GroupChallengeType): GroupChallengeType {

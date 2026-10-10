@@ -1,4 +1,4 @@
-import { COLLECTIVE_FIELDS, goalPayload, typeForMode, validateGoal } from '../challengeForm';
+import { COLLECTIVE_FIELDS, goalPayload, typeForMode, typeOptionsFor, validateGoal } from '../challengeForm';
 
 const values = {
   mode: 'INDIVIDUAL' as const,
@@ -37,5 +37,18 @@ describe('challenge form helpers', () => {
   it('builds the request body for each mode', () => {
     expect(goalPayload(values)).toEqual({ mode: 'INDIVIDUAL', threshold: 8000, requiredCount: 10 });
     expect(goalPayload({ ...values, mode: 'COLLECTIVE', targetTotal: '100 000' })).toEqual({ mode: 'COLLECTIVE', targetTotal: 100000 });
+  });
+
+  it('a team total offers "Steps" and "Workouts" (no daily/weekly wording, no sleep score)', () => {
+    const all = [
+      { value: 'DAILY_STEPS', label: 'Daily steps' },
+      { value: 'SLEEP_SCORE', label: 'Sleep score' },
+      { value: 'WEEKLY_WORKOUTS', label: 'Weekly workouts' },
+    ];
+    expect(typeOptionsFor('INDIVIDUAL', all)).toEqual(all);
+    expect(typeOptionsFor('COLLECTIVE', all)).toEqual([
+      { value: 'DAILY_STEPS', label: 'Steps' },
+      { value: 'WEEKLY_WORKOUTS', label: 'Workouts' },
+    ]);
   });
 });
