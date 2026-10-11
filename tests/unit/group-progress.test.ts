@@ -13,6 +13,7 @@ import {
   groupChallengeStatus,
   memberProgress,
   newChallengeNotification,
+  participantFirstDay,
   participantSummaryNotification,
   summarizeTeam,
 } from '@/modules/groups/group-progress';
@@ -194,5 +195,19 @@ describe('team chart series and the goal-reached notification', () => {
     expect(people.body).toContain('103 500 steps (target 100 000) with 6 days still to go');
     expect(goalReachedNotification({ ...base, daysRemaining: 1, audience: 'participant' }).body).toContain('on the last day');
     expect(goalReachedNotification({ ...base, daysRemaining: 2, audience: 'creator' }).body).toContain('has reached the target of "October walk"');
+  });
+});
+
+describe('participantFirstDay', () => {
+  it('is the joining day (UTC midnight of that date) in the person\'s time zone', () => {
+    expect(participantFirstDay({ joinedAt: at('2026-10-12T07:30:00Z') })).toEqual(at('2026-10-12T00:00:00Z'));
+    expect(participantFirstDay({ joinedAt: at('2026-10-11T22:30:00Z'), timezone: 'Europe/Budapest' })).toEqual(at('2026-10-12T00:00:00Z'));
+    expect(participantFirstDay({ joinedAt: at('2026-10-12T01:00:00Z'), timezone: 'America/New_York' })).toEqual(at('2026-10-11T00:00:00Z'));
+  });
+  it('can start the day after (sleep scores)', () => {
+    expect(participantFirstDay({ joinedAt: at('2026-10-12T07:30:00Z') }, { afterJoinDay: true })).toEqual(at('2026-10-13T00:00:00Z'));
+  });
+  it('falls back to UTC for an unknown time zone', () => {
+    expect(participantFirstDay({ joinedAt: at('2026-10-12T07:30:00Z'), timezone: 'Not/AZone' })).toEqual(at('2026-10-12T00:00:00Z'));
   });
 });

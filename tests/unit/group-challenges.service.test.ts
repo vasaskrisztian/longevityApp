@@ -4,7 +4,7 @@ const prismaMock = {
   wellbeingGroup: { findUnique: vi.fn() },
   groupMembership: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
   groupChallenge: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), delete: vi.fn(), updateMany: vi.fn() },
-  groupChallengeParticipant: { upsert: vi.fn(), deleteMany: vi.fn() },
+  groupChallengeParticipant: { upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/logging/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -58,6 +58,7 @@ beforeEach(() => {
   countQualifyingPeriodsFor.mockResolvedValue(0);
   sumMetricFor.mockResolvedValue(0);
   dailyTotalsFor.mockResolvedValue(new Map());
+  prismaMock.groupChallengeParticipant.findMany.mockResolvedValue([]);
 });
 
 describe('toChallengeDTO', () => {
@@ -98,6 +99,65 @@ describe('computeParticipantProgress', () => {
     const progress = await computeParticipantProgress(challengeRow() as never, 'u1', new Date('2026-10-01T00:00:00Z'));
     expect(countQualifyingPeriodsFor).not.toHaveBeenCalled();
     expect(progress.currentCount).toBe(0);
+  });
+});
+
+describe('computeParticipantProgress — only data from after joining counts', () => {
+  const join = (iso: string, timezone: string | null = null) => ({ joinedAt: new Date(iso), timezone });
+
+  it('starts an individual steps count on the day the person joined, not at the challenge start', async () => {
+    await computeParticipantProgress(challengeRow() as never, 'u1', NOW, join('2026-10-12T07:30:00Z'));
+    expect(countQualifyingPeriodsFor).toHaveBeenCalledWith(
+      expect.objectContaining({ from: new Date('2026-10-12T00:00:00Z'), to: NOW, since: new Date('2026-10-12T07:30:00Z') }),
+    );
+  });
+
+  it('sleep scores start the day after joining (last night was before joining)', async () => {
+    await computeParticipantProgress(challengeRow({ type: 'SLEEP_SCORE', threshold: 80 }) as never, 'u1', new Date('2026-10-14T09:00:00Z'), join('2026-10-12T07:30:00Z'));
+    expect(countQualifyingPeriodsFor.mock.calls[0]![0].from).toEqual(new Date('2026-10-13T00:00:00Z'));
+  });
+
+  it('counts nothing yet when the first countable day has not begun (sleep score, joined today)', async () => {
+    const progress = await computeParticipantProgress(challengeRow({ type: 'SLEEP_SCORE', threshold: 80 }) as never, 'u1', NOW, join('2026-10-12T07:30:00Z'));
+    expect(countQualifyingPeriodsFor).not.toHaveBeenCalled();
+    expect(progress.currentCount).toBe(0);
+  });
+
+  it('keeps the challenge start when the person joined before it started', async () => {
+    await computeParticipantProgress(challengeRow() as never, 'u1', NOW, join('2026-10-01T10:00:00Z'));
+    expect(countQualifyingPeriodsFor.mock.calls[0]![0].from).toEqual(new Date('2026-10-10T00:00:00Z'));
+  });
+
+  it('a team-total contribution ignores everything before the joining day (and workouts before the joining moment)', async () => {
+    sumMetricFor.mockResolvedValue(25_000);
+    const collective = challengeRow({ mode: 'COLLECTIVE', targetTotal: 100_000, threshold: 0, requiredCount: 1 });
+    await computeParticipantProgress(collective as never, 'u1', NOW, join('2026-10-12T07:30:00Z'));
+    expect(sumMetricFor).toHaveBeenCalledWith({
+      userId: 'u1',
+      type: 'DAILY_STEPS',
+      from: new Date('2026-10-12T00:00:00Z'),
+      to: NOW,
+      since: new Date('2026-10-12T07:30:00Z'),
+    });
+  });
+
+  it('uses the person\'s own calendar day: joining at 00:30 in Budapest is still the previous day in UTC', async () => {
+    await computeParticipantProgress(challengeRow() as never, 'u1', NOW, join('2026-10-11T22:30:00Z', 'Europe/Budapest'));
+    expect(countQualifyingPeriodsFor.mock.calls[0]![0].from).toEqual(new Date('2026-10-12T00:00:00Z'));
+  });
+});
+
+describe('member view uses each participant\'s joining time', () => {
+  it('looks the joining moments up and passes them to the progress calculation', async () => {
+    prismaMock.groupMembership.findUnique.mockResolvedValue({ id: 'm' });
+    prismaMock.groupMembership.count.mockResolvedValue(2);
+    prismaMock.groupChallenge.findMany.mockResolvedValue([challengeRow({ participants: [{ userId: 'u1' }] })]);
+    prismaMock.groupChallengeParticipant.findMany.mockResolvedValue([
+      { userId: 'u1', createdAt: new Date('2026-10-12T07:30:00Z'), user: { profile: { timezone: 'UTC' } } },
+    ]);
+    countQualifyingPeriodsFor.mockResolvedValue(1);
+    await listMyGroupChallenges('u1', 'g1', NOW);
+    expect(countQualifyingPeriodsFor.mock.calls[0]![0].from).toEqual(new Date('2026-10-12T00:00:00Z'));
   });
 });
 
@@ -439,14 +499,18 @@ describe('collective (team total) group challenges', () => {
   });
 
   it('admin detail and member view carry the team chart series (aggregate per day), individual challenges none', async () => {
-    dailyTotalsFor.mockResolvedValue(new Map([['2026-10-10', 10_000], ['2026-10-12', 5_000]]));
+    dailyTotalsFor.mockImplementation(async ({ userIds }: { userIds: string[] }) =>
+      userIds[0] === 'u1' ? new Map([['2026-10-10', 10_000], ['2026-10-12', 5_000]]) : new Map(),
+    );
     prismaMock.groupChallenge.findUnique.mockResolvedValue(collectiveRow({ participants: [{ user: user('u1') }, { user: user('u2') }] }));
     prismaMock.groupMembership.findMany.mockResolvedValue([{ user: user('u1') }, { user: user('u2') }]);
 
     const detail = await getGroupChallengeDetailForAdmin('g1', 'c1', NOW);
 
+    // Summed per person (each from their own joining day), so one call per participant.
+    expect(dailyTotalsFor).toHaveBeenCalledTimes(2);
     expect(dailyTotalsFor).toHaveBeenCalledWith({
-      userIds: ['u1', 'u2'],
+      userIds: ['u1'],
       type: 'DAILY_STEPS',
       from: new Date('2026-10-10T00:00:00Z'),
       to: NOW,

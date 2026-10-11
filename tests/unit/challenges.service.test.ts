@@ -369,6 +369,29 @@ describe('sumMetricFor (team-total group challenges)', () => {
       startedAt: { gte: new Date('2026-10-01T00:00:00Z'), lt: new Date('2026-10-13T00:00:00Z') },
     });
   });
+  it('ignores workouts that started before the `since` moment (e.g. before the person joined), but not steps\' day granularity', async () => {
+    prismaMock.workout.findMany.mockResolvedValue(sessions(1));
+    await sumMetricFor({
+      userId: 'u1',
+      type: 'WEEKLY_WORKOUTS',
+      from: new Date('2026-10-12T00:00:00Z'),
+      to: new Date('2026-10-12T09:00:00Z'),
+      since: new Date('2026-10-12T07:30:00Z'),
+    });
+    expect(prismaMock.workout.findMany.mock.calls[0]![0].where.startedAt.gte).toEqual(new Date('2026-10-12T07:30:00Z'));
+  });
+
+  it('a `since` earlier than the window start changes nothing', async () => {
+    prismaMock.workout.findMany.mockResolvedValue(sessions(1));
+    await sumMetricFor({
+      userId: 'u1',
+      type: 'WEEKLY_WORKOUTS',
+      from: new Date('2026-10-12T00:00:00Z'),
+      to: new Date('2026-10-12T09:00:00Z'),
+      since: new Date('2026-10-01T07:30:00Z'),
+    });
+    expect(prismaMock.workout.findMany.mock.calls[0]![0].where.startedAt.gte).toEqual(new Date('2026-10-12T00:00:00Z'));
+  });
 });
 
 describe('dailyTotalsFor (team chart of a collective group challenge)', () => {

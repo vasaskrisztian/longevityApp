@@ -18,6 +18,36 @@ export function groupChallengeStatus(
   return 'ACTIVE';
 }
 
+/** When a participant joined and in which time zone their days are counted. */
+export interface ParticipantJoin {
+  joinedAt: Date;
+  timezone?: string | null;
+}
+
+/**
+ * First calendar day (UTC midnight of that date) a participant's data counts
+ * from: the day they joined, in their own time zone. Data is stored per day, so
+ * the joining day itself cannot be split into before/after and counts as a
+ * whole; everything earlier is history and never counts. Sleep scores are the
+ * exception — the score dated a day is last night's sleep, which was over
+ * before the person joined — so those start the day after (`afterJoinDay`).
+ */
+export function participantFirstDay(join: ParticipantJoin, options: { afterJoinDay?: boolean } = {}): Date {
+  let day: string;
+  try {
+    day = new Intl.DateTimeFormat('en-CA', {
+      timeZone: join.timezone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(join.joinedAt);
+  } catch {
+    day = join.joinedAt.toISOString().slice(0, 10);
+  }
+  const first = new Date(`${day}T00:00:00.000Z`);
+  return options.afterJoinDay ? new Date(first.getTime() + 24 * 60 * 60 * 1000) : first;
+}
+
 export interface MemberProgress {
   currentCount: number;
   requiredCount: number;

@@ -14,6 +14,11 @@ import type { CreateChallengeInput, UpdateChallengeInput } from '@/lib/validatio
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** The later of a date and an optional lower bound. */
+function laterOf(date: Date, since?: Date): Date {
+  return since && since.getTime() > date.getTime() ? since : date;
+}
+
 function utcMidnight(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
@@ -64,6 +69,7 @@ async function countQualifyingWeeks(
   from: Date,
   to: Date,
   threshold: number,
+  since?: Date,
 ): Promise<number> {
   const windowStart = utcMidnight(from);
   const windowEndExclusive = new Date(utcMidnight(to).getTime() + DAY_MS);
@@ -80,7 +86,7 @@ async function countQualifyingWeeks(
     chunks.map((chunk) =>
       prisma.workout
         .findMany({
-          where: { userId, startedAt: { gte: chunk.start, lt: chunk.end } },
+          where: { userId, startedAt: { gte: laterOf(chunk.start, since), lt: chunk.end } },
           select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
         })
         .then(countDistinctWorkouts),
@@ -100,15 +106,17 @@ export async function countQualifyingPeriodsFor(params: {
   threshold: number;
   from: Date;
   to: Date;
+  /** Workouts only: ignore anything that started before this exact moment (e.g. when the person joined). */
+  since?: Date;
 }): Promise<number> {
-  const { userId, type, threshold, from, to } = params;
+  const { userId, type, threshold, from, to, since } = params;
   switch (type) {
     case 'SLEEP_SCORE':
       return countQualifyingDays(userId, 'sleepScore', from, to, threshold);
     case 'DAILY_STEPS':
       return countQualifyingDays(userId, 'steps', from, to, threshold);
     case 'WEEKLY_WORKOUTS':
-      return countQualifyingWeeks(userId, from, to, threshold);
+      return countQualifyingWeeks(userId, from, to, threshold, since);
     default:
       // Exhaustiveness guard — a new ChallengeType added to the enum without
       // a case here would otherwise silently return 0 forever.
@@ -127,8 +135,10 @@ export async function sumMetricFor(params: {
   type: 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
   from: Date;
   to: Date;
+  /** Workouts only: ignore anything that started before this exact moment (e.g. when the person joined). */
+  since?: Date;
 }): Promise<number> {
-  const { userId, type, from, to } = params;
+  const { userId, type, from, to, since } = params;
   if (type === 'DAILY_STEPS') {
     const result = await prisma.dailyHealthMetric.aggregate({
       where: { userId, date: { gte: utcMidnight(from), lte: utcMidnight(to) } },
@@ -137,7 +147,7 @@ export async function sumMetricFor(params: {
     return result._sum.steps ?? 0;
   }
   const workouts = await prisma.workout.findMany({
-    where: { userId, startedAt: { gte: utcMidnight(from), lt: new Date(utcMidnight(to).getTime() + DAY_MS) } },
+    where: { userId, startedAt: { gte: laterOf(utcMidnight(from), since), lt: new Date(utcMidnight(to).getTime() + DAY_MS) } },
     select: { startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
   });
   return countDistinctWorkouts(workouts);
@@ -154,8 +164,10 @@ export async function dailyTotalsFor(params: {
   type: 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
   from: Date;
   to: Date;
+  /** Workouts only: ignore anything that started before this exact moment (e.g. when the person joined). */
+  since?: Date;
 }): Promise<Map<string, number>> {
-  const { userIds, type, from, to } = params;
+  const { userIds, type, from, to, since } = params;
   const totals = new Map<string, number>();
   if (userIds.length === 0) return totals;
   const add = (day: string, amount: number) => totals.set(day, (totals.get(day) ?? 0) + amount);
@@ -173,7 +185,7 @@ export async function dailyTotalsFor(params: {
   const workouts = await prisma.workout.findMany({
     where: {
       userId: { in: userIds },
-      startedAt: { gte: utcMidnight(from), lt: new Date(utcMidnight(to).getTime() + DAY_MS) },
+      startedAt: { gte: laterOf(utcMidnight(from), since), lt: new Date(utcMidnight(to).getTime() + DAY_MS) },
     },
     select: { userId: true, startedAt: true, endedAt: true, durationMin: true, activityType: true, source: true },
   });

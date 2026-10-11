@@ -16,6 +16,7 @@ import {
   groupChallengeStatus,
   memberProgress,
   newChallengeNotification,
+  participantFirstDay,
   participantSummaryNotification,
   summarizeCollective,
   summarizeTeam,
@@ -25,6 +26,7 @@ import {
   type GroupChallengeStatus,
   type GroupChallengeType,
   type MemberProgress,
+  type ParticipantJoin,
   type TeamSummary,
 } from './group-progress';
 import type { CreateGroupChallengeInput as ParsedGroupChallengeInput } from '@/lib/validation/group.schemas';
@@ -105,6 +107,37 @@ function countingWindow(challenge: { startsAt: Date; endsAt: Date }, now: Date):
 }
 
 /**
+ * A participant's own counting window: the challenge window, but never before
+ * the day they joined — only data from after joining takes part (see
+ * participantFirstDay). Null when nothing can count yet.
+ */
+function personalWindow(
+  challenge: { type: GroupChallengeType; startsAt: Date; endsAt: Date },
+  now: Date,
+  join?: ParticipantJoin,
+): { from: Date; to: Date } | null {
+  const window = countingWindow(challenge, now);
+  if (!window || !join) return window;
+  const first = participantFirstDay(join, { afterJoinDay: challenge.type === 'SLEEP_SCORE' });
+  const from = first.getTime() > window.from.getTime() ? first : window.from;
+  return from.getTime() > window.to.getTime() ? null : { from, to: window.to };
+}
+
+/** Joining moment and time zone of each participant (one query per challenge). */
+async function loadJoins(challengeId: string | undefined, userIds: string[]): Promise<Map<string, ParticipantJoin>> {
+  const joins = new Map<string, ParticipantJoin>();
+  if (!challengeId || userIds.length === 0) return joins;
+  const rows: any[] = await prisma.groupChallengeParticipant.findMany({
+    where: { challengeId, userId: { in: userIds } },
+    select: { userId: true, createdAt: true, user: { select: { profile: { select: { timezone: true } } } } },
+  });
+  for (const row of rows ?? []) {
+    joins.set(row.userId, { joinedAt: row.createdAt, timezone: row.user?.profile?.timezone ?? null });
+  }
+  return joins;
+}
+
+/**
  * One person's result: the qualifying-period count towards their own goal
  * (INDIVIDUAL), or their contribution to the shared total, shown against the
  * team target (COLLECTIVE). 0 before the start.
@@ -121,8 +154,9 @@ export async function computeParticipantProgress(
   },
   userId: string,
   now: Date = new Date(),
+  join?: ParticipantJoin,
 ): Promise<MemberProgress> {
-  const window = countingWindow(challenge, now);
+  const window = personalWindow(challenge, now, join);
   if (isCollectiveChallenge(challenge)) {
     const target = challenge.targetTotal as number;
     if (!window) return memberProgress(0, target);
@@ -131,6 +165,7 @@ export async function computeParticipantProgress(
       type: challenge.type as 'DAILY_STEPS' | 'WEEKLY_WORKOUTS',
       from: window.from,
       to: window.to,
+      since: join?.joinedAt,
     });
     return memberProgress(contribution, target);
   }
@@ -141,6 +176,7 @@ export async function computeParticipantProgress(
     threshold: challenge.threshold,
     from: window.from,
     to: window.to,
+    since: join?.joinedAt,
   });
   return memberProgress(count, challenge.requiredCount);
 }
@@ -231,7 +267,10 @@ interface TeamProgress {
 }
 
 async function teamProgress(challenge: any, participantIds: string[], memberCount: number, now: Date): Promise<TeamProgress> {
-  const progresses = await Promise.all(participantIds.map((userId) => computeParticipantProgress(challenge, userId, now)));
+  const joins = await loadJoins(challenge.id, participantIds);
+  const progresses = await Promise.all(
+    participantIds.map((userId) => computeParticipantProgress(challenge, userId, now, joins.get(userId))),
+  );
   if (!isCollectiveChallenge(challenge)) {
     return { progresses, collective: null, team: summarizeTeam(progresses, memberCount) };
   }
@@ -248,12 +287,23 @@ async function collectiveSeriesFor(challenge: any, participantIds: string[], now
   if (!isCollectiveChallenge(challenge)) return null;
   const window = countingWindow(challenge, now);
   if (!window) return { targetTotal: challenge.targetTotal, points: [] };
-  const amounts = await dailyTotalsFor({
-    userIds: participantIds,
-    type: challenge.type as 'DAILY_STEPS' | 'WEEKLY_WORKOUTS',
-    from: window.from,
-    to: window.to,
-  });
+  // Each person's days count from when they joined, so the chart is summed per participant.
+  const joins = await loadJoins(challenge.id, participantIds);
+  const amounts = new Map<string, number>();
+  await Promise.all(
+    participantIds.map(async (userId) => {
+      const own = personalWindow(challenge, now, joins.get(userId));
+      if (!own) return;
+      const days = await dailyTotalsFor({
+        userIds: [userId],
+        type: challenge.type as 'DAILY_STEPS' | 'WEEKLY_WORKOUTS',
+        from: own.from,
+        to: own.to,
+        since: joins.get(userId)?.joinedAt,
+      });
+      for (const [day, amount] of days) amounts.set(day, (amounts.get(day) ?? 0) + amount);
+    }),
+  );
   return buildCollectiveSeries(
     challenge.startsAt.toISOString().slice(0, 10),
     window.to.toISOString().slice(0, 10),

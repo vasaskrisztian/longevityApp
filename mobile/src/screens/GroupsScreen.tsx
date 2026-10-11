@@ -127,6 +127,9 @@ function ChallengeCard({
       )}
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
+      {challenge.status !== 'ENDED' && !challenge.joined ? (
+        <Text style={styles.muted}>Only data from the day you join counts — earlier days are not added.</Text>
+      ) : null}
       {challenge.status !== 'ENDED' ? (
         <Button
           title={challenge.joined ? 'Leave this challenge' : 'Join this challenge'}
