@@ -69,3 +69,26 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export const MobileRefreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
+
+/** Signed-in password change (Me > Account). The current password is re-checked server-side. */
+export const ChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: PasswordSchema,
+    newPasswordConfirmation: z.string(),
+  })
+  .refine((data) => data.newPassword === data.newPasswordConfirmation, {
+    message: 'Passwords do not match',
+    path: ['newPasswordConfirmation'],
+  })
+  .refine((data) => data.newPassword !== data.currentPassword, {
+    message: 'Choose a password different from the current one',
+    path: ['newPassword'],
+  });
+
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+
+/** Deleting one's own account re-confirms the password — a stolen session alone cannot erase an account. */
+export const DeleteAccountSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
