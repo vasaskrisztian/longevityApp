@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { getGroupMemberHealth, type MemberHealth } from '@/src/api/groups';
 import { Alert } from '@/src/components/ui/Alert';
+import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
 import { colors, fontFamily } from '@/src/theme/tokens';
@@ -82,6 +83,13 @@ export default function MemberHealthScreen() {
         <Text style={styles.title}>{displayName(data.member)}</Text>
         {data.member.fullName ? <Text style={styles.muted}>{data.member.email}</Text> : null}
         <Text style={styles.muted}>In the group since {formatDay(data.member.joinedAt.slice(0, 10))}</Text>
+        <Button
+          title="Account details"
+          size="sm"
+          variant="outline"
+          style={styles.accountButton}
+          onPress={() => router.push(`/admin/users/${userId}`)}
+        />
       </View>
 
       <Card style={styles.card}>
@@ -173,6 +181,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 14 },
   centered: { flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: 'center', alignItems: 'center' },
   flex: { flex: 1 },
+  accountButton: { alignSelf: 'flex-start', marginTop: 10 },
   title: { fontFamily: fontFamily.display, fontSize: 24, color: colors.foreground },
   card: { gap: 10 },
   cardTitle: { fontFamily: fontFamily.sansSemibold, fontSize: 16, color: colors.foreground },

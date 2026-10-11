@@ -19,6 +19,8 @@ import {
   type InviteResult,
 } from '@/src/api/groups';
 import { Alert } from '@/src/components/ui/Alert';
+import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { useTabParam } from '@/src/navigation/useTabParam';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect } from '@/src/components/ui/ChipSelect';
@@ -54,6 +56,8 @@ import {
  * has not yet (pending / expired invitations), open a member's health data,
  * and create and follow group challenges.
  */
+
+const GROUP_SEGMENTS = ['overview', 'challenges', 'settings'] as const;
 
 function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: () => void }) {
   const [name, setName] = useState(group.name);
@@ -460,6 +464,7 @@ function ChallengesCard({
 
 export default function AdminGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [segment, setSegment] = useTabParam(GROUP_SEGMENTS, 'overview');
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [challenges, setChallenges] = useState<AdminGroupChallengeListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -491,7 +496,7 @@ export default function AdminGroupScreen() {
     setDeleting(true);
     try {
       await deleteAdminGroup(group.id);
-      router.replace('/admin/groups');
+      router.replace('/admin?tab=groups');
     } catch {
       setError('Could not delete the group.');
       setDeleting(false);
@@ -527,12 +532,32 @@ export default function AdminGroupScreen() {
       </View>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
 
-      <MembersCard group={group} onChanged={load} />
-      <InvitationsCard group={group} onChanged={load} />
-      <InviteCard groupId={group.id} onInvited={load} />
-      <ChallengesCard groupId={group.id} challenges={challenges} onChanged={load} />
-      <EditGroupCard key={`${group.name}:${group.logoUrl ?? ''}`} group={group} onChanged={load} />
-      <Button title="Delete this group" variant="destructive" loading={deleting} onPress={handleDelete} />
+      <SegmentedControl
+        options={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'challenges', label: 'Challenges' },
+          { value: 'settings', label: 'Settings' },
+        ]}
+        value={segment}
+        onChange={setSegment}
+      />
+
+      {segment === 'overview' ? (
+        <>
+          <MembersCard group={group} onChanged={load} />
+          <InvitationsCard group={group} onChanged={load} />
+          <InviteCard groupId={group.id} onInvited={load} />
+        </>
+      ) : null}
+
+      {segment === 'challenges' ? <ChallengesCard groupId={group.id} challenges={challenges} onChanged={load} /> : null}
+
+      {segment === 'settings' ? (
+        <>
+          <EditGroupCard key={`${group.name}:${group.logoUrl ?? ''}`} group={group} onChanged={load} />
+          <Button title="Delete this group" variant="destructive" loading={deleting} onPress={handleDelete} />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
