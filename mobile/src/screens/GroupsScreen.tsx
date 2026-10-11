@@ -20,6 +20,7 @@ import { Checkbox } from '@/src/components/ui/Checkbox';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily } from '@/src/theme/tokens';
+import { setPendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/src/wellbeing/format';
 
@@ -212,6 +213,7 @@ export default function GroupsScreen() {
       .then((result) => {
         setGroups(result.groups);
         setInvitations(result.pendingInvitations);
+        setPendingInvitations(result.pendingInvitations.length);
         setError(null);
       })
       .catch(() => setError('Could not load your groups.'));

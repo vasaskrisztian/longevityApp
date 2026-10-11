@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSession } from '@/src/auth/useSession';
 import { useUnreadCount } from '@/src/notifications/unreadStore';
+import { usePendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -43,6 +44,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useSession();
   const unread = useUnreadCount();
+  const pendingInvitations = usePendingInvitations();
   const items = user?.role === 'ADMIN' ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
 
   return (
@@ -65,6 +67,11 @@ export function DesktopShell({ children }: { children: ReactNode }) {
                 {item.match === '/notifications' && unread > 0 ? (
                   <View style={styles.badge} accessibilityLabel={`${unread} unread`}>
                     <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
+                  </View>
+                ) : null}
+                {item.match === '/community' && pendingInvitations > 0 ? (
+                  <View style={styles.badge} accessibilityLabel={`${pendingInvitations} pending invitations`}>
+                    <Text style={styles.badgeText}>{pendingInvitations}</Text>
                   </View>
                 ) : null}
               </Pressable>

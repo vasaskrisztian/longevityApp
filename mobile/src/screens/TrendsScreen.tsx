@@ -119,7 +119,6 @@ export default function TrendsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View>
-        <Text style={styles.title}>Trends</Text>
         <Text style={styles.subtitle}>
           Sleep, readiness and activity scores, HRV, resting heart rate, sleep duration and steps
           over the last 7 or 30 days.
