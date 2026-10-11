@@ -8,6 +8,7 @@ import { getProfileBundle } from '@/src/api/profile';
 import { useDeviceDataVersion, useDeviceSyncing } from '@/src/health/deviceSyncStore';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
@@ -84,6 +85,7 @@ interface DashboardState {
 }
 
 export default function DashboardScreen() {
+  const isDesktop = useIsDesktop();
   const [state, setState] = useState<DashboardState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -153,6 +155,83 @@ export default function DashboardScreen() {
   const sleepDuration = formatSleepDuration(snapshot?.totalSleepMinutes ?? null);
   const targetSleepDuration = formatSleepDuration(activeProtocol?.targetSleepMinutes ?? null);
 
+  const protocolCard = activeProtocol ? (
+      <Card style={styles.protocolCard}>
+        <Text style={styles.protocolTitle}>Following: {activeProtocol.name}</Text>
+        <Text style={styles.protocolDescription}>
+          {activeProtocol.description || "Today's actuals above are compared against this protocol's targets."}
+        </Text>
+        {activeProtocol.supplements.length > 0 ? (
+          <View style={styles.protocolSupplements}>
+            <Text style={styles.protocolSupplementsLabel}>Supplements on this protocol</Text>
+            {activeProtocol.supplements.map((s, i) => (
+              <Text key={`${s.name}-${i}`} style={styles.protocolSupplementItem}>
+                •{' '}
+                {[
+                  s.name,
+                  s.dosage ? `— ${s.dosage}${s.unit ? ` ${s.unit}` : ''}` : null,
+                  s.frequency ? `(${s.frequency.replaceAll('_', ' ').toLowerCase()})` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </Card>
+    ) : null;
+
+  const sleepDurationCard = (
+    <Card style={styles.scoreCard}>
+      <Text style={styles.scoreLabel}>Sleep duration</Text>
+      <Text style={styles.scoreValue}>{sleepDuration ?? '—'}</Text>
+      {targetSleepDuration ? (
+        <Text style={styles.targetText}>Target: {targetSleepDuration}</Text>
+      ) : !sleepDuration ? (
+        <Text style={styles.scoreHint}>No data yet</Text>
+      ) : null}
+    </Card>
+  );
+  const sleepCard = <ScoreCard label="Sleep" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />;
+  const readinessCard = <ScoreCard label="Readiness" value={snapshot?.readinessScore ?? null} />;
+  const activityCard = <ScoreCard label="Activity" value={snapshot?.activityScore ?? null} />;
+  const hrvCard = <ScoreCard label="HRV" value={snapshot?.averageHrv ?? null} unit="ms" />;
+  const restingHrCard = <ScoreCard label="Resting HR" value={snapshot?.restingHeartRate ?? null} unit="bpm" />;
+  const stepsCard = <ScoreCard label="Steps" value={snapshot?.steps ?? null} />;
+  const caloriesCard = (
+    <ScoreCard
+      label="Active calories (today)"
+      value={snapshot?.activeCalories ?? null}
+      unit="kcal"
+      target={activeProtocol?.targetDailyActiveCalories}
+    />
+  );
+  const workoutsCard = (
+    <ScoreCard label="Workouts (last 7 days)" value={weeklyWorkoutCount} target={activeProtocol?.targetWeeklyWorkouts} />
+  );
+  // Phone: 3 / 2 / 2 / 2 cards per row. Desktop (wide main column): three rows of three, grouped by theme.
+  const rows = isDesktop
+    ? [
+        [sleepCard, readinessCard, activityCard],
+        [sleepDurationCard, hrvCard, restingHrCard],
+        [stepsCard, caloriesCard, workoutsCard],
+      ]
+    : [
+        [sleepCard, readinessCard, activityCard],
+        [hrvCard, restingHrCard],
+        [sleepDurationCard, stepsCard],
+        [caloriesCard, workoutsCard],
+      ];
+  const scoreRows = rows.map((cards, rowIndex) => (
+    <View key={rowIndex} style={styles.row}>
+      {cards.map((card, i) => (
+        <View key={i} style={styles.cell}>
+          {card}
+        </View>
+      ))}
+    </View>
+  ));
+
   return (
     <ScrollView
       style={styles.container}
@@ -182,69 +261,17 @@ export default function DashboardScreen() {
         </View>
       ) : null}
 
-      {activeProtocol ? (
-        <Card style={styles.protocolCard}>
-          <Text style={styles.protocolTitle}>Following: {activeProtocol.name}</Text>
-          <Text style={styles.protocolDescription}>
-            {activeProtocol.description || "Today's actuals above are compared against this protocol's targets."}
-          </Text>
-          {activeProtocol.supplements.length > 0 ? (
-            <View style={styles.protocolSupplements}>
-              <Text style={styles.protocolSupplementsLabel}>Supplements on this protocol</Text>
-              {activeProtocol.supplements.map((s, i) => (
-                <Text key={`${s.name}-${i}`} style={styles.protocolSupplementItem}>
-                  •{' '}
-                  {[
-                    s.name,
-                    s.dosage ? `— ${s.dosage}${s.unit ? ` ${s.unit}` : ''}` : null,
-                    s.frequency ? `(${s.frequency.replaceAll('_', ' ').toLowerCase()})` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-        </Card>
-      ) : null}
-
-      <View style={styles.row}>
-        <ScoreCard label="Sleep" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />
-        <ScoreCard label="Readiness" value={snapshot?.readinessScore ?? null} />
-        <ScoreCard label="Activity" value={snapshot?.activityScore ?? null} />
-      </View>
-
-      <View style={styles.row}>
-        <ScoreCard label="HRV" value={snapshot?.averageHrv ?? null} unit="ms" />
-        <ScoreCard label="Resting HR" value={snapshot?.restingHeartRate ?? null} unit="bpm" />
-      </View>
-
-      <View style={styles.row}>
-        <Card style={styles.scoreCard}>
-          <Text style={styles.scoreLabel}>Sleep duration</Text>
-          <Text style={styles.scoreValue}>{sleepDuration ?? '—'}</Text>
-          {targetSleepDuration ? (
-            <Text style={styles.targetText}>Target: {targetSleepDuration}</Text>
-          ) : !sleepDuration ? (
-            <Text style={styles.scoreHint}>No data yet</Text>
-          ) : null}
-        </Card>
-        <ScoreCard label="Steps" value={snapshot?.steps ?? null} />
-      </View>
-
-      <View style={styles.row}>
-        <ScoreCard
-          label="Active calories (today)"
-          value={snapshot?.activeCalories ?? null}
-          unit="kcal"
-          target={activeProtocol?.targetDailyActiveCalories}
-        />
-        <ScoreCard
-          label="Workouts (last 7 days)"
-          value={weeklyWorkoutCount}
-          target={activeProtocol?.targetWeeklyWorkouts}
-        />
-      </View>
+      {isDesktop ? (
+        <View style={styles.desktopColumns}>
+          <View style={styles.desktopMain}>{scoreRows}</View>
+          {activeProtocol ? <View style={styles.desktopSide}>{protocolCard}</View> : null}
+        </View>
+      ) : (
+        <>
+          {protocolCard}
+          {scoreRows}
+        </>
+      )}
 
       {!snapshot ? (
         <Card>
@@ -298,8 +325,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  // Each card sits in a flex cell so a row of 2 or 3 splits the width evenly; the card fills its cell.
+  cell: {
+    flex: 1,
+  },
   scoreCard: {
     flex: 1,
+  },
+  desktopColumns: {
+    flexDirection: 'row',
+    gap: 20,
+    alignItems: 'flex-start',
+  },
+  desktopMain: {
+    flex: 1,
+    gap: 16,
+  },
+  desktopSide: {
+    width: 300,
   },
   scoreLabel: {
     fontFamily: fontFamily.sansMedium,
