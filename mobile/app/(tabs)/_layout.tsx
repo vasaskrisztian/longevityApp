@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDeviceAutoSync } from '@/src/health/useDeviceAutoSync';
 import { useNotificationPolling } from '@/src/notifications/useNotificationPolling';
-import { useUnreadCount } from '@/src/notifications/unreadStore';
 
 import { colors } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
@@ -13,16 +12,14 @@ import { getProfileBundle } from '@/src/api/profile';
 import { DesktopShell } from '@/src/components/DesktopShell';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 
-// Mirrors the web app's sidebar nav (Dashboard/Trends/Profile/Devices —
-// see ARCHITECTURE.md §2 repository structure / phase-1-summary.md's "Base
-// UI shell"), plus Admin (phase 22): a 5th tab shown only to role === 'ADMIN',
-// hidden from everyone else via `href: null` (expo-router's documented way
-// to register a route without putting it in the tab bar — see
-// node_modules/expo-router/build/layouts/Tabs.d.ts) rather than filtering
-// the <Tabs.Screen> children array, so the route stays reachable even if
-// something ever links to it directly. Lifestyle/Nutrition/Supplements/
-// Goals live inside the Profile stack rather than as top-level tabs, same
-// as the web sidebar groups them under Profile.
+// Four areas (see the UI review): Today (scores, trends, body), Plan
+// (protocols, supplements, goals, my challenges), Community (groups,
+// creators) and Me (about me, devices and data, account), plus Admin as a
+// 5th tab shown only to role === 'ADMIN' — hidden from everyone else via
+// `href: null` (expo-router's documented way to register a route without
+// putting it in the tab bar) rather than filtering the children, so the
+// route stays reachable even if something ever links to it directly.
+// Notifications has no tab: the bell with its unread badge sits in every header.
 export default function TabLayout() {
   // The actual sign-in gate: every route under (tabs) requires a session.
   // Root _layout.tsx's `ready` gate already waits out `status === 'loading'`
@@ -33,7 +30,6 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   useDeviceAutoSync(status === 'signedIn');
   useNotificationPolling(status === 'signedIn');
-  const unread = useUnreadCount();
 
   // Mirrors requireOnboardedUserForPage (lib/auth/page-guards.ts): an
   // authenticated non-admin user who hasn't completed the onboarding wizard
@@ -73,11 +69,11 @@ export default function TabLayout() {
     return <Redirect href="/onboarding" />;
   }
 
-  // Dashboard/Trends/Devices draw no native header (headerShown: false above),
+  // Today and Notifications draw no native header (headerShown: false above),
   // so without this their first line sits under the iPhone's status
-  // bar/camera cut-out. Profile and Admin are nested Stacks with their own
-  // native header, which already handles the inset — they must NOT get it
-  // twice. (On web and in the desktop shell the inset is 0.)
+  // bar/camera cut-out. Plan, Community, Me and Admin are nested Stacks with
+  // their own native header, which already handles the inset — they must NOT
+  // get it twice. (On web and in the desktop shell the inset is 0.)
   const headerlessScene = { sceneStyle: { paddingTop: insets.top } };
 
   const tabs = (
@@ -98,42 +94,33 @@ export default function TabLayout() {
         name="index"
         options={{
           ...headerlessScene,
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Ionicons name="speedometer-outline" size={size} color={color} />,
+          title: 'Today',
+          tabBarIcon: ({ color, size }) => <Ionicons name="sunny-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="trends"
+        name="plan"
         options={{
-          ...headerlessScene,
-          title: 'Trends',
-          tabBarIcon: ({ color, size }) => <Ionicons name="trending-up-outline" size={size} color={color} />,
+          title: 'Plan',
+          tabBarIcon: ({ color, size }) => <Ionicons name="clipboard-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="community"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          title: 'Community',
+          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="devices"
+        name="me"
         options={{
-          ...headerlessScene,
-          title: 'Devices',
-          tabBarIcon: ({ color, size }) => <Ionicons name="watch-outline" size={size} color={color} />,
+          title: 'Me',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          ...headerlessScene,
-          title: 'Notifications',
-          tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
-          tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
-        }}
-      />
+      {/* Notifications is reached from the bell in every header, not from the tab bar. */}
+      <Tabs.Screen name="notifications" options={{ ...headerlessScene, title: 'Notifications', href: null }} />
       <Tabs.Screen
         name="admin"
         options={{

@@ -18,10 +18,10 @@ interface NavItem {
 }
 
 const BASE_ITEMS: NavItem[] = [
-  { label: 'Dashboard', href: '/', match: '/', icon: 'speedometer-outline' },
-  { label: 'Trends', href: '/trends', match: '/trends', icon: 'trending-up-outline' },
-  { label: 'Profile', href: '/profile', match: '/profile', icon: 'person-outline' },
-  { label: 'Devices', href: '/devices', match: '/devices', icon: 'watch-outline' },
+  { label: 'Today', href: '/', match: '/', icon: 'sunny-outline' },
+  { label: 'Plan', href: '/plan', match: '/plan', icon: 'clipboard-outline' },
+  { label: 'Community', href: '/community', match: '/community', icon: 'people-outline' },
+  { label: 'Me', href: '/me', match: '/me', icon: 'person-circle-outline' },
   { label: 'Notifications', href: '/notifications', match: '/notifications', icon: 'notifications-outline' },
 ];
 const ADMIN_ITEM: NavItem = { label: 'Admin', href: '/admin', match: '/admin', icon: 'shield-checkmark-outline' };

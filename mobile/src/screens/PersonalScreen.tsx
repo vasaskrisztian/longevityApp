@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getProfileBundle, updatePersonalInfo } from '@/src/api/profile';
-import { getPublicProfileStatus, setPublicProfileConsent, type PublicProfileStatus } from '@/src/api/creators';
-import { useSession } from '@/src/auth/useSession';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
@@ -15,15 +11,10 @@ import { colors, fontFamily } from '@/src/theme/tokens';
 import { GenderEnum, PersonalInfoSchema, enumLabel, type PersonalInfoInput } from '@/src/validation/schemas';
 
 /**
- * The Profile tab's hub screen — personal info (view/edit, mirrors the web
- * app's profile/page.tsx + personal-info-form.tsx) plus nav rows into the
- * Goals/Supplements/Nutrition/Lifestyle/Discover/Protocols/Challenges
- * sub-screens, same grouping the web sidebar uses. Phase 20 (see
- * claude/phase-15-mobile-migration-plan.md) adds the creator public-profile
- * toggle below, mirroring the web app's creator-consent-toggle.tsx — shown
- * only for an account the admin has granted CREATOR status, fetched
- * separately from the personal-info bundle above since it comes from the
- * creators module, not the profile module.
+ * Me > About me > Personal: view/edit personal info (mirrors the web app's
+ * profile/page.tsx + personal-info-form.tsx). The nav rows and the creator
+ * public-profile toggle that used to share this screen now live in the Plan
+ * area and Me > Account.
  */
 
 const GENDER_OPTIONS: ChipOption[] = GenderEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
@@ -37,25 +28,13 @@ interface PersonalFormState {
   timezone: string;
 }
 
-function NavRow({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable style={styles.navRow} onPress={onPress}>
-      <Text style={styles.navRowLabel}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
-    </Pressable>
-  );
-}
-
-export default function ProfileHomeScreen() {
-  const { user, logout } = useSession();
+export default function PersonalScreen() {
   const [form, setForm] = useState<PersonalFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [publicProfileStatus, setPublicProfileStatus] = useState<PublicProfileStatus | null>(null);
-  const [togglingConsent, setTogglingConsent] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -72,24 +51,9 @@ export default function ProfileHomeScreen() {
       })
       .catch(() => setServerError('Could not load your profile.'))
       .finally(() => setLoading(false));
-    getPublicProfileStatus()
-      .then(setPublicProfileStatus)
-      .catch(() => setPublicProfileStatus(null));
   }, []);
 
   useEffect(load, [load]);
-
-  async function handleToggleConsent() {
-    if (!publicProfileStatus) return;
-    setTogglingConsent(true);
-    const nextConsent = !publicProfileStatus.canPublish;
-    try {
-      await setPublicProfileConsent(nextConsent);
-      setPublicProfileStatus({ ...publicProfileStatus, canPublish: nextConsent });
-    } finally {
-      setTogglingConsent(false);
-    }
-  }
 
   async function save() {
     if (!form) return;
@@ -172,50 +136,6 @@ export default function ProfileHomeScreen() {
         <Button title={saving ? 'Saving…' : 'Save changes'} onPress={save} loading={saving} />
       </Card>
 
-      <Card style={styles.navCard}>
-        <NavRow label="Goals" onPress={() => router.push('/profile/goals')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Supplements" onPress={() => router.push('/profile/supplements')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Nutrition" onPress={() => router.push('/profile/nutrition')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Lifestyle" onPress={() => router.push('/profile/lifestyle')} />
-        <View style={styles.navDivider} />
-        <NavRow label="InBody" onPress={() => router.push('/profile/inbody')} />
-      </Card>
-
-      <Card style={styles.navCard}>
-        <NavRow label="Discover" onPress={() => router.push('/profile/discover')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Protocols" onPress={() => router.push('/profile/protocols')} />
-        <View style={styles.navDivider} />
-        <NavRow label="My challenges" onPress={() => router.push('/profile/challenges')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Creators" onPress={() => router.push('/profile/creators')} />
-        <View style={styles.navDivider} />
-        <NavRow label="Groups" onPress={() => router.push('/profile/wellbeing')} />
-      </Card>
-
-      {publicProfileStatus?.accountType === 'CREATOR' ? (
-        <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Creator public profile</Text>
-          <Text style={styles.cardDescription}>
-            {publicProfileStatus.canPublish
-              ? 'Your public protocols, challenges, and recent data are visible to anyone in the Creators directory.'
-              : 'Turn this on to let followers see your public protocols, challenges, and recent data in the Creators directory.'}
-          </Text>
-          <Button
-            title={togglingConsent ? 'Updating…' : publicProfileStatus.canPublish ? 'Make profile private' : 'Publish profile publicly'}
-            variant={publicProfileStatus.canPublish ? 'outline' : 'primary'}
-            size="sm"
-            onPress={handleToggleConsent}
-            loading={togglingConsent}
-          />
-        </Card>
-      ) : null}
-
-      {user ? <Text style={styles.email}>{user.email}</Text> : null}
-      <Button title="Log out" variant="destructive" onPress={() => logout()} />
     </ScrollView>
   );
 }

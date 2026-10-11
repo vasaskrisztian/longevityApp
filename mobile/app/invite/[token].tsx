@@ -77,7 +77,7 @@ export default function InviteScreen() {
     setError(null);
     try {
       await acceptInvitationByToken(String(token));
-      router.replace('/profile/wellbeing');
+      router.replace('/community');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not accept the invitation.');
     } finally {
@@ -130,7 +130,7 @@ export default function InviteScreen() {
     }
     try {
       await login(preview.email, parsed.data.password);
-      router.replace('/profile/wellbeing');
+      router.replace('/community');
     } catch {
       setError('Your account was created. Please log in to continue.');
       router.replace('/login');

@@ -200,7 +200,7 @@ function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: ()
   );
 }
 
-export default function WellbeingScreen() {
+export default function GroupsScreen() {
   // Set when opened from a notification (see notifications/route.ts): that invitation / group is shown first and outlined.
   const { invitation: focusInvitation, group: focusGroup } = useLocalSearchParams<{ invitation?: string; group?: string }>();
   const [groups, setGroups] = useState<MyGroup[] | null>(null);

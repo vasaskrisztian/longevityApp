@@ -213,8 +213,6 @@ export default function DevicesScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
-      <Text style={styles.title}>Devices</Text>
-
       {loadError ? <Alert variant="destructive">{loadError}</Alert> : null}
 
       <Card style={styles.cardGap}>

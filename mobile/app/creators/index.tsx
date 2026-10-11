@@ -50,7 +50,7 @@ export default function PublicCreatorsScreen() {
       .catch(() => setError('Could not load the creators directory.'));
   }, [status]);
 
-  if (status === 'signedIn') return <Redirect href="/profile/creators" />;
+  if (status === 'signedIn') return <Redirect href="/community/browse" />;
 
   return (
     <PublicLayout>

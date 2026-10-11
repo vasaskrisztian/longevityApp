@@ -58,7 +58,7 @@ function FollowingRow({
   );
 }
 
-export default function DiscoverScreen() {
+export default function FollowedCreatorsScreen() {
   const [following, setFollowing] = useState<FollowedCreatorSummary[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +97,7 @@ export default function DiscoverScreen() {
         title="Browse all creators"
         variant="outline"
         size="sm"
-        onPress={() => router.push('/profile/creators')}
+        onPress={() => router.push('/community/browse')}
       />
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}

@@ -74,6 +74,10 @@ export default function NotificationsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Pressable accessibilityRole="button" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} style={styles.back}>
+        <Ionicons name="chevron-back" size={18} color={colors.muted.foreground} />
+        <Text style={styles.backLabel}>Back</Text>
+      </Pressable>
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
         {unread > 0 ? <Button title="Mark all as read" size="sm" variant="outline" loading={busy} onPress={markAllRead} /> : null}
@@ -117,6 +121,8 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, gap: 12 },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
+  backLabel: { fontFamily: fontFamily.sansMedium, fontSize: 14, color: colors.muted.foreground },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   title: { fontFamily: fontFamily.display, fontSize: 26, color: colors.foreground },
   centered: { paddingVertical: 24, alignItems: 'center' },

@@ -45,7 +45,7 @@ const DEFAULT_FORM: LifestyleFormState = {
   customActivities: '',
 };
 
-export default function LifestyleScreen() {
+export default function ExerciseScreen() {
   const [form, setForm] = useState<LifestyleFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);

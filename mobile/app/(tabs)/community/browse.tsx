@@ -19,7 +19,7 @@ import { colors, fontFamily } from '@/src/theme/tokens';
 
 function DirectoryRow({ creator }: { creator: CreatorDirectoryItem }) {
   return (
-    <Pressable onPress={() => router.push(`/profile/creators/${creator.id}`)}>
+    <Pressable onPress={() => router.push(`/community/creators/${creator.id}`)}>
       <Card style={styles.row}>
         <View style={styles.rowText}>
           <Text style={styles.rowTitle}>{creator.fullName ?? 'Creator'}</Text>

@@ -44,7 +44,7 @@ export default function PublicCreatorScreen() {
       );
   }, [id, status]);
 
-  if (status === 'signedIn') return <Redirect href={`/profile/creators/${id}`} />;
+  if (status === 'signedIn') return <Redirect href={`/community/creators/${id}`} />;
 
   return (
     <PublicLayout>
