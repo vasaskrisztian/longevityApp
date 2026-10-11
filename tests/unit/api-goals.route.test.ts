@@ -22,6 +22,7 @@ const createGoalMock = vi.fn();
 vi.mock('@/modules/goals/goals.service', () => ({
   listGoals: listGoalsMock,
   createGoal: createGoalMock,
+  UnknownProtocolError: class UnknownProtocolError extends Error {},
 }));
 
 vi.mock('@/lib/logging/logger', () => ({

@@ -4,7 +4,7 @@ import {
   toErrorResponse,
 } from '@/lib/auth/authorization';
 import { UpdateGoalSchema } from '@/lib/validation/goal.schemas';
-import { getGoalById, updateGoal, deleteGoal } from '@/modules/goals/goals.service';
+import { getGoalById, updateGoal, deleteGoal, UnknownProtocolError } from '@/modules/goals/goals.service';
 import { logger } from '@/lib/logging/logger';
 
 interface RouteParams {
@@ -51,9 +51,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const updated = await updateGoal(params.id, parsed.data);
+    const updated = await updateGoal(params.id, result.goal!.userId, parsed.data);
     return Response.json(updated, { status: 200 });
   } catch (error) {
+    if (error instanceof UnknownProtocolError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     logger.error('goal_update_failed', { message: (error as Error).message });
     return Response.json({ error: 'Failed to update goal' }, { status: 500 });
   }

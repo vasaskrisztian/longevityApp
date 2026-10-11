@@ -26,6 +26,7 @@ vi.mock('@/modules/protocols/protocols.service', () => ({
   getProtocolById: getProtocolByIdMock,
   updateProtocol: updateProtocolMock,
   deleteProtocol: deleteProtocolMock,
+  UnknownSupplementError: class UnknownSupplementError extends Error {},
 }));
 
 // Phase 13 — see api-protocols.route.test.ts's identical mock comment.

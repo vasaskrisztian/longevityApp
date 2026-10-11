@@ -4,7 +4,7 @@ import {
   toErrorResponse,
 } from '@/lib/auth/authorization';
 import { UpdateProtocolSchema } from '@/lib/validation/protocol.schemas';
-import { getProtocolById, updateProtocol, deleteProtocol } from '@/modules/protocols/protocols.service';
+import { getProtocolById, updateProtocol, deleteProtocol, UnknownSupplementError } from '@/modules/protocols/protocols.service';
 import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
 
@@ -66,6 +66,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const updated = await updateProtocol(params.id, result.protocol!.userId, parsed.data);
     return Response.json(updated, { status: 200 });
   } catch (error) {
+    if (error instanceof UnknownSupplementError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     logger.error('protocol_update_failed', { message: (error as Error).message });
     return Response.json({ error: 'Failed to update protocol' }, { status: 500 });
   }

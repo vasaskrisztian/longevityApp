@@ -1,6 +1,6 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
 import { CreateProtocolSchema } from '@/lib/validation/protocol.schemas';
-import { listProtocols, createProtocol } from '@/modules/protocols/protocols.service';
+import { listProtocols, createProtocol, UnknownSupplementError } from '@/modules/protocols/protocols.service';
 import { canPublishPublicly } from '@/modules/creators/creators.service';
 import { logger } from '@/lib/logging/logger';
 
@@ -45,6 +45,9 @@ export async function POST(request: Request) {
     const protocol = await createProtocol(userId, parsed.data);
     return Response.json(protocol, { status: 201 });
   } catch (error) {
+    if (error instanceof UnknownSupplementError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     logger.error('protocol_create_failed', { message: (error as Error).message });
     return Response.json({ error: 'Failed to create protocol' }, { status: 500 });
   }

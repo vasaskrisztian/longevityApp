@@ -26,6 +26,7 @@ vi.mock('@/modules/goals/goals.service', () => ({
   getGoalById: getGoalByIdMock,
   updateGoal: updateGoalMock,
   deleteGoal: deleteGoalMock,
+  UnknownProtocolError: class UnknownProtocolError extends Error {},
 }));
 
 vi.mock('@/lib/logging/logger', () => ({
@@ -161,7 +162,7 @@ describe('PATCH /api/goals/[id]', () => {
     const response = await PATCH(patchRequest({ status: 'PAUSED' }), ctx('g1'));
 
     expect(response.status).toBe(200);
-    expect(updateGoalMock).toHaveBeenCalledWith('g1', expect.objectContaining({ status: 'PAUSED' }));
+    expect(updateGoalMock).toHaveBeenCalledWith('g1', 'u1', expect.objectContaining({ status: 'PAUSED' }));
   });
 
   it('returns 500 when the service throws', async () => {
@@ -173,6 +174,20 @@ describe('PATCH /api/goals/[id]', () => {
     const response = await PATCH(patchRequest({ status: 'PAUSED' }), ctx('g1'));
 
     expect(response.status).toBe(500);
+  });
+});
+
+describe('PATCH /api/goals/[id] — protocol ownership', () => {
+  it('returns 400 when the goal is moved to a protocol that is not the owner\'s', async () => {
+    const { UnknownProtocolError } = await import('@/modules/goals/goals.service');
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    getGoalByIdMock.mockResolvedValue(OWNED_GOAL);
+    requireOwnResourceOrAdminMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    updateGoalMock.mockRejectedValue(new UnknownProtocolError());
+
+    const response = await PATCH(patchRequest({ protocolId: '0b1f5b53-3c63-4a9d-9b8e-0d3f5a1a6a11' }), ctx('g1'));
+
+    expect(response.status).toBe(400);
   });
 });
 

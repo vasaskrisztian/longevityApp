@@ -22,6 +22,7 @@ const createProtocolMock = vi.fn();
 vi.mock('@/modules/protocols/protocols.service', () => ({
   listProtocols: listProtocolsMock,
   createProtocol: createProtocolMock,
+  UnknownSupplementError: class UnknownSupplementError extends Error {},
 }));
 
 // Phase 13: the route imports creators.service.ts for the PUBLIC-visibility
@@ -129,6 +130,16 @@ describe('POST /api/protocols', () => {
     const response = await POST(postRequest(VALID_PROTOCOL));
 
     expect(response.status).toBe(500);
+  });
+
+  it('returns 400 when a selected supplement is not on the caller\'s list', async () => {
+    const { UnknownSupplementError } = await import('@/modules/protocols/protocols.service');
+    requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
+    createProtocolMock.mockRejectedValue(new UnknownSupplementError());
+
+    const response = await POST(postRequest({ ...VALID_PROTOCOL, supplementIds: ['0b1f5b53-3c63-4a9d-9b8e-0d3f5a1a6a11'] }));
+
+    expect(response.status).toBe(400);
   });
 
   // Phase 13

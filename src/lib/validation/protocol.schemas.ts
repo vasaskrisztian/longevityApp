@@ -49,6 +49,13 @@ export const CreateProtocolSchema = z.object({
   targetSleepMinutes: optionalCoercedInt(0, 1440),
   targetWeeklyWorkouts: optionalCoercedInt(0, 50),
   targetDailyActiveCalories: optionalCoercedInt(0, 20_000),
+  // Preferred: ids of the user's OWN supplements (Plan > Supplements is the
+  // single list). `supplements` (name/dose/... lines) is what app builds from
+  // before the single list send; they are matched to, or added to, the user's
+  // list server-side. Both may be sent; an update that sends neither keeps the
+  // protocol's supplements unchanged (UpdateProtocolSchema is .partial(), which
+  // does not apply the `[]` default). A create that sends neither starts empty.
+  supplementIds: z.array(z.string().uuid()).max(50).optional(),
   supplements: z.array(ProtocolSupplementSchema).max(50).default([]),
   // Optional (not `.default()`, deliberately) — the form never sends this
   // field on create (see protocols-manager.tsx), so `undefined` reaches

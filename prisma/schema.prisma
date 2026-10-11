@@ -388,15 +388,22 @@ model Supplement {
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name      String
-  dosage    Decimal             @db.Decimal(8, 2)
-  unit      String
-  frequency SupplementFrequency
+  // Required when created through the supplements form, but nullable at the
+  // database level: a protocol line that never had a dose (older protocols
+  // allowed that) becomes a supplement without one during the single-source
+  // migration instead of being given an invented value.
+  dosage    Decimal?            @db.Decimal(8, 2)
+  unit      String?
+  frequency SupplementFrequency?
   timing    SupplementTiming?
   notes     String?
   active    Boolean             @default(true)
 
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
+
+  /// The protocols this supplement is part of (the user's own list is the single source).
+  protocolLinks ProtocolSupplement[]
 
   @@index([userId])
   @@index([userId, active])
@@ -416,11 +423,17 @@ model Goal {
   targetDate  DateTime?  @db.Date
   status      GoalStatus @default(ACTIVE)
 
+  /// The protocol this goal belongs to (shown under it in Plan > Protocols);
+  /// null = a goal without a protocol. Deleting the protocol keeps the goal.
+  protocolId  String?
+  protocol    Protocol?  @relation(fields: [protocolId], references: [id], onDelete: SetNull)
+
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   @@index([userId])
   @@index([userId, status])
+  @@index([protocolId])
   @@map("goals")
 }
 
@@ -458,6 +471,7 @@ model Protocol {
   updatedAt   DateTime @updatedAt
 
   supplements ProtocolSupplement[]
+  goals       Goal[]
 
   @@index([userId])
   @@index([userId, isActive])
@@ -476,6 +490,13 @@ model ProtocolSupplement {
   protocolId String
   protocol   Protocol  @relation(fields: [protocolId], references: [id], onDelete: Cascade)
 
+  /// The user's own supplement this line points at — the single source of
+  /// name/dose/frequency/timing. The columns below are the pre-link snapshot,
+  /// kept only so older rows and rollbacks stay readable; reads prefer the
+  /// linked supplement (protocols.service.ts).
+  supplementId String?
+  supplement   Supplement? @relation(fields: [supplementId], references: [id], onDelete: Cascade)
+
   name       String
   dosage     Decimal?  @db.Decimal(8, 2)
   unit       String?
@@ -486,6 +507,7 @@ model ProtocolSupplement {
   updatedAt  DateTime  @updatedAt
 
   @@index([protocolId])
+  @@index([supplementId])
   @@map("protocol_supplements")
 }
 

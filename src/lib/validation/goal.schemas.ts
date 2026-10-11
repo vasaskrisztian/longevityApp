@@ -26,6 +26,9 @@ export const CreateGoalSchema = z.object({
   targetUnit: z.string().trim().max(20).optional(),
   targetDate: z.coerce.date().optional(),
   status: GoalStatusEnum.default('ACTIVE'),
+  // The protocol the goal belongs to. Left out on create = the user's active
+  // protocol (if any); `null` = a goal without a protocol.
+  protocolId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateGoalInput = z.infer<typeof CreateGoalSchema>;

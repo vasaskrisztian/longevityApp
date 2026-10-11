@@ -13,6 +13,11 @@ const prismaMock = {
   protocolSupplement: {
     deleteMany: vi.fn(),
   },
+  supplement: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+  },
   // createProtocol/updateProtocol pass an array of already-invoked Prisma
   // call promises, matching real Prisma's `$transaction([...])` array form
   // (see profile.service.test.ts for the same convention).
@@ -28,7 +33,23 @@ const {
   createProtocol,
   updateProtocol,
   deleteProtocol,
+  resolveSupplements,
+  flattenProtocol,
+  UnknownSupplementError,
 } = await import('@/modules/protocols/protocols.service');
+
+// What every protocol query asks Prisma for: lines joined with the user's own supplement.
+const INCLUDE = { supplements: { include: { supplement: true }, orderBy: { createdAt: 'asc' } } };
+
+const MAGNESIUM = { id: 's1', userId: 'u1', name: 'Magnesium', dosage: '400', unit: 'mg', frequency: 'DAILY', timing: 'EVENING' };
+const MAGNESIUM_LINE = {
+  supplementId: 's1',
+  name: 'Magnesium',
+  dosage: '400',
+  unit: 'mg',
+  frequency: 'DAILY',
+  timing: 'EVENING',
+};
 
 const CREATE_INPUT = {
   name: 'Base building',
@@ -50,19 +71,19 @@ describe('listProtocols', () => {
     expect(prismaMock.protocol.findMany).toHaveBeenCalledWith({
       where: { userId: 'u1' },
       orderBy: { createdAt: 'desc' },
-      include: { supplements: true },
+      include: INCLUDE,
     });
-    expect(result).toEqual([{ id: 'p1' }]);
+    expect(result).toEqual([{ id: 'p1', supplements: [] }]);
   });
 });
 
 describe('getProtocolById', () => {
   it('returns the protocol with supplements when found', async () => {
     prismaMock.protocol.findUnique.mockResolvedValue({ id: 'p1', userId: 'u1' });
-    await expect(getProtocolById('p1')).resolves.toEqual({ id: 'p1', userId: 'u1' });
+    await expect(getProtocolById('p1')).resolves.toEqual({ id: 'p1', userId: 'u1', supplements: [] });
     expect(prismaMock.protocol.findUnique).toHaveBeenCalledWith({
       where: { id: 'p1' },
-      include: { supplements: true },
+      include: INCLUDE,
     });
   });
 
@@ -80,9 +101,9 @@ describe('getActiveProtocol', () => {
 
     expect(prismaMock.protocol.findFirst).toHaveBeenCalledWith({
       where: { userId: 'u1', isActive: true },
-      include: { supplements: true },
+      include: INCLUDE,
     });
-    expect(result).toEqual({ id: 'p1', isActive: true });
+    expect(result).toEqual({ id: 'p1', isActive: true, supplements: [] });
   });
 
   it('returns null when the user has no active protocol', async () => {
@@ -105,7 +126,7 @@ describe('createProtocol', () => {
         name: 'Base building',
         supplements: { create: [] },
       },
-      include: { supplements: true },
+      include: INCLUDE,
     });
     expect(result.id).toBe('p1');
   });
@@ -125,20 +146,113 @@ describe('createProtocol', () => {
     );
   });
 
-  it('strips any client-supplied id off nested supplements before creating', async () => {
+  it('links chosen supplements by id, copying nothing the client sent', async () => {
+    prismaMock.supplement.findMany.mockResolvedValue([MAGNESIUM]);
+    prismaMock.protocol.create.mockResolvedValue({ id: 'p1' });
+
+    await createProtocol('u1', { ...CREATE_INPUT, supplementIds: ['s1'] } as never);
+
+    expect(prismaMock.supplement.findMany).toHaveBeenCalledWith({ where: { id: { in: ['s1'] }, userId: 'u1' } });
+    expect(prismaMock.protocol.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ supplements: { create: [MAGNESIUM_LINE] } }),
+      include: INCLUDE,
+    });
+  });
+
+  it('refuses a supplement that is not the caller\'s own', async () => {
+    prismaMock.supplement.findMany.mockResolvedValue([]);
+
+    await expect(createProtocol('u1', { ...CREATE_INPUT, supplementIds: ['someone-elses'] } as never)).rejects.toBeInstanceOf(
+      UnknownSupplementError,
+    );
+    expect(prismaMock.protocol.create).not.toHaveBeenCalled();
+  });
+
+  it('maps inline lines (older app builds) onto the user\'s own list and ignores a client-supplied id', async () => {
+    prismaMock.supplement.findFirst.mockResolvedValue(MAGNESIUM);
     prismaMock.protocol.create.mockResolvedValue({ id: 'p1' });
 
     await createProtocol('u1', {
       ...CREATE_INPUT,
-      supplements: [{ id: 'should-be-stripped', name: 'Vitamin D3' } as never],
+      supplements: [{ id: 'should-be-ignored', name: 'magnesium', dosage: 400, unit: 'mg', frequency: 'DAILY', timing: 'EVENING' } as never],
     });
 
+    expect(prismaMock.supplement.create).not.toHaveBeenCalled();
     expect(prismaMock.protocol.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        supplements: { create: [{ name: 'Vitamin D3' }] },
-      }),
-      include: { supplements: true },
+      data: expect.objectContaining({ supplements: { create: [MAGNESIUM_LINE] } }),
+      include: INCLUDE,
     });
+  });
+});
+
+describe('resolveSupplements', () => {
+  it('creates the supplement on the user\'s list when no existing one matches', async () => {
+    prismaMock.supplement.findFirst.mockResolvedValue(null);
+    prismaMock.supplement.create.mockResolvedValue({ id: 's9', name: 'Creatine' });
+
+    const result = await resolveSupplements('u1', undefined, [{ name: 'Creatine', dosage: 5, unit: 'g' }]);
+
+    expect(prismaMock.supplement.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: 'u1',
+        name: { equals: 'Creatine', mode: 'insensitive' },
+        dosage: 5,
+        unit: 'g',
+        frequency: null,
+        timing: null,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(prismaMock.supplement.create).toHaveBeenCalledWith({
+      data: { userId: 'u1', name: 'Creatine', dosage: 5, unit: 'g', frequency: null, timing: null },
+    });
+    expect(result).toEqual([{ id: 's9', name: 'Creatine' }]);
+  });
+
+  it('keeps order and drops duplicates across ids and inline lines', async () => {
+    prismaMock.supplement.findMany.mockResolvedValue([MAGNESIUM, { id: 's2', name: 'Vitamin D' }]);
+    prismaMock.supplement.findFirst.mockResolvedValue(MAGNESIUM);
+
+    const result = await resolveSupplements('u1', ['s2', 's1', 's2'], [{ name: 'Magnesium' }]);
+
+    expect(result.map((s) => s.id)).toEqual(['s2', 's1']);
+  });
+
+  it('returns an empty list for no input', async () => {
+    await expect(resolveSupplements('u1', undefined, undefined)).resolves.toEqual([]);
+  });
+});
+
+describe('flattenProtocol', () => {
+  it('reports the linked supplement\'s values on each line, so editing the supplement edits every protocol', () => {
+    const result = flattenProtocol({
+      id: 'p1',
+      supplements: [
+        {
+          id: 'l1',
+          protocolId: 'p1',
+          supplementId: 's1',
+          name: 'Magnesium (old snapshot)',
+          dosage: '200',
+          unit: 'mg',
+          frequency: 'DAILY',
+          timing: null,
+          supplement: MAGNESIUM,
+        },
+      ],
+    } as never);
+
+    expect(result.supplements[0]).toMatchObject({ id: 'l1', supplementId: 's1', name: 'Magnesium', dosage: '400', timing: 'EVENING' });
+    expect(result.supplements[0]).not.toHaveProperty('supplement');
+  });
+
+  it('falls back to the line\'s own values when it was never linked', () => {
+    const result = flattenProtocol({
+      id: 'p1',
+      supplements: [{ id: 'l2', supplementId: null, name: 'Legacy', dosage: null, supplement: null }],
+    } as never);
+
+    expect(result.supplements[0]).toMatchObject({ name: 'Legacy' });
   });
 });
 
@@ -153,7 +267,7 @@ describe('updateProtocol', () => {
     expect(prismaMock.protocol.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
       data: { name: 'Renamed' },
-      include: { supplements: true },
+      include: INCLUDE,
     });
     expect(result.name).toBe('Renamed');
   });
@@ -172,18 +286,32 @@ describe('updateProtocol', () => {
     );
   });
 
-  it('replaces the whole supplement list wholesale when supplements are provided', async () => {
+  it('replaces the whole supplement list wholesale when supplementIds are provided', async () => {
+    prismaMock.supplement.findMany.mockResolvedValue([MAGNESIUM]);
     prismaMock.protocol.update.mockResolvedValue({ id: 'p1' });
 
-    await updateProtocol('p1', 'u1', { supplements: [{ name: 'Omega-3' }] });
+    await updateProtocol('p1', 'u1', { supplementIds: ['s1'] });
 
     expect(prismaMock.protocolSupplement.deleteMany).toHaveBeenCalledWith({
       where: { protocolId: 'p1' },
     });
     expect(prismaMock.protocol.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
-      data: { supplements: { create: [{ name: 'Omega-3' }] } },
-      include: { supplements: true },
+      data: { supplements: { create: [MAGNESIUM_LINE] } },
+      include: INCLUDE,
+    });
+  });
+
+  it('clears the list when an empty one is sent, and still accepts the older inline form', async () => {
+    prismaMock.protocol.update.mockResolvedValue({ id: 'p1' });
+    await updateProtocol('p1', 'u1', { supplementIds: [] });
+    expect(prismaMock.protocolSupplement.deleteMany).toHaveBeenCalledTimes(1);
+
+    prismaMock.supplement.findFirst.mockResolvedValue(null);
+    prismaMock.supplement.create.mockResolvedValue({ id: 's7', name: 'Omega-3', dosage: null, unit: null, frequency: null, timing: null });
+    await updateProtocol('p1', 'u1', { supplements: [{ name: 'Omega-3' }] });
+    expect(prismaMock.supplement.create).toHaveBeenCalledWith({
+      data: { userId: 'u1', name: 'Omega-3', dosage: null, unit: null, frequency: null, timing: null },
     });
   });
 
@@ -196,7 +324,7 @@ describe('updateProtocol', () => {
     expect(prismaMock.protocol.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
       data: { isActive: false },
-      include: { supplements: true },
+      include: INCLUDE,
     });
   });
 });

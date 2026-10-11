@@ -1,6 +1,6 @@
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
 import { CreateGoalSchema } from '@/lib/validation/goal.schemas';
-import { listGoals, createGoal } from '@/modules/goals/goals.service';
+import { listGoals, createGoal, UnknownProtocolError } from '@/modules/goals/goals.service';
 import { logger } from '@/lib/logging/logger';
 
 export async function GET() {
@@ -33,6 +33,9 @@ export async function POST(request: Request) {
     const goal = await createGoal(userId, parsed.data);
     return Response.json(goal, { status: 201 });
   } catch (error) {
+    if (error instanceof UnknownProtocolError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     logger.error('goal_create_failed', { message: (error as Error).message });
     return Response.json({ error: 'Failed to create goal' }, { status: 500 });
   }

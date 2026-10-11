@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import type { Challenge, Protocol, ProtocolSupplement } from '@prisma/client';
 import { computeProgress, type ChallengeWithProgress } from '@/modules/challenges/challenges.service';
+import { PROTOCOL_INCLUDE, flattenProtocol } from '@/modules/protocols/protocols.service';
 
 /**
  * Phase 13 (Creators & Followers) — ARCHITECTURE.md §4.2's private-by-default
@@ -146,7 +147,7 @@ export async function getCreatorPublicProfile(userId: string): Promise<CreatorPu
     prisma.follow.count({ where: { creatorId: userId } }),
     prisma.protocol.findMany({
       where: { userId, visibility: 'PUBLIC' },
-      include: { supplements: true },
+      include: PROTOCOL_INCLUDE,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.challenge.findMany({
@@ -179,7 +180,8 @@ export async function getCreatorPublicProfile(userId: string): Promise<CreatorPu
     fullName: user.profile?.fullName ?? null,
     memberSince: user.createdAt,
     followerCount,
-    protocols,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    protocols: protocols.map((protocol: any) => flattenProtocol(protocol)),
     challenges: challengesWithProgress,
     // averageHrv is a Prisma `Decimal` column (schema.prisma) — the real
     // generated client returns a Decimal.js instance, not a plain number,
