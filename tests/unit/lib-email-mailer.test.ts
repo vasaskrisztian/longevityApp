@@ -98,7 +98,12 @@ describe('sendEmail', () => {
 
     expect(loggerErrorMock).toHaveBeenCalledWith(
       'email_send_failed',
-      expect.objectContaining({ emailDomain: 'example.com', errorName: 'invalid_from_address' }),
+      expect.objectContaining({
+        emailDomain: 'example.com',
+        errorName: 'invalid_from_address',
+        message: 'bad from',
+        fromDomain: 'resend.dev',
+      }),
     );
   });
 

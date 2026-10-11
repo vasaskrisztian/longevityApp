@@ -32,6 +32,12 @@ function getResendClient(): Resend | null {
   return resendClient;
 }
 
+/** The domain part of "Name <user@domain>" / "user@domain" — for logs (never the full address). */
+function fromDomainOf(from: string): string {
+  const match = from.match(/@([^>\s]+)/);
+  return match?.[1] ?? '';
+}
+
 /** Test-only escape hatch, mirroring connection.ts's `_resetConnectionForTests`. */
 export function _resetMailerClientForTests(): void {
   resendClient = null;
@@ -63,8 +69,9 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
   }
 
   try {
+    const from = process.env.EMAIL_FROM ?? RESEND_TEST_FROM;
     const { error } = await client.emails.send({
-      from: process.env.EMAIL_FROM ?? RESEND_TEST_FROM,
+      from,
       to: input.to,
       subject: input.subject,
       html: input.html,
@@ -72,10 +79,15 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     });
 
     if (error) {
+      // Resend's own explanation ("domain is not verified", "you can only send
+      // testing emails to your own address", ...) is what tells an operator
+      // how to fix a 403/422 — it never contains the API key or the body.
       logger.error('email_send_failed', {
         emailDomain,
+        fromDomain: fromDomainOf(from),
         errorName: error.name,
         statusCode: error.statusCode ?? undefined,
+        message: typeof error.message === 'string' ? error.message.slice(0, 300) : undefined,
       });
       return;
     }
