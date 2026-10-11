@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 
 import { getDashboardSnapshot, getProtocolOverlay, type DashboardSnapshot, type ProtocolOverlay } from '@/src/api/dashboard';
 import { getConnections, type ConnectionSummary } from '@/src/api/wearables';
 import { getProfileBundle } from '@/src/api/profile';
 import { useDeviceDataVersion, useDeviceSyncing } from '@/src/health/deviceSyncStore';
+import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
@@ -250,8 +252,11 @@ export default function DashboardScreen() {
           <Text style={styles.emptyBody}>
             {connection?.status === 'CONNECTED'
               ? 'Your Oura Ring is connected — the first sync populates this dashboard once it runs.'
-              : 'Connect your Oura Ring to start seeing Sleep, Readiness and Activity scores here.'}
+              : 'Connect your Oura Ring or Apple Health to start seeing Sleep, Readiness and Activity scores here.'}
           </Text>
+          {connection?.status === 'CONNECTED' ? null : (
+            <Button title="Connect a device" size="sm" style={styles.emptyButton} onPress={() => router.navigate('/devices')} />
+          )}
         </Card>
       ) : null}
 
@@ -386,6 +391,10 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans,
     fontSize: 13,
     color: colors.muted.foreground,
+  },
+  emptyButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
   },
   disclaimer: {
     fontFamily: fontFamily.sans,

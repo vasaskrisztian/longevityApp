@@ -7,6 +7,7 @@ import { listNotifications, markNotificationsRead, type AppNotification } from '
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { notificationHref } from '@/src/notifications/route';
 import { setUnreadCount } from '@/src/notifications/unreadStore';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { timeAgo } from '@/src/wellbeing/format';
@@ -21,7 +22,7 @@ const ICON: Record<AppNotification['type'], React.ComponentProps<typeof Ionicons
 /**
  * The in-app notification inbox: group invitations, new group challenges and
  * end-of-challenge summaries. Opening a notification marks it read and takes
- * the person to the Wellbeing page, where invitations are accepted (with the
+ * the person to the matching invitation / group on the Groups page, where invitations are accepted (with the
  * consent text) and challenges joined.
  */
 export default function NotificationsScreen() {
@@ -53,7 +54,7 @@ export default function NotificationsScreen() {
         .then((result) => setUnreadCount(result.unreadCount))
         .catch(() => undefined);
     }
-    router.push('/profile/wellbeing');
+    router.push(notificationHref(notification));
   }
 
   async function markAllRead() {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import {
   acceptInvitationById,
@@ -31,7 +31,7 @@ import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/src
  * administrators' access immediately.
  */
 
-function InvitationCard({ invitation, onAccepted }: { invitation: PendingInvitation; onAccepted: () => void }) {
+function InvitationCard({ invitation, onAccepted, highlight }: { invitation: PendingInvitation; onAccepted: () => void; highlight?: boolean }) {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ function InvitationCard({ invitation, onAccepted }: { invitation: PendingInvitat
   }
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, highlight && styles.highlight]}>
       <View style={styles.groupHeader}>
         <GroupLogo logoUrl={invitation.logoUrl} />
         <View style={styles.flex}>
@@ -141,7 +141,7 @@ function ChallengeCard({
   );
 }
 
-function GroupSection({ group, onLeft }: { group: MyGroup; onLeft: () => void }) {
+function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: () => void; highlight?: boolean }) {
   const [challenges, setChallenges] = useState<MyGroupChallenge[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -175,7 +175,7 @@ function GroupSection({ group, onLeft }: { group: MyGroup; onLeft: () => void })
   }
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, highlight && styles.highlight]}>
       <View style={styles.groupHeader}>
         <GroupLogo logoUrl={group.logoUrl} />
         <View style={styles.flex}>
@@ -201,6 +201,8 @@ function GroupSection({ group, onLeft }: { group: MyGroup; onLeft: () => void })
 }
 
 export default function WellbeingScreen() {
+  // Set when opened from a notification (see notifications/route.ts): that invitation / group is shown first and outlined.
+  const { invitation: focusInvitation, group: focusGroup } = useLocalSearchParams<{ invitation?: string; group?: string }>();
   const [groups, setGroups] = useState<MyGroup[] | null>(null);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -231,13 +233,18 @@ export default function WellbeingScreen() {
         </View>
       ) : null}
 
-      {invitations.map((invitation) => (
-        <InvitationCard key={invitation.id} invitation={invitation} onAccepted={load} />
-      ))}
+      {[...invitations]
+        .sort((a, b) => Number(b.id === focusInvitation) - Number(a.id === focusInvitation))
+        .map((invitation) => (
+          <InvitationCard key={invitation.id} invitation={invitation} onAccepted={load} highlight={invitation.id === focusInvitation} />
+        ))}
 
-      {groups?.map((group) => (
-        <GroupSection key={group.id} group={group} onLeft={load} />
-      ))}
+      {groups
+        ?.slice()
+        .sort((a, b) => Number(b.id === focusGroup) - Number(a.id === focusGroup))
+        .map((group) => (
+          <GroupSection key={group.id} group={group} onLeft={load} highlight={group.id === focusGroup} />
+        ))}
 
       {groups && groups.length === 0 && invitations.length === 0 ? (
         <Card>
@@ -257,6 +264,7 @@ const styles = StyleSheet.create({
   centered: { paddingVertical: 24, alignItems: 'center' },
   intro: { fontFamily: fontFamily.sans, fontSize: 13, color: colors.muted.foreground, lineHeight: 19 },
   card: { gap: 14 },
+  highlight: { borderColor: colors.primary.default, borderWidth: 2 },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   groupName: { fontFamily: fontFamily.display, fontSize: 20, color: colors.foreground },
   body: { fontFamily: fontFamily.sans, fontSize: 14, color: colors.foreground, lineHeight: 20 },

@@ -189,11 +189,11 @@ export default function ProfileHomeScreen() {
         <View style={styles.navDivider} />
         <NavRow label="Protocols" onPress={() => router.push('/profile/protocols')} />
         <View style={styles.navDivider} />
-        <NavRow label="Challenges" onPress={() => router.push('/profile/challenges')} />
+        <NavRow label="My challenges" onPress={() => router.push('/profile/challenges')} />
         <View style={styles.navDivider} />
         <NavRow label="Creators" onPress={() => router.push('/profile/creators')} />
         <View style={styles.navDivider} />
-        <NavRow label="Wellbeing" onPress={() => router.push('/profile/wellbeing')} />
+        <NavRow label="Groups" onPress={() => router.push('/profile/wellbeing')} />
       </Card>
 
       {publicProfileStatus?.accountType === 'CREATOR' ? (
@@ -215,7 +215,7 @@ export default function ProfileHomeScreen() {
       ) : null}
 
       {user ? <Text style={styles.email}>{user.email}</Text> : null}
-      <Button title="Kijelentkezés" variant="destructive" onPress={() => logout()} />
+      <Button title="Log out" variant="destructive" onPress={() => logout()} />
     </ScrollView>
   );
 }

@@ -130,7 +130,6 @@ export default function TabLayout() {
         options={{
           ...headerlessScene,
           title: 'Notifications',
-          tabBarLabel: 'Alerts',
           tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
           tabBarIcon: ({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />,
         }}

@@ -28,9 +28,9 @@ export default function ProfileStackLayout() {
       <Stack.Screen name="lifestyle" options={{ title: 'Lifestyle' }} />
       <Stack.Screen name="discover" options={{ title: 'Discover' }} />
       <Stack.Screen name="protocols" options={{ title: 'Protocols' }} />
-      <Stack.Screen name="challenges" options={{ title: 'Challenges' }} />
+      <Stack.Screen name="challenges" options={{ title: 'My challenges' }} />
       <Stack.Screen name="inbody" options={{ title: 'InBody' }} />
-      <Stack.Screen name="wellbeing" options={{ title: 'Wellbeing' }} />
+      <Stack.Screen name="wellbeing" options={{ title: 'Groups' }} />
       <Stack.Screen name="creators/index" options={{ title: 'Creators' }} />
       <Stack.Screen name="creators/[id]" options={{ title: 'Creator' }} />
     </Stack>
