@@ -19,7 +19,7 @@ Next.js UI stays untouched until TestFlight QA confirms parity.
   with `Authorization: Bearer`. `CORS_ALLOWED_ORIGINS` (comma-separated exact
   origins) enables it; unset = nothing changes. No wildcard, no
   `Allow-Credentials` (cookies are never used by this client), `/api/auth/*`
-  (NextAuth) is excluded. Preflights from listed origins get 204.
+  (register, password reset) is covered too. Preflights from listed origins get 204.
 
 ## One-time setup (Railway dashboard)
 

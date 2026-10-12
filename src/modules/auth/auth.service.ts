@@ -101,14 +101,11 @@ export interface VerifiedCredentialsUser {
 }
 
 /**
- * The one place a password comparison happens for email+password login —
- * shared by both the web app's NextAuth Credentials provider
- * (lib/auth/auth.ts's authorize()) and the mobile login route
- * (api/mobile/auth/login), so the security-sensitive bits (constant-shape
- * failure, active/verified checks, lastLoginAt bump) exist exactly once.
- * Callers own their own rate limiting — it's tied to how each caller gets
- * its client identifier (NextAuth's `authorize()` gets a Request from the
- * framework; the mobile route reads its own).
+ * The one place a password comparison happens for email+password login
+ * (called by api/mobile/auth/login, and re-checks in the account routes), so
+ * the security-sensitive bits (constant-shape failure, active/verified
+ * checks, lastLoginAt bump) exist exactly once. Callers own their own rate
+ * limiting — it is tied to how each caller gets its client identifier.
  */
 export async function verifyUserCredentials(
   email: string,

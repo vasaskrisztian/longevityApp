@@ -2,11 +2,8 @@ import { SignJWT, jwtVerify } from 'jose';
 import type { UserRole } from '@prisma/client';
 
 /**
- * Short-lived Bearer access tokens for the Expo mobile app. The web app
- * authenticates with NextAuth's own (JWE-encrypted) session cookie — this
- * is a deliberately separate, independent token format for clients that
- * can't rely on an HttpOnly cookie, reusing AUTH_SECRET (already
- * provisioned for Auth.js) rather than adding a second secret to manage.
+ * Short-lived Bearer access tokens for the Expo app (iOS, Android and web),
+ * signed with AUTH_SECRET.
  * Long-lived sessions are handled by the rotating MobileRefreshToken
  * instead (see modules/auth/mobile-session.service.ts) — this token is
  * intentionally too short-lived to be worth revoking directly.

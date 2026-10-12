@@ -8,8 +8,7 @@
  * `localhost:PORT` — harmless for reading query params off the same
  * request, but a `Response.redirect(new URL(path, request.url))` built from
  * it sends the user's browser to an address that's only reachable from
- * inside the container (see auth.config.ts's `trustHost` comment for the
- * same root cause hitting Auth.js). `APP_URL` is the one source of truth
+ * inside the container. `APP_URL` is the one source of truth
  * for the public origin; this falls back to `requestUrl` so redirects still
  * work locally (dev, tests) where `APP_URL` may be unset.
  */

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 
 import middleware from '@/middleware';
@@ -39,9 +39,9 @@ describe('middleware CORS for /api/*', () => {
     expect(off.headers.get('access-control-allow-origin')).toBeNull();
   });
 
-  it('leaves NextAuth routes alone (no CORS headers, no redirect)', async () => {
-    const res = (await middleware(req('/api/auth/session', { origin: 'https://app.example.com' }))) as Response;
-    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+  it('also covers the auth routes (register / password reset are called from the web export)', async () => {
+    const res = (await middleware(req('/api/auth/request-password-reset', { origin: 'https://app.example.com' }))) as Response;
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
     expect(res.status).toBe(200);
   });
 });

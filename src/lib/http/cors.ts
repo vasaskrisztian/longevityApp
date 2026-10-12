@@ -6,7 +6,7 @@
  * origins, e.g. `https://app.example.com`). There is no wildcard and no
  * `Access-Control-Allow-Credentials`: the mobile/web-export client
  * authenticates with an `Authorization: Bearer` header, never cookies, so
- * browsers never attach the NextAuth session cookie to these requests.
+ * browsers never attach any session cookie to these requests.
  */
 const ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
 const ALLOWED_HEADERS = 'Authorization, Content-Type';
@@ -38,7 +38,11 @@ export function corsHeaders(allowedOrigin: string, isPreflight: boolean): Record
   return headers;
 }
 
-/** NextAuth's own routes are cookie-based and same-origin only. */
+/**
+ * Every JSON API route is eligible — including `/api/auth/*` (register,
+ * password reset, e-mail verification), which the Expo web export calls from
+ * its own origin. Non-API paths (the retired UI pages) are not.
+ */
 export function isCorsEligiblePath(pathname: string): boolean {
-  return pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/');
+  return pathname.startsWith('/api/');
 }

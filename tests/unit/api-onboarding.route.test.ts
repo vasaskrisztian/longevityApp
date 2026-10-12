@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Dependency-free — see src/lib/auth/errors.ts / page-guards.test.ts for why
-// these come from here rather than the (Prisma/Auth.js-heavy) real
+// these come from here rather than the (Prisma-heavy) real
 // authorization.ts module, which is mocked below.
 import { UnauthenticatedError, ForbiddenError } from '@/lib/auth/errors';
 

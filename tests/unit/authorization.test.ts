@@ -11,12 +11,7 @@ vi.mock('@prisma/client', () => ({
   UserRole: { USER: 'USER', ADMIN: 'ADMIN' },
 }));
 
-// Isolate authorization.ts from the real Auth.js config (which itself pulls
-// in Prisma + argon2) — we only need to control what `auth()` resolves to.
-const authMock = vi.fn();
-vi.mock('@/lib/auth/auth', () => ({ auth: authMock }));
-
-// Bearer-token (mobile) fallback path — isolate from the real `next/headers`
+// Bearer-token authentication — isolate from the real `next/headers`
 // request context and the real JWT verification.
 const headersGetMock = vi.fn();
 vi.mock('next/headers', () => ({
@@ -30,36 +25,20 @@ vi.mock('@/lib/auth/mobile-jwt', () => ({
 const { requireAuthenticatedUser, requireAdmin, requireOwnResourceOrAdmin, toErrorResponse, UnauthenticatedError, ForbiddenError } =
   await import('@/lib/auth/authorization');
 
-function sessionFor(user: { id: string; role: 'USER' | 'ADMIN' }) {
-  return { user };
+const headerFor = (token: string | null) => headersGetMock.mockReturnValue(token === null ? null : `Bearer ${token}`);
+function bearerUser(user: { id: string; role: 'USER' | 'ADMIN'; email?: string }) {
+  headerFor('a-valid-token');
+  verifyMobileAccessTokenMock.mockResolvedValue({ sub: user.id, role: user.role, email: user.email });
 }
 
 beforeEach(() => {
-  authMock.mockReset();
   headersGetMock.mockReset().mockReturnValue(null);
   verifyMobileAccessTokenMock.mockReset();
 });
 
 describe('requireAuthenticatedUser', () => {
-  it('returns the session user when a session exists', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'u1', role: 'USER' }));
-    await expect(requireAuthenticatedUser()).resolves.toEqual({ id: 'u1', role: 'USER' });
-  });
-
-  it('throws UnauthenticatedError when there is no session', async () => {
-    authMock.mockResolvedValue(null);
-    await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
-  });
-
-  it('throws UnauthenticatedError when the session has no user', async () => {
-    authMock.mockResolvedValue({});
-    await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
-  });
-
-  it('falls back to a valid Bearer access token when there is no cookie session (mobile)', async () => {
-    authMock.mockResolvedValue(null);
-    headersGetMock.mockReturnValue('Bearer a-valid-token');
-    verifyMobileAccessTokenMock.mockResolvedValue({ sub: 'u1', role: 'USER', email: 'jane@example.com' });
+  it('returns the user behind a valid Bearer access token', async () => {
+    bearerUser({ id: 'u1', role: 'USER', email: 'jane@example.com' });
 
     await expect(requireAuthenticatedUser()).resolves.toEqual({
       id: 'u1',
@@ -70,63 +49,60 @@ describe('requireAuthenticatedUser', () => {
   });
 
   it('throws UnauthenticatedError for an invalid/expired Bearer token', async () => {
-    authMock.mockResolvedValue(null);
-    headersGetMock.mockReturnValue('Bearer garbage');
+    headerFor('garbage');
     verifyMobileAccessTokenMock.mockResolvedValue(null);
 
     await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
   });
 
-  it('throws UnauthenticatedError when there is no session and no Authorization header at all', async () => {
-    authMock.mockResolvedValue(null);
-    headersGetMock.mockReturnValue(null);
+  it('throws UnauthenticatedError when there is no Authorization header at all', async () => {
+    headerFor(null);
 
     await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
     expect(verifyMobileAccessTokenMock).not.toHaveBeenCalled();
   });
 
-  it('prefers the cookie session over a Bearer header when both are present', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'cookie-user', role: 'USER' }));
-    headersGetMock.mockReturnValue('Bearer some-token');
+  it('ignores an Authorization header that is not a Bearer token', async () => {
+    headersGetMock.mockReturnValue('Basic dXNlcjpwYXNz');
 
-    await expect(requireAuthenticatedUser()).resolves.toEqual({ id: 'cookie-user', role: 'USER' });
+    await expect(requireAuthenticatedUser()).rejects.toBeInstanceOf(UnauthenticatedError);
     expect(verifyMobileAccessTokenMock).not.toHaveBeenCalled();
   });
 });
 
 describe('requireAdmin', () => {
   it('returns the user when role is ADMIN', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'admin1', role: 'ADMIN' }));
-    await expect(requireAdmin()).resolves.toEqual({ id: 'admin1', role: 'ADMIN' });
+    bearerUser({ id: 'admin1', role: 'ADMIN' });
+    await expect(requireAdmin()).resolves.toMatchObject({ id: 'admin1', role: 'ADMIN' });
   });
 
   it('throws ForbiddenError when role is USER', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'u1', role: 'USER' }));
+    bearerUser({ id: 'u1', role: 'USER' });
     await expect(requireAdmin()).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it('throws UnauthenticatedError (not ForbiddenError) when there is no session at all', async () => {
-    authMock.mockResolvedValue(null);
+  it('throws UnauthenticatedError (not ForbiddenError) when nobody is signed in', async () => {
+    headerFor(null);
     await expect(requireAdmin()).rejects.toBeInstanceOf(UnauthenticatedError);
   });
 });
 
 describe('requireOwnResourceOrAdmin', () => {
   it('allows a user accessing their own resource', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'u1', role: 'USER' }));
-    await expect(requireOwnResourceOrAdmin('u1')).resolves.toEqual({ id: 'u1', role: 'USER' });
+    bearerUser({ id: 'u1', role: 'USER' });
+    await expect(requireOwnResourceOrAdmin('u1')).resolves.toMatchObject({ id: 'u1', role: 'USER' });
   });
 
   it('allows an admin accessing someone else\'s resource', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'admin1', role: 'ADMIN' }));
-    await expect(requireOwnResourceOrAdmin('someone-else')).resolves.toEqual({
+    bearerUser({ id: 'admin1', role: 'ADMIN' });
+    await expect(requireOwnResourceOrAdmin('someone-else')).resolves.toMatchObject({
       id: 'admin1',
       role: 'ADMIN',
     });
   });
 
   it('rejects a non-admin user accessing someone else\'s resource (IDOR/BOLA)', async () => {
-    authMock.mockResolvedValue(sessionFor({ id: 'u1', role: 'USER' }));
+    bearerUser({ id: 'u1', role: 'USER' });
     await expect(requireOwnResourceOrAdmin('u2')).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

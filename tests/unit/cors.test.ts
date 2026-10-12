@@ -40,10 +40,10 @@ describe('cors helpers', () => {
     expect(pre).not.toHaveProperty('Access-Control-Allow-Credentials');
   });
 
-  it('excludes NextAuth routes and non-API paths', () => {
+  it('covers every API route (auth routes included) but not non-API paths', () => {
     expect(isCorsEligiblePath('/api/mobile/auth/login')).toBe(true);
     expect(isCorsEligiblePath('/api/creators/abc/teaser')).toBe(true);
-    expect(isCorsEligiblePath('/api/auth/callback/credentials')).toBe(false);
+    expect(isCorsEligiblePath('/api/auth/request-password-reset')).toBe(true);
     expect(isCorsEligiblePath('/dashboard')).toBe(false);
   });
 });

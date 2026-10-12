@@ -5,15 +5,13 @@ import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth
 import { logger } from '@/lib/logging/logger';
 
 /**
- * Mobile-only login — issues a Bearer access token + rotating refresh
- * token (lib/auth/mobile-jwt.ts / modules/auth/mobile-session.service.ts)
- * instead of a cookie session. The web app keeps using NextAuth's own
- * Credentials provider via /api/auth/[...nextauth]; this route exists
- * because a native client can't participate in that cookie-based flow.
- * Shares the exact same credential-verification logic (auth.service.ts's
- * verifyUserCredentials) as the web login, so "wrong password", "inactive
- * account", "unverified email" etc. are judged identically either way —
- * only the rate-limit scope is kept separate so a flood of mobile login
+ * Login for the Expo app (iOS, Android and web) — issues a Bearer access
+ * token + rotating refresh token (lib/auth/mobile-jwt.ts /
+ * modules/auth/mobile-session.service.ts). This is the only login there is:
+ * the old cookie session (NextAuth) was retired with the Next.js UI.
+ * Credentials are judged by auth.service.ts's verifyUserCredentials, so
+ * "wrong password", "inactive account", "unverified email" etc. have one
+ * definition — the rate-limit scope is kept separate so a flood of mobile login
  * attempts can't lock out web users sharing the same IP, or vice versa.
  */
 export async function POST(request: Request) {

@@ -7,8 +7,8 @@ import { requestSessionSync } from '@/modules/wearable/services/session-sync.ser
  * queues a sync for every connected server-pulled device whose data is stale
  * and tells device-pushed ones (Apple Health) to push. Returns immediately
  * (the Oura round-trip happens in the worker); clients then poll
- * GET /api/wearables until a provider's `lastSyncAt` moves. Works with the
- * NextAuth cookie (web) and the Bearer token (mobile) alike.
+ * GET /api/wearables until a provider's `lastSyncAt` moves. Authenticated
+ * with the Bearer token (the Expo app on every platform).
  */
 export async function POST() {
   let userId: string;
