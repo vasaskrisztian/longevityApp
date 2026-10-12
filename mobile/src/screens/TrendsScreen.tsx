@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useDeviceDataVersion } from '@/src/health/deviceSyncStore';
 import { getTrends, type TrendPoint, type TrendRangeDays } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
+import { durationAxisMax, durationLabel } from '@/src/components/charts/chartFormat';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
+import { niceAxisMax } from '@/src/wellbeing/format';
 
 /**
  * Real data, phase 17 — replaces the ScreenStub. Mirrors the web app's
@@ -30,6 +32,25 @@ function formatDateLabel(iso: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+function formatTooltipDate(iso: string): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** The three score series, in their fixed order and colors (never reassigned when some are hidden). */
+const SCORE_SERIES = [
+  { key: 'sleepScore', name: 'Sleep', color: SLEEP_COLOR },
+  { key: 'readinessScore', name: 'Readiness', color: READINESS_COLOR },
+  { key: 'activityScore', name: 'Activity', color: ACTIVITY_COLOR },
+] as const;
+type ScoreKey = (typeof SCORE_SERIES)[number]['key'];
+
+/** A round axis top a little above the data maximum, so the gridlines read cleanly (e.g. 12000, 8000). */
+function niceMax(values: Array<number | null>): number {
+  const max = values.reduce<number>((acc, v) => (v !== null && v > acc ? v : acc), 0);
+  return niceAxisMax(max * 1.05);
+}
+
 function hasAnyData(points: TrendPoint[]): boolean {
   return points.some(
     (p) =>
@@ -48,21 +69,42 @@ function ChartCard({
   description,
   points,
   series,
+  legend,
+  yMin,
+  yMax,
+  formatY,
+  formatValue,
 }: {
   title: string;
   description: string;
   points: TrendPoint[];
   series: LineChartSeries[];
+  /** Replaces the default legend (the Scores card uses it for its series toggles). */
+  legend?: ReactNode;
+  yMin?: number;
+  yMax?: number;
+  formatY?: (value: number) => string;
+  formatValue?: (value: number) => string;
 }) {
   const labels = useMemo(() => points.map((p) => formatDateLabel(p.date)), [points]);
+  const tooltipLabels = useMemo(() => points.map((p) => formatTooltipDate(p.date)), [points]);
   return (
     <Card>
       <Text style={styles.chartTitle}>{title}</Text>
       <Text style={styles.chartDescription}>{description}</Text>
       {hasAnyData(points) ? (
         <View style={styles.chartBody}>
-          <LineChart labels={labels} series={series} />
-          {series.length > 1 ? (
+          {legend ? <View style={styles.legendTop}>{legend}</View> : null}
+          <LineChart
+            labels={labels}
+            tooltipLabels={tooltipLabels}
+            series={series}
+            yMin={yMin}
+            yMax={yMax}
+            formatY={formatY}
+            formatValue={formatValue}
+          />
+          {!legend && series.length > 1 ? (
             <View style={styles.legendRow}>
               {series.map((s) => (
                 <View key={s.key} style={styles.legendItem}>
@@ -82,12 +124,37 @@ function ChartCard({
   );
 }
 
+/** Toggle chips for the score series: any one, two or all three can be on, never none. */
+function ScoreToggles({ selected, onToggle }: { selected: ScoreKey[]; onToggle: (key: ScoreKey) => void }) {
+  return (
+    <View style={styles.toggleRow}>
+      {SCORE_SERIES.map((s) => {
+        const on = selected.includes(s.key);
+        return (
+          <Pressable
+            key={s.key}
+            onPress={() => onToggle(s.key)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: on }}
+            accessibilityLabel={`${s.name} score`}
+            style={[styles.toggleChip, on && styles.toggleChipOn]}
+          >
+            <View style={[styles.toggleDot, { backgroundColor: on ? s.color : colors.card.border }]} />
+            <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{s.name}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function TrendsScreen() {
   const [range, setRange] = useState<TrendRangeDays>(7);
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
+  const [scoreKeys, setScoreKeys] = useState<ScoreKey[]>(SCORE_SERIES.map((s) => s.key));
 
   // Goes up when the login-time device sync has brought in new data: reload quietly (no spinner).
   const deviceDataVersion = useDeviceDataVersion();
@@ -115,6 +182,22 @@ export default function TrendsScreen() {
       cancelled = true;
     };
   }, [range, deviceDataVersion]);
+
+  function toggleScore(key: ScoreKey) {
+    setScoreKeys((current) => {
+      if (!current.includes(key)) return SCORE_SERIES.map((s) => s.key).filter((k) => k === key || current.includes(k));
+      // Keep at least one score on the chart.
+      return current.length > 1 ? current.filter((k) => k !== key) : current;
+    });
+  }
+
+  const scoreSeries: LineChartSeries[] = SCORE_SERIES.filter((s) => scoreKeys.includes(s.key)).map((s) => ({
+    key: s.key,
+    name: s.name,
+    color: s.color,
+    values: points.map((p) => p[s.key]),
+  }));
+  const sleepDurations = points.map((p) => p.totalSleepMinutes);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -158,29 +241,20 @@ export default function TrendsScreen() {
         <View style={styles.chartsStack}>
           <ChartCard
             title="Scores"
-            description="Sleep, readiness and activity — higher is better, 0-100."
+            description="Sleep, readiness and activity — higher is better, 0-100. Tap a name to show or hide it."
             points={points}
-            series={[
-              { key: 'sleepScore', name: 'Sleep', color: SLEEP_COLOR, values: points.map((p) => p.sleepScore) },
-              {
-                key: 'readinessScore',
-                name: 'Readiness',
-                color: READINESS_COLOR,
-                values: points.map((p) => p.readinessScore),
-              },
-              {
-                key: 'activityScore',
-                name: 'Activity',
-                color: ACTIVITY_COLOR,
-                values: points.map((p) => p.activityScore),
-              },
-            ]}
+            series={scoreSeries}
+            yMin={0}
+            yMax={100}
+            legend={<ScoreToggles selected={scoreKeys} onToggle={toggleScore} />}
           />
 
           <ChartCard
             title="HRV"
             description="Average heart rate variability (ms)."
             points={points}
+            yMin={0}
+            yMax={niceMax(points.map((p) => p.averageHrv))}
             series={[{ key: 'averageHrv', name: 'HRV', color: METRIC_COLOR, values: points.map((p) => p.averageHrv) }]}
           />
 
@@ -188,6 +262,8 @@ export default function TrendsScreen() {
             title="Resting heart rate"
             description="Beats per minute."
             points={points}
+            yMin={0}
+            yMax={niceMax(points.map((p) => p.restingHeartRate))}
             series={[
               {
                 key: 'restingHeartRate',
@@ -200,14 +276,18 @@ export default function TrendsScreen() {
 
           <ChartCard
             title="Sleep duration"
-            description="Total sleep, in minutes."
+            description="Total sleep, in hours and minutes."
             points={points}
+            yMin={0}
+            yMax={durationAxisMax(sleepDurations)}
+            formatY={durationLabel}
+            formatValue={durationLabel}
             series={[
               {
                 key: 'totalSleepMinutes',
                 name: 'Sleep duration',
                 color: METRIC_COLOR,
-                values: points.map((p) => p.totalSleepMinutes),
+                values: sleepDurations,
               },
             ]}
           />
@@ -216,6 +296,8 @@ export default function TrendsScreen() {
             title="Steps"
             description="Daily step count."
             points={points}
+            yMin={0}
+            yMax={niceMax(points.map((p) => p.steps))}
             series={[{ key: 'steps', name: 'Steps', color: METRIC_COLOR, values: points.map((p) => p.steps) }]}
           />
         </View>
@@ -230,7 +312,7 @@ export default function TrendsScreen() {
           <ScrollView horizontal style={styles.tableScroll}>
             <View>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                {['Date', 'Sleep', 'Readiness', 'Activity', 'HRV', 'Resting HR', 'Sleep min', 'Steps'].map(
+                {['Date', 'Sleep', 'Readiness', 'Activity', 'HRV', 'Resting HR', 'Sleep time', 'Steps'].map(
                   (h) => (
                     <Text key={h} style={styles.tableHeaderCell}>
                       {h}
@@ -246,7 +328,7 @@ export default function TrendsScreen() {
                   <Text style={styles.tableCell}>{p.activityScore ?? '—'}</Text>
                   <Text style={styles.tableCell}>{p.averageHrv ?? '—'}</Text>
                   <Text style={styles.tableCell}>{p.restingHeartRate ?? '—'}</Text>
-                  <Text style={styles.tableCell}>{p.totalSleepMinutes ?? '—'}</Text>
+                  <Text style={styles.tableCell}>{p.totalSleepMinutes === null ? '—' : durationLabel(p.totalSleepMinutes)}</Text>
                   <Text style={styles.tableCell}>{p.steps ?? '—'}</Text>
                 </View>
               ))}
@@ -366,6 +448,44 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sans,
     fontSize: 13,
     color: colors.muted.foreground,
+  },
+  legendTop: {
+    marginBottom: 8,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  toggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.card.border,
+    backgroundColor: colors.card.default,
+  },
+  toggleChipOn: {
+    backgroundColor: colors.primary.default,
+    borderColor: colors.accent.light,
+  },
+  toggleDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  toggleText: {
+    fontFamily: fontFamily.sansMedium,
+    fontSize: 13,
+    color: colors.muted.foreground,
+  },
+  toggleTextOn: {
+    color: colors.primary.foreground,
   },
   legendRow: {
     flexDirection: 'row',
