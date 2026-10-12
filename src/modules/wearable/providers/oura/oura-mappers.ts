@@ -8,6 +8,7 @@ import type {
   OuraDailyReadinessRecord,
   OuraDailySleepRecord,
   OuraDailySpo2Record,
+  OuraSleepSessionRecord,
   OuraWorkoutRecord,
 } from './oura-data-types';
 
@@ -37,6 +38,66 @@ function secondsToMinutes(seconds: number | undefined): number | undefined {
 
 function toDateOrUndefined(value: string | undefined): Date | undefined {
   return value ? new Date(value) : undefined;
+}
+
+/** Number or undefined (Oura sends null for a value it could not measure). */
+function numberOrUndefined(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Oura's `sleep` endpoint returns every sleep period, and a day can have a
+ * main night plus naps. One record per day represents the night: the longest
+ * `long_sleep`, otherwise the longest `sleep`; naps (`late_nap`), `rest`
+ * periods and `deleted` records never set the day's HRV / resting heart rate /
+ * duration. (The `type` field is absent on some older records — those count
+ * as `sleep`.)
+ */
+export function pickPrimarySleepSessions(sessions: OuraSleepSessionRecord[]): OuraSleepSessionRecord[] {
+  const rank = (s: OuraSleepSessionRecord): number => {
+    const type = s.type ?? 'sleep';
+    if (type === 'long_sleep') return 2;
+    if (type === 'sleep') return 1;
+    return 0;
+  };
+  const best = new Map<string, OuraSleepSessionRecord>();
+  for (const session of sessions) {
+    if (rank(session) === 0 || !session.day) continue;
+    const current = best.get(session.day);
+    if (
+      !current ||
+      rank(session) > rank(current) ||
+      (rank(session) === rank(current) &&
+        (numberOrUndefined(session.total_sleep_duration) ?? 0) > (numberOrUndefined(current.total_sleep_duration) ?? 0))
+    ) {
+      best.set(session.day, session);
+    }
+  }
+  return [...best.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
+function looksLikeSleepSession(payload: Record<string, unknown>): boolean {
+  return 'average_hrv' in payload || 'lowest_heart_rate' in payload || 'total_sleep_duration' in payload;
+}
+
+function mapSleepSession(record: ProviderRawRecord): NormalizedDailyMetric | null {
+  const payload = record.payload as OuraSleepSessionRecord;
+  return {
+    date: record.dataDate,
+    fields: {
+      totalSleepMinutes: secondsToMinutes(numberOrUndefined(payload.total_sleep_duration)),
+      deepSleepMinutes: secondsToMinutes(numberOrUndefined(payload.deep_sleep_duration)),
+      remSleepMinutes: secondsToMinutes(numberOrUndefined(payload.rem_sleep_duration)),
+      lightSleepMinutes: secondsToMinutes(numberOrUndefined(payload.light_sleep_duration)),
+      awakeMinutes: secondsToMinutes(numberOrUndefined(payload.awake_time)),
+      sleepEfficiencyPct: numberOrUndefined(payload.efficiency),
+      sleepLatencyMinutes: secondsToMinutes(numberOrUndefined(payload.latency)),
+      bedtimeStart: toDateOrUndefined(payload.bedtime_start),
+      bedtimeEnd: toDateOrUndefined(payload.bedtime_end),
+      restingHeartRate: numberOrUndefined(payload.lowest_heart_rate),
+      averageHrv: numberOrUndefined(payload.average_hrv),
+    },
+  };
 }
 
 export function mapOuraRecordToDailyMetric(record: ProviderRawRecord): NormalizedDailyMetric | null {
@@ -96,9 +157,14 @@ export function mapOuraRecordToDailyMetric(record: ProviderRawRecord): Normalize
     // DailyHealthMetric field (workouts get their own table — see
     // mapOuraRecordToWorkout below; heart-rate has no finer-grained target
     // than restingHeartRate, which the sleep record already supplies).
+    // Oura's detailed `sleep` periods are stored as dataType 'OTHER' (the
+    // WearableDataType enum has no slot for them, same convention as the Apple
+    // Health records): the one place HRV, resting heart rate and the sleep
+    // durations really come from. `daily_sleep` only carries the score.
+    case 'OTHER':
+      return looksLikeSleepSession(record.payload as Record<string, unknown>) ? mapSleepSession(record) : null;
     case 'HEART_RATE':
     case 'WORKOUT':
-    case 'OTHER':
     default:
       return null;
   }

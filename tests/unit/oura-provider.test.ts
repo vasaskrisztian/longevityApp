@@ -33,6 +33,7 @@ const fetchOuraDailyActivityMock = vi.fn();
 const fetchOuraHeartRateMock = vi.fn();
 const fetchOuraWorkoutsMock = vi.fn();
 const fetchOuraDailySpo2Mock = vi.fn();
+const fetchOuraSleepSessionsMock = vi.fn();
 vi.mock('@/modules/wearable/providers/oura/oura-api-client', () => ({
   fetchOuraDailySleep: fetchOuraDailySleepMock,
   fetchOuraDailyReadiness: fetchOuraDailyReadinessMock,
@@ -40,6 +41,7 @@ vi.mock('@/modules/wearable/providers/oura/oura-api-client', () => ({
   fetchOuraHeartRate: fetchOuraHeartRateMock,
   fetchOuraWorkouts: fetchOuraWorkoutsMock,
   fetchOuraDailySpo2: fetchOuraDailySpo2Mock,
+  fetchOuraSleepSessions: fetchOuraSleepSessionsMock,
 }));
 
 const mockFetchRawDataMock = vi.fn();
@@ -52,6 +54,8 @@ const mapOuraRecordToWorkoutMock = vi.fn();
 vi.mock('@/modules/wearable/providers/oura/oura-mappers', () => ({
   mapOuraRecordToDailyMetric: mapOuraRecordToDailyMetricMock,
   mapOuraRecordToWorkout: mapOuraRecordToWorkoutMock,
+  // Selection is the real implementation's job (tested in oura-mappers.test.ts); pass everything through here.
+  pickPrimarySleepSessions: (sessions: unknown[]) => sessions,
 }));
 
 const { OuraProvider, getOuraProvider, _resetOuraProviderForTests } = await import(
@@ -215,8 +219,9 @@ describe('OuraProvider#fetchRawData', () => {
     expect(fetchOuraDailySleepMock).not.toHaveBeenCalled();
   });
 
-  it('in real mode, calls all six endpoints and combines their records', async () => {
+  it('in real mode, calls all seven endpoints and combines their records', async () => {
     isOuraMockModeMock.mockReturnValue(false);
+    fetchOuraSleepSessionsMock.mockResolvedValue([{ id: 'session-1', day: '2026-01-01', average_hrv: 55 }]);
     fetchOuraDailySleepMock.mockResolvedValue([{ id: 'sleep-1', day: '2026-01-01' }]);
     fetchOuraDailyReadinessMock.mockResolvedValue([{ id: 'ready-1', day: '2026-01-01' }]);
     fetchOuraDailyActivityMock.mockResolvedValue([{ id: 'act-1', day: '2026-01-01' }]);
@@ -228,15 +233,46 @@ describe('OuraProvider#fetchRawData', () => {
     const result = await provider.fetchRawData({ accessToken: 'at', from: FROM, to: TO });
 
     expect(result.failures).toEqual([]);
-    expect(result.records).toHaveLength(6);
+    expect(result.records).toHaveLength(7);
     const dataTypes = result.records.map((r) => r.dataType).sort();
     expect(dataTypes).toEqual(
-      ['DAILY_ACTIVITY', 'DAILY_READINESS', 'DAILY_SLEEP', 'HEART_RATE', 'SPO2', 'WORKOUT'].sort(),
+      ['DAILY_ACTIVITY', 'DAILY_READINESS', 'DAILY_SLEEP', 'HEART_RATE', 'OTHER', 'SPO2', 'WORKOUT'].sort(),
     );
     expect(fetchOuraDailySleepMock).toHaveBeenCalledWith('at', FROM, TO);
+    // The detailed sleep periods (HRV, resting HR, durations) are stored as OTHER.
+    const session = result.records.find((r) => r.dataType === 'OTHER')!;
+    expect(session.externalId).toBe('session-1');
+    expect(session.dataDate).toEqual(new Date('2026-01-01'));
   });
 
-  it('in real mode, one endpoint failing does not discard the records the other five returned', async () => {
+  it('always fetches the sleep periods over at least the last 30 days, even for a short sync window', async () => {
+    isOuraMockModeMock.mockReturnValue(false);
+    for (const m of [
+      fetchOuraDailySleepMock,
+      fetchOuraDailyReadinessMock,
+      fetchOuraDailyActivityMock,
+      fetchOuraHeartRateMock,
+      fetchOuraWorkoutsMock,
+      fetchOuraDailySpo2Mock,
+      fetchOuraSleepSessionsMock,
+    ]) {
+      m.mockResolvedValue([]);
+    }
+    const provider = new OuraProvider();
+
+    await provider.fetchRawData({ accessToken: 'at', from: FROM, to: TO });
+
+    const [, sleepFrom, sleepTo] = fetchOuraSleepSessionsMock.mock.calls[0]!;
+    expect(sleepTo).toBe(TO);
+    expect((sleepFrom as Date).toISOString().slice(0, 10)).toBe('2025-12-03'); // TO (2026-01-02) minus 30 days
+    // A window already longer than 30 days is left alone.
+    fetchOuraSleepSessionsMock.mockClear();
+    const longFrom = new Date('2025-10-01T00:00:00Z');
+    await provider.fetchRawData({ accessToken: 'at', from: longFrom, to: TO });
+    expect(fetchOuraSleepSessionsMock.mock.calls[0]![1]).toEqual(longFrom);
+  });
+
+  it('in real mode, one endpoint failing does not discard the records the others returned', async () => {
     isOuraMockModeMock.mockReturnValue(false);
     fetchOuraDailySleepMock.mockResolvedValue([{ id: 'sleep-1', day: '2026-01-01' }]);
     fetchOuraDailyReadinessMock.mockResolvedValue([]);
@@ -244,6 +280,7 @@ describe('OuraProvider#fetchRawData', () => {
     fetchOuraHeartRateMock.mockResolvedValue([]);
     fetchOuraWorkoutsMock.mockRejectedValue(new Error('Oura workout request failed with status 503'));
     fetchOuraDailySpo2Mock.mockResolvedValue([]);
+    fetchOuraSleepSessionsMock.mockResolvedValue([]);
     const provider = new OuraProvider();
 
     const result = await provider.fetchRawData({ accessToken: 'at', from: FROM, to: TO });

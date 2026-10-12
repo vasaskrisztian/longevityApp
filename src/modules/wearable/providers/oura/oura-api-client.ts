@@ -5,6 +5,7 @@ import type {
   OuraDailySleepRecord,
   OuraDailySpo2Record,
   OuraHeartRateRecord,
+  OuraSleepSessionRecord,
   OuraWorkoutRecord,
 } from './oura-data-types';
 
@@ -13,7 +14,7 @@ import type {
  * cursor-paginated (`next_token`); `fetchOuraCollection` walks every page
  * before returning, so callers (oura-provider.ts) never see a partial page.
  * A network/HTTP failure on one endpoint throws — the caller
- * (`OuraProvider.fetchRawData`) runs all six endpoints independently via
+ * (`OuraProvider.fetchRawData`) runs all seven endpoints independently via
  * `Promise.allSettled` so one endpoint's failure never discards data another
  * endpoint successfully returned.
  */
@@ -38,8 +39,9 @@ interface OuraCollectionPage<T> {
   next_token: string | null;
 }
 
-function toDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function toDateOnly(date: Date, addDays = 0): string {
+  const shifted = addDays === 0 ? date : new Date(date.getTime() + addDays * 86_400_000);
+  return shifted.toISOString().slice(0, 10);
 }
 
 async function fetchOuraCollection<T>(params: {
@@ -47,6 +49,8 @@ async function fetchOuraCollection<T>(params: {
   accessToken: string;
   from: Date;
   to: Date;
+  /** Days added to `end_date` (the `sleep` endpoint treats it as exclusive, so a same-day window would return nothing). */
+  endPaddingDays?: number;
 }): Promise<T[]> {
   const results: T[] = [];
   let nextToken: string | undefined;
@@ -56,7 +60,7 @@ async function fetchOuraCollection<T>(params: {
     page += 1;
     const url = new URL(`${OURA_API_BASE}/${params.endpoint}`);
     url.searchParams.set('start_date', toDateOnly(params.from));
-    url.searchParams.set('end_date', toDateOnly(params.to));
+    url.searchParams.set('end_date', toDateOnly(params.to, params.endPaddingDays ?? 0));
     if (nextToken) {
       url.searchParams.set('next_token', nextToken);
     }
@@ -114,6 +118,28 @@ export function fetchOuraDailySleep(
   to: Date,
 ): Promise<OuraDailySleepRecord[]> {
   return fetchOuraCollection<OuraDailySleepRecord>({ endpoint: 'daily_sleep', accessToken, from, to });
+}
+
+/**
+ * The detailed `sleep` endpoint: one record per sleep period, carrying the
+ * total/stage durations, `average_hrv` and `lowest_heart_rate` that
+ * `daily_sleep` does not have. Its `end_date` is exclusive (a window whose
+ * start and end are the same day returns nothing), so the window is padded by
+ * one day; a padded day only ever adds a record, which the primary-session
+ * selection and the per-day merge handle like any other.
+ */
+export function fetchOuraSleepSessions(
+  accessToken: string,
+  from: Date,
+  to: Date,
+): Promise<OuraSleepSessionRecord[]> {
+  return fetchOuraCollection<OuraSleepSessionRecord>({
+    endpoint: 'sleep',
+    accessToken,
+    from,
+    to,
+    endPaddingDays: 1,
+  });
 }
 
 export function fetchOuraDailyReadiness(

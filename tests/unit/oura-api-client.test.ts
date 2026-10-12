@@ -5,6 +5,7 @@ import {
   fetchOuraDailySleep,
   fetchOuraDailySpo2,
   fetchOuraHeartRate,
+  fetchOuraSleepSessions,
   fetchOuraWorkouts,
 } from '@/modules/wearable/providers/oura/oura-api-client';
 
@@ -21,6 +22,21 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('fetchOuraSleepSessions', () => {
+  it('uses the detailed sleep endpoint and pads end_date by one day (it is exclusive there)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: 'x', day: '2026-01-02' }], next_token: null }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOuraSleepSessions('token-abc', FROM, TO);
+
+    const parsed = new URL(fetchMock.mock.calls[0]![0] as string);
+    expect(parsed.origin + parsed.pathname).toBe('https://api.ouraring.com/v2/usercollection/sleep');
+    expect(parsed.searchParams.get('start_date')).toBe('2026-01-01');
+    expect(parsed.searchParams.get('end_date')).toBe('2026-01-04');
+    expect(result).toEqual([{ id: 'x', day: '2026-01-02' }]);
+  });
 });
 
 describe('fetchOuraDailySleep', () => {

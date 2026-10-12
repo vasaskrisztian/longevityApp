@@ -26,18 +26,29 @@ import {
   fetchOuraDailySleep,
   fetchOuraDailySpo2,
   fetchOuraHeartRate,
+  fetchOuraSleepSessions,
   fetchOuraWorkouts,
 } from './oura-api-client';
 import { mockFetchRawData } from './oura-ingestion-mock';
-import { mapOuraRecordToDailyMetric, mapOuraRecordToWorkout } from './oura-mappers';
+import { mapOuraRecordToDailyMetric, mapOuraRecordToWorkout, pickPrimarySleepSessions } from './oura-mappers';
 import type {
   OuraDailyActivityRecord,
   OuraDailyReadinessRecord,
   OuraDailySleepRecord,
   OuraDailySpo2Record,
   OuraHeartRateRecord,
+  OuraSleepSessionRecord,
   OuraWorkoutRecord,
 } from './oura-data-types';
+
+/**
+ * The detailed sleep periods are always fetched over at least this many days,
+ * however short the sync window is: it is one small request (about a record a
+ * day), the upserts are idempotent, and it makes the sleep duration / HRV /
+ * resting-heart-rate history repair itself on the next sync instead of needing
+ * a manual re-import.
+ */
+const SLEEP_LOOKBACK_DAYS = 30;
 
 type FetchRawDataTask = { dataType: ProviderRawRecord['dataType']; run: () => Promise<ProviderRawRecord[]> };
 
@@ -49,6 +60,27 @@ function buildFetchTasks(accessToken: string, from: Date, to: Date): FetchRawDat
         (await fetchOuraDailySleep(accessToken, from, to)).map(
           (r: OuraDailySleepRecord): ProviderRawRecord => ({
             dataType: 'DAILY_SLEEP',
+            externalId: r.id,
+            dataDate: new Date(r.day),
+            payload: r,
+          }),
+        ),
+    },
+    {
+      // The detailed sleep periods: the only source of sleep duration, HRV and
+      // resting heart rate (daily_sleep has just the score). Stored as 'OTHER'
+      // (see oura-mappers.ts); one record per day, the main night.
+      dataType: 'OTHER',
+      run: async () =>
+        pickPrimarySleepSessions(
+          await fetchOuraSleepSessions(
+            accessToken,
+            new Date(Math.min(from.getTime(), to.getTime() - SLEEP_LOOKBACK_DAYS * 86_400_000)),
+            to,
+          ),
+        ).map(
+          (r: OuraSleepSessionRecord): ProviderRawRecord => ({
+            dataType: 'OTHER',
             externalId: r.id,
             dataDate: new Date(r.day),
             payload: r,
@@ -181,9 +213,9 @@ export class OuraProvider implements WearableProviderAdapter {
   }
 
   /**
-   * Runs all six of Oura's data-type endpoints independently
+   * Runs all seven of Oura's endpoints independently
    * (`Promise.allSettled`) so one endpoint's failure (e.g. a transient 500 on
-   * /workout) never discards data the other five successfully returned —
+   * /workout) never discards data the others successfully returned —
    * `failures` carries the per-endpoint errors for the caller
    * (modules/wearable/services/sync.service.ts) to decide whether the
    * overall sync is SUCCESS, PARTIAL or FAILED.

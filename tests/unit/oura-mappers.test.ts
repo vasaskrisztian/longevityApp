@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   mapOuraRecordToDailyMetric,
   mapOuraRecordToWorkout,
+  pickPrimarySleepSessions,
 } from '@/modules/wearable/providers/oura/oura-mappers';
 import type { ProviderRawRecord } from '@/modules/wearable/domain/wearable-provider.types';
 
@@ -111,6 +112,67 @@ describe('mapOuraRecordToDailyMetric', () => {
     });
   });
 
+  it('maps a real daily_sleep payload (score + contributors only) to just the sleep score', () => {
+    const record = rawRecord({
+      dataType: 'DAILY_SLEEP',
+      payload: { id: 's1', day: '2026-01-15', score: 82, timestamp: '2026-01-15T00:00:00+00:00', contributors: { deep_sleep: 70 } },
+    });
+
+    expect(mapOuraRecordToDailyMetric(record)!.fields).toEqual({ sleepScore: 82 });
+  });
+
+  it('maps an Oura sleep period (stored as OTHER): durations, HRV and resting HR from the `sleep` endpoint', () => {
+    const record = rawRecord({
+      dataType: 'OTHER',
+      payload: {
+        id: 'p1',
+        day: '2026-01-15',
+        type: 'long_sleep',
+        total_sleep_duration: 7 * 3600,
+        deep_sleep_duration: 3600,
+        rem_sleep_duration: 5400,
+        light_sleep_duration: 7 * 3600 - 3600 - 5400,
+        awake_time: 600,
+        efficiency: 91,
+        latency: 300,
+        bedtime_start: '2026-01-14T22:00:00Z',
+        bedtime_end: '2026-01-15T06:10:00Z',
+        lowest_heart_rate: 48,
+        average_hrv: 63,
+      },
+    });
+
+    expect(mapOuraRecordToDailyMetric(record)).toEqual({
+      date: DAY,
+      fields: {
+        totalSleepMinutes: 420,
+        deepSleepMinutes: 60,
+        remSleepMinutes: 90,
+        lightSleepMinutes: 270,
+        awakeMinutes: 10,
+        sleepEfficiencyPct: 91,
+        sleepLatencyMinutes: 5,
+        bedtimeStart: new Date('2026-01-14T22:00:00Z'),
+        bedtimeEnd: new Date('2026-01-15T06:10:00Z'),
+        restingHeartRate: 48,
+        averageHrv: 63,
+      },
+    });
+  });
+
+  it('leaves out values Oura could not measure (null) instead of writing 0 or NaN', () => {
+    const record = rawRecord({
+      dataType: 'OTHER',
+      payload: { id: 'p2', day: '2026-01-15', type: 'long_sleep', total_sleep_duration: 6 * 3600, average_hrv: null, lowest_heart_rate: null },
+    });
+
+    const fields = mapOuraRecordToDailyMetric(record)!.fields;
+
+    expect(fields.totalSleepMinutes).toBe(360);
+    expect(fields.averageHrv).toBeUndefined();
+    expect(fields.restingHeartRate).toBeUndefined();
+  });
+
   it('returns null for HEART_RATE, WORKOUT, and OTHER — no daily-metric field targets them', () => {
     expect(mapOuraRecordToDailyMetric(rawRecord({ dataType: 'HEART_RATE' }))).toBeNull();
     expect(mapOuraRecordToDailyMetric(rawRecord({ dataType: 'WORKOUT' }))).toBeNull();
@@ -173,5 +235,52 @@ describe('mapOuraRecordToWorkout', () => {
 
   it('returns null for any non-WORKOUT dataType', () => {
     expect(mapOuraRecordToWorkout(rawRecord({ dataType: 'DAILY_SLEEP' }))).toBeNull();
+  });
+});
+
+describe('pickPrimarySleepSessions', () => {
+  const session = (id: string, day: string, type: string | undefined, total: number) => ({
+    id,
+    day,
+    ...(type ? { type } : {}),
+    total_sleep_duration: total,
+  });
+
+  it('keeps one record per day: the longest long_sleep', () => {
+    const picked = pickPrimarySleepSessions([
+      session('a', '2026-01-15', 'long_sleep', 6 * 3600),
+      session('b', '2026-01-15', 'long_sleep', 7 * 3600),
+      session('c', '2026-01-16', 'long_sleep', 8 * 3600),
+    ]);
+
+    expect(picked.map((p) => p.id)).toEqual(['b', 'c']);
+  });
+
+  it('never lets a nap, a rest period or a deleted record stand in for the night', () => {
+    const picked = pickPrimarySleepSessions([
+      session('nap', '2026-01-15', 'late_nap', 9 * 3600),
+      session('rest', '2026-01-15', 'rest', 9 * 3600),
+      session('gone', '2026-01-15', 'deleted', 9 * 3600),
+      session('night', '2026-01-15', 'long_sleep', 5 * 3600),
+      session('nap-only', '2026-01-16', 'late_nap', 3600),
+    ]);
+
+    expect(picked.map((p) => p.id)).toEqual(['night']);
+  });
+
+  it('prefers long_sleep over sleep, and treats a missing type as sleep', () => {
+    expect(
+      pickPrimarySleepSessions([session('s', '2026-01-15', 'sleep', 9 * 3600), session('l', '2026-01-15', 'long_sleep', 4 * 3600)]).map((p) => p.id),
+    ).toEqual(['l']);
+    expect(pickPrimarySleepSessions([session('old', '2026-01-15', undefined, 7 * 3600)]).map((p) => p.id)).toEqual(['old']);
+  });
+
+  it('returns the days oldest first', () => {
+    const picked = pickPrimarySleepSessions([
+      session('b', '2026-01-16', 'long_sleep', 7 * 3600),
+      session('a', '2026-01-15', 'long_sleep', 7 * 3600),
+    ]);
+
+    expect(picked.map((p) => p.day)).toEqual(['2026-01-15', '2026-01-16']);
   });
 });

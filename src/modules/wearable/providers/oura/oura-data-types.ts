@@ -3,16 +3,15 @@
  * ingests. Nothing outside this directory may import this file — enforced
  * by .eslintrc.json's no-restricted-imports rule, same as oura-types.ts.
  *
- * These field names are modeled on Oura's public v2 API documentation,
- * consolidated to match what this app's `DailyHealthMetric` schema actually
- * needs (e.g. `daily_sleep` here also carries the sleep-duration/HRV/resting-
- * heart-rate detail Oura's real API splits into a separate `sleep` endpoint)
- * — this is a deliberate simplification for the MVP, not a transcription of
- * Oura's docs. Nothing in this sandbox can verify field names against a live
- * Oura account (see docs/phase-4-summary.md's Known limitations); the mock
- * generator in oura-ingestion-mock.ts produces exactly this shape, so the
- * mapper in oura-mappers.ts is internally consistent regardless. Revisit
- * against Oura's live API docs before the first production sync.
+ * IMPORTANT (confirmed against the live production payloads, 2026-10): the
+ * real `daily_sleep` endpoint returns ONLY `id, day, score, timestamp,
+ * contributors` — no durations, no HRV, no resting heart rate. Those live on
+ * the separate `sleep` endpoint (one record per sleep period, see
+ * `OuraSleepSessionRecord`). `OuraDailySleepRecord` below still lists the
+ * detail fields because the mock generator (oura-ingestion-mock.ts) emits
+ * them and the mapper tolerates them, but for a real account they are always
+ * absent: the sleep duration / HRV / resting heart rate come from the
+ * `sleep` endpoint via `OuraSleepSessionRecord`.
  */
 
 export interface OuraDailySleepRecord {
@@ -30,6 +29,29 @@ export interface OuraDailySleepRecord {
   bedtime_end: string; // ISO datetime
   lowest_heart_rate: number; // bpm — used as this app's restingHeartRate
   average_hrv: number; // ms
+}
+
+/**
+ * One record of Oura's `sleep` endpoint — a single sleep period (a night, a
+ * nap, ...). A day can have several; `pickPrimarySleepSessions` in
+ * oura-mappers.ts selects the one that represents the night.
+ */
+export interface OuraSleepSessionRecord {
+  id: string;
+  day: string; // YYYY-MM-DD (the day the period belongs to)
+  /** 'long_sleep' (the main night), 'sleep', 'late_nap', 'rest' or 'deleted'. */
+  type?: string;
+  total_sleep_duration?: number | null; // seconds
+  deep_sleep_duration?: number | null;
+  rem_sleep_duration?: number | null;
+  light_sleep_duration?: number | null;
+  awake_time?: number | null;
+  efficiency?: number | null; // 0-100 (%)
+  latency?: number | null; // seconds
+  bedtime_start?: string;
+  bedtime_end?: string;
+  lowest_heart_rate?: number | null; // bpm — used as this app's restingHeartRate
+  average_hrv?: number | null; // ms
 }
 
 export interface OuraDailyReadinessRecord {
