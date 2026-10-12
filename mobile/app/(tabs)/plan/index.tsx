@@ -7,7 +7,8 @@ import { Card } from '@/src/components/ui/Card';
 import { HubList } from '@/src/components/ui/HubRow';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { protocolTargetLines } from '@/src/screens/protocolTargets';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
+import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 function FollowingCard() {
   const [overlay, setOverlay] = useState<ProtocolOverlay | null | undefined>(undefined);
@@ -54,7 +55,9 @@ export default function PlanScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <ScreenBackdrop />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.intro}>What you follow and what you aim for.</Text>
       {isDesktop ? (
         <View style={styles.columns}>
@@ -66,12 +69,14 @@ export default function PlanScreen() {
       ) : (
         hub
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
+  scroll: { flex: 1 },
   content: { padding: 20, gap: 16 },
   intro: { fontFamily: fontFamily.sans, fontSize: 14, color: colors.muted.foreground },
   columns: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },

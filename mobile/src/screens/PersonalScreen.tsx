@@ -7,7 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { GenderEnum, PersonalInfoSchema, enumLabel, type PersonalInfoInput } from '@/src/validation/schemas';
 
 /**
@@ -143,7 +143,7 @@ export default function PersonalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },

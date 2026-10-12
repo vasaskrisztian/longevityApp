@@ -31,9 +31,10 @@ const chipStyles = StyleSheet.create({
     borderColor: colors.card.border,
     backgroundColor: colors.card.default,
   },
+  // Selected chips: forest green with a thin gold edge (the brand pairing).
   chipActive: {
     backgroundColor: colors.primary.default,
-    borderColor: colors.primary.default,
+    borderColor: colors.accent.light,
   },
   chipText: {
     fontFamily: fontFamily.sansMedium,

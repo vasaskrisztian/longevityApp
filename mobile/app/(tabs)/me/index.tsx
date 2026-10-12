@@ -1,15 +1,18 @@
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { useSession } from '@/src/auth/useSession';
 import { Button } from '@/src/components/ui/Button';
 import { HubList } from '@/src/components/ui/HubRow';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
+import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 export default function MeScreen() {
   const { user, logout } = useSession();
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <ScreenBackdrop />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {user ? <Text style={styles.email}>{user.email}</Text> : null}
       <HubList
         items={[
@@ -19,12 +22,14 @@ export default function MeScreen() {
         ]}
       />
       <Button title="Log out" variant="destructive" onPress={() => logout()} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
+  scroll: { flex: 1 },
   content: { padding: 20, gap: 16 },
   email: { fontFamily: fontFamily.sansMedium, fontSize: 15, color: colors.muted.foreground },
 });

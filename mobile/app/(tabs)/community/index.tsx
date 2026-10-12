@@ -4,7 +4,8 @@ import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import FollowedCreatorsScreen from '@/src/screens/FollowedCreatorsScreen';
 import GroupsScreen from '@/src/screens/GroupsScreen';
-import { colors } from '@/src/theme/tokens';
+import { screenBackground } from '@/src/theme/tokens';
+import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 const SEGMENTS = ['groups', 'creators'] as const;
 
@@ -13,6 +14,7 @@ export default function CommunityScreen() {
   const [segment, setSegment] = useTabParam(SEGMENTS, 'groups');
   return (
     <View style={styles.container}>
+      <ScreenBackdrop />
       <View style={styles.segments}>
         <SegmentedControl
           options={[
@@ -29,7 +31,7 @@ export default function CommunityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   segments: { paddingHorizontal: 20, paddingTop: 12 },
   body: { flex: 1 },
 });

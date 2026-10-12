@@ -16,7 +16,7 @@ import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelec
 import { TextField } from '@/src/components/ui/TextField';
 import { describeSupplement } from '@/src/screens/supplementText';
 import { confirmDestructive } from '@/src/utils/confirm';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import {
   CreateSupplementSchema,
   SupplementFrequencyEnum,
@@ -278,7 +278,7 @@ export default function SupplementsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

@@ -8,7 +8,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/src/wellbeing/format';
 
@@ -143,9 +143,9 @@ export default function AdminGroupChallengeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   content: { padding: 20, gap: 12 },
-  centered: { flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: 'center', alignItems: 'center' },
+  centered: { flex: 1, backgroundColor: screenBackground, padding: 20, justifyContent: 'center', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { flexShrink: 1, fontFamily: fontFamily.display, fontSize: 24, color: colors.foreground },
   card: { gap: 10 },

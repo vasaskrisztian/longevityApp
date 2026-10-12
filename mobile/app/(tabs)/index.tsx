@@ -6,7 +6,8 @@ import { useTabParam } from '@/src/navigation/useTabParam';
 import DashboardScreen from '@/src/screens/DashboardScreen';
 import InBodyScreen from '@/src/screens/InBodyScreen';
 import TrendsScreen from '@/src/screens/TrendsScreen';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
+import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 const SEGMENTS = ['today', 'trends', 'body'] as const;
 
@@ -19,6 +20,7 @@ export default function TodayScreen() {
   const [segment, setSegment] = useTabParam(SEGMENTS, 'today');
   return (
     <View style={styles.container}>
+      <ScreenBackdrop />
       <View style={styles.header}>
         <Text style={styles.title}>Today</Text>
         <BellButton />
@@ -44,7 +46,7 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12 },
   title: { fontFamily: fontFamily.display, fontSize: 28, color: colors.foreground },
   segments: { paddingHorizontal: 20, paddingTop: 12 },

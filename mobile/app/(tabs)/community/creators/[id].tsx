@@ -13,7 +13,7 @@ import { useSession } from '@/src/auth/useSession';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
  * Mirrors the web app's app/creators/[id]/page.tsx: a creator's public
@@ -229,7 +229,7 @@ export default function CreatorPublicProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

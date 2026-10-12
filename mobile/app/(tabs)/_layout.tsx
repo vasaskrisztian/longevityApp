@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Platform, View } from 'react-native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,11 +11,31 @@ import { useUnreadCount } from '@/src/notifications/unreadStore';
 import { usePendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { usePendingInvitationsSync } from '@/src/wellbeing/usePendingInvitationsSync';
 
-import { colors } from '@/src/theme/tokens';
+import { colors, tints, screenBackground } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
 import { getProfileBundle } from '@/src/api/profile';
+import { AppBackdrop } from '@/src/components/AppBackdrop';
 import { DesktopShell } from '@/src/components/DesktopShell';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+
+// On the web the decorative backdrop sits behind the whole content area, so
+// the navigators in this subtree must not paint their own opaque scene
+// background (the screens use `screenBackground`, which is transparent on
+// web).
+const transparentTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: colors.primary.default,
+    background: 'transparent',
+    // Nested stack headers take their colour from `card`: transparent on the
+    // web so the backdrop runs up to the top edge (the tab bar sets its own).
+    card: 'transparent',
+    text: colors.foreground,
+    border: colors.card.border,
+    notification: colors.danger,
+  },
+};
 
 // Four areas (see the UI review): Today (scores, trends, body), Plan
 // (protocols, supplements, goals, my challenges), Community (groups,
@@ -91,6 +113,9 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary.default,
         tabBarInactiveTintColor: colors.muted.foreground,
+        // The selected tab sits on a soft gold wash (green icon + label).
+        tabBarActiveBackgroundColor: tints.gold,
+        tabBarItemStyle: { borderRadius: 14, marginHorizontal: 6, marginVertical: 4 },
         tabBarStyle: {
           backgroundColor: colors.card.default,
           borderTopColor: colors.card.border,
@@ -139,5 +164,13 @@ export default function TabLayout() {
     </Tabs>
   );
 
-  return isDesktop ? <DesktopShell>{tabs}</DesktopShell> : tabs;
+  if (Platform.OS !== 'web') return tabs;
+  const themed = <ThemeProvider value={transparentTheme}>{tabs}</ThemeProvider>;
+  if (isDesktop) return <DesktopShell>{themed}</DesktopShell>;
+  return (
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
+      <AppBackdrop />
+      {themed}
+    </View>
+  );
 }

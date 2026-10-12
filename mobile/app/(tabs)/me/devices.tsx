@@ -16,7 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import appleHealthNative from '@/src/health/native';
 import { AppleHealthRateLimitedError } from '@/src/api/appleHealth';
 import { syncAppleHealth } from '@/src/health/sync';
-import { colors, fontFamily, radii } from '@/src/theme/tokens';
+import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens';
 
 /**
  * Real Oura connect/sync/disconnect, phase 19 — replaces the ScreenStub.
@@ -359,7 +359,7 @@ export default function DevicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },

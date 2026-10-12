@@ -9,8 +9,9 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { notificationHref } from '@/src/notifications/route';
 import { setUnreadCount } from '@/src/notifications/unreadStore';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { timeAgo } from '@/src/wellbeing/format';
+import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 const ICON: Record<AppNotification['type'], React.ComponentProps<typeof Ionicons>['name']> = {
   GROUP_INVITATION: 'mail-outline',
@@ -73,7 +74,9 @@ export default function NotificationsScreen() {
   const unread = items?.filter((n) => !n.readAt).length ?? 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <ScreenBackdrop />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Pressable accessibilityRole="button" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} style={styles.back}>
         <Ionicons name="chevron-back" size={18} color={colors.muted.foreground} />
         <Text style={styles.backLabel}>Back</Text>
@@ -114,12 +117,14 @@ export default function NotificationsScreen() {
           </Card>
         </Pressable>
       ))}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
+  scroll: { flex: 1 },
   content: { padding: 20, gap: 12 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
   backLabel: { fontFamily: fontFamily.sansMedium, fontSize: 14, color: colors.muted.foreground },

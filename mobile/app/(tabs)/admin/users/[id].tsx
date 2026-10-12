@@ -12,7 +12,7 @@ import {
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
  * Phase 22 — mirrors the web app's admin/users/[id]/page.tsx (plus its two
@@ -284,7 +284,7 @@ export default function AdminUserDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

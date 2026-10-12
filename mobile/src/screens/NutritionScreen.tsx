@@ -7,7 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
-import { colors } from '@/src/theme/tokens';
+import { colors, screenBackground } from '@/src/theme/tokens';
 import { DietTypeEnum, NutritionProfileSchema, enumLabel, type NutritionProfileInput } from '@/src/validation/schemas';
 import { formatTagList, parseTagList } from '@/src/utils/tagList';
 
@@ -169,7 +169,7 @@ export default function NutritionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },

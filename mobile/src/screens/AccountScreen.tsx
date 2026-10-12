@@ -9,7 +9,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TextField } from '@/src/components/ui/TextField';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { newPasswordProblem } from '@/src/validation/passwordChange';
 import { confirmDestructive } from '@/src/utils/confirm';
 
@@ -265,7 +265,7 @@ function DeleteAccountCard({ onDeleted }: { onDeleted: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   content: { padding: 20, gap: 16 },
   card: { gap: 10 },
   cardTitle: { fontFamily: fontFamily.sansSemibold, fontSize: 17, color: colors.foreground },

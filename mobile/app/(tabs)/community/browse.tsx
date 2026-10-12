@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCreatorDirectory, type CreatorDirectoryItem } from '@/src/api/creators';
 import { Alert } from '@/src/components/ui/Alert';
 import { Card } from '@/src/components/ui/Card';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
  * Mirrors the web app's app/creators/page.tsx — the public directory of
@@ -87,7 +87,7 @@ export default function CreatorsDirectoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

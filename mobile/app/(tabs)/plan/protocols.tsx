@@ -14,7 +14,7 @@ import { TextField } from '@/src/components/ui/TextField';
 import { GoalsPanel } from '@/src/screens/GoalsPanel';
 import { describeSupplement } from '@/src/screens/supplementText';
 import { confirmDestructive } from '@/src/utils/confirm';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { CreateProtocolSchema, type CreateProtocolInput } from '@/src/validation/schemas';
 
 /**
@@ -417,7 +417,7 @@ export default function ProtocolsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

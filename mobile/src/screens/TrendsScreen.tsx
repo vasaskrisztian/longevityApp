@@ -5,7 +5,7 @@ import { useDeviceDataVersion } from '@/src/health/deviceSyncStore';
 import { getTrends, type TrendPoint, type TrendRangeDays } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
  * Real data, phase 17 — replaces the ScreenStub. Mirrors the web app's
@@ -261,7 +261,7 @@ export default function TrendsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: screenBackground,
   },
   content: {
     padding: 20,
@@ -297,8 +297,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
   },
+  // Selected range: forest green with a thin gold edge (same pairing as the chips).
   rangeButtonActive: {
     backgroundColor: colors.primary.default,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.accent.light,
   },
   rangeButtonText: {
     fontFamily: fontFamily.sansMedium,

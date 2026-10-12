@@ -7,7 +7,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { displayName, formatDay, minutesToHoursLabel, providerLabel, timeAgo } from '@/src/wellbeing/format';
 
 /**
@@ -177,9 +177,9 @@ export default function MemberHealthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   content: { padding: 20, gap: 14 },
-  centered: { flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: 'center', alignItems: 'center' },
+  centered: { flex: 1, backgroundColor: screenBackground, padding: 20, justifyContent: 'center', alignItems: 'center' },
   flex: { flex: 1 },
   accountButton: { alignSelf: 'flex-start', marginTop: 10 },
   title: { fontFamily: fontFamily.display, fontSize: 24, color: colors.foreground },

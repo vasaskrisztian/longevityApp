@@ -19,7 +19,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Checkbox } from '@/src/components/ui/Checkbox';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { setPendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/src/wellbeing/format';
@@ -263,7 +263,7 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   content: { padding: 20, gap: 16 },
   flex: { flex: 1 },
   centered: { paddingVertical: 24, alignItems: 'center' },

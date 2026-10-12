@@ -9,7 +9,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TextField } from '@/src/components/ui/TextField';
 import { GroupLogo } from '@/src/components/wellbeing/parts';
-import { colors, fontFamily } from '@/src/theme/tokens';
+import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { pickLogo, type PickedLogo } from '@/src/utils/logoPicker';
 
 /**
@@ -117,7 +117,7 @@ export default function AdminGroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: screenBackground },
   content: { padding: 20, gap: 14 },
   card: { gap: 14 },
   cardTitle: { fontFamily: fontFamily.sansSemibold, fontSize: 17, color: colors.foreground },
