@@ -28,3 +28,18 @@ describe('resolveWebAppOrigin', () => {
     expect(resolveWebAppOrigin()).toBe('');
   });
 });
+
+describe('resolveWebAppUrl', () => {
+  it('builds an absolute URL on the web app origin', async () => {
+    const { resolveWebAppUrl } = await import('@/lib/http/app-url');
+    process.env.WEB_APP_URL = 'https://web.example.com';
+    expect(resolveWebAppUrl('/me/devices', 'http://localhost:8080/x').toString()).toBe('https://web.example.com/me/devices');
+  });
+
+  it('falls back to the request origin when nothing is configured', async () => {
+    const { resolveWebAppUrl } = await import('@/lib/http/app-url');
+    delete process.env.WEB_APP_URL;
+    delete process.env.APP_URL;
+    expect(resolveWebAppUrl('/login?verified=1', 'http://localhost:3000/api/x').toString()).toBe('http://localhost:3000/login?verified=1');
+  });
+});

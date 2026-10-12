@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import {
@@ -106,6 +106,16 @@ export default function DevicesScreen() {
     load(false);
   }, [load]);
 
+  // The Oura consent screen runs in a separate browser (in-app sheet or a new
+  // tab) that ends on a result page of the server — it cannot tell this screen
+  // anything. So when the person comes back to the app, re-read the status.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') load(true);
+    });
+    return () => subscription.remove();
+  }, [load]);
+
   useEffect(() => {
     let cancelled = false;
     if (Platform.OS !== 'ios') {
@@ -155,9 +165,10 @@ export default function DevicesScreen() {
     try {
       const { authorizationUrl } = await getOuraAuthorizationUrl();
       await WebBrowser.openBrowserAsync(authorizationUrl);
-      // The user authorizes (or declines) in that browser, which redirects
-      // to our server callback, not back into this app — there's no result
-      // to await here. Refresh once they return to pick up the new status.
+      // The user authorizes (or declines) in that browser, which ends on a
+      // result page of our server, not back in this app — there's no result
+      // to await here. Refresh now (native: the sheet was just closed) and
+      // again whenever the app becomes active (web: the tab is left open).
       await load(true);
     } catch {
       setConnectError('Could not start the Oura connection. Please try again.');

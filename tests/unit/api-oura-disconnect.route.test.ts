@@ -131,7 +131,7 @@ describe('POST /api/integrations/oura/disconnect', () => {
     });
     expect(response.status).toBe(303);
     const location = new URL(response.headers.get('location')!);
-    expect(location.pathname).toBe('/profile/devices');
+    expect(location.pathname).toBe('/me/devices');
   });
 
   it('still deletes the local credential and marks disconnected even if the provider revoke call throws unexpectedly', async () => {

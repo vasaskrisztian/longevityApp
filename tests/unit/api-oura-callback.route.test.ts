@@ -80,24 +80,37 @@ beforeEach(() => {
 });
 
 describe('GET /api/integrations/oura/callback', () => {
-  it('returns 401 and never touches OAuth state when unauthenticated', async () => {
+  it('works without a session (Expo app): the person is identified by the single-use state', async () => {
     requireAuthenticatedUserMock.mockRejectedValue(new UnauthenticatedError());
+    consumeOAuthStateMock.mockResolvedValue({ userId: 'u9', redirectUri: BASE_URL, codeVerifier: 'v' });
+    exchangeAuthorizationCodeMock.mockResolvedValue(TOKEN_SET);
+    upsertConnectionAsConnectedMock.mockResolvedValue({ id: 'conn-9' });
+    enqueueInitialSyncJobMock.mockResolvedValue({ id: 'job-9' });
 
     const response = await GET(requestWith({ code: 'c', state: 's' }));
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
+    expect(upsertConnectionAsConnectedMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u9' }));
+    expect(enqueueSyncJobToQueueMock).toHaveBeenCalledWith('INITIAL', 'job-9');
+  });
+
+  it('still refuses an unexpected error from the session lookup', async () => {
+    requireAuthenticatedUserMock.mockRejectedValue(new ForbiddenError('nope'));
+
+    const response = await GET(requestWith({ code: 'c', state: 's' }));
+
+    expect(response.status).toBe(403);
     expect(consumeOAuthStateMock).not.toHaveBeenCalled();
   });
 
-  it('redirects with oura_error=denied when the user declined consent, without consuming state', async () => {
+  it('shows a "not connected" page when the user declined consent, without consuming state', async () => {
     requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
 
     const response = await GET(requestWith({ error: 'access_denied' }));
 
-    expect(response.status).toBe(302);
-    const location = new URL(response.headers.get('location')!);
-    expect(location.pathname).toBe('/profile/devices');
-    expect(location.searchParams.get('oura_error')).toBe('denied');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(await response.text()).toContain('Oura was not connected');
     expect(consumeOAuthStateMock).not.toHaveBeenCalled();
   });
 
@@ -156,21 +169,20 @@ describe('GET /api/integrations/oura/callback', () => {
     expect(exchangeAuthorizationCodeMock).not.toHaveBeenCalled();
   });
 
-  it('redirects with oura_error=exchange_failed when the token exchange fails, and creates no connection', async () => {
+  it('shows a failure page when the token exchange fails, and creates no connection', async () => {
     requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
     consumeOAuthStateMock.mockResolvedValue({ userId: 'u1', redirectUri: BASE_URL, codeVerifier: 'v' });
     exchangeAuthorizationCodeMock.mockRejectedValue(new Error('bad code'));
 
     const response = await GET(requestWith({ code: 'c', state: 's' }));
 
-    expect(response.status).toBe(302);
-    const location = new URL(response.headers.get('location')!);
-    expect(location.searchParams.get('oura_error')).toBe('exchange_failed');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('Connecting Oura failed');
     expect(upsertConnectionAsConnectedMock).not.toHaveBeenCalled();
     expect(enqueueSyncJobToQueueMock).not.toHaveBeenCalled();
   });
 
-  it('on success: stores the connection, saves the credential, audit-logs, enqueues the initial sync, pushes it onto the queue, and redirects without an error param', async () => {
+  it('on success: stores the connection, saves the credential, audit-logs, enqueues the initial sync, pushes it onto the queue, and shows the success page with a link to the app', async () => {
     requireAuthenticatedUserMock.mockResolvedValue({ id: 'u1', role: 'USER' });
     consumeOAuthStateMock.mockResolvedValue({ userId: 'u1', redirectUri: BASE_URL, codeVerifier: 'v' });
     exchangeAuthorizationCodeMock.mockResolvedValue(TOKEN_SET);
@@ -200,9 +212,9 @@ describe('GET /api/integrations/oura/callback', () => {
       provider: 'OURA',
     });
     expect(enqueueSyncJobToQueueMock).toHaveBeenCalledWith('INITIAL', 'job-1');
-    expect(response.status).toBe(302);
-    const location = new URL(response.headers.get('location')!);
-    expect(location.pathname).toBe('/profile/devices');
-    expect(location.searchParams.get('oura_error')).toBeNull();
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Oura connected');
+    expect(html).toContain('/me/devices');
   });
 });

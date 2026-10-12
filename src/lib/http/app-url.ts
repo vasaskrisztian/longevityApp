@@ -28,3 +28,12 @@ export function resolveWebAppOrigin(): string {
   const raw = process.env.WEB_APP_URL || process.env.APP_URL || '';
   return raw.replace(/\/+$/, '');
 }
+
+/**
+ * Absolute URL of a page of the Expo web app (the only UI since the legacy
+ * Next.js pages were retired). Falls back to `requestUrl`'s origin only when no
+ * public origin is configured (dev, tests).
+ */
+export function resolveWebAppUrl(path: string, requestUrl: string): URL {
+  return new URL(path, resolveWebAppOrigin() || requestUrl);
+}

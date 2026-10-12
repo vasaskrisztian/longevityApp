@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { requireAuthenticatedUser, toErrorResponse } from '@/lib/auth/authorization';
-import { resolveAppUrl } from '@/lib/http/app-url';
+import { resolveWebAppUrl } from '@/lib/http/app-url';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import {
@@ -67,5 +67,5 @@ export async function POST(request: Request) {
   if (isMobileBearerAuth) {
     return Response.json({ ok: true }, { status: 200 });
   }
-  return Response.redirect(resolveAppUrl('/profile/devices', request.url), 303);
+  return Response.redirect(resolveWebAppUrl('/me/devices', request.url), 303);
 }
