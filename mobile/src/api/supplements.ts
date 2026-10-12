@@ -5,9 +5,9 @@ import type { CreateSupplementInput } from '@/src/validation/schemas';
 interface RawSupplement {
   id: string;
   name: string;
-  dosage: string;
-  unit: string;
-  frequency: string;
+  dosage: string | null;
+  unit: string | null;
+  frequency: string | null;
   timing: string | null;
   notes: string | null;
   active: boolean;
@@ -16,16 +16,17 @@ interface RawSupplement {
 export interface Supplement {
   id: string;
   name: string;
-  dosage: number;
-  unit: string;
-  frequency: string;
+  /** Null only for a supplement that came from a protocol line that never had a dose. */
+  dosage: number | null;
+  unit: string | null;
+  frequency: string | null;
   timing: string | null;
   notes: string | null;
   active: boolean;
 }
 
 function toSupplement(raw: RawSupplement): Supplement {
-  return { ...raw, dosage: Number(raw.dosage) };
+  return { ...raw, dosage: raw.dosage === null || raw.dosage === undefined ? null : Number(raw.dosage) };
 }
 
 export async function listSupplements(): Promise<Supplement[]> {

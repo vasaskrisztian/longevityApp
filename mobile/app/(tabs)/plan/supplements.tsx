@@ -14,6 +14,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { describeSupplement } from '@/src/screens/supplementText';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import {
@@ -59,9 +60,9 @@ const EMPTY_FORM: SupplementFormState = {
 function supplementToFormState(supplement: Supplement): SupplementFormState {
   return {
     name: supplement.name,
-    dosage: String(supplement.dosage),
-    unit: supplement.unit,
-    frequency: supplement.frequency,
+    dosage: supplement.dosage != null ? String(supplement.dosage) : '',
+    unit: supplement.unit ?? '',
+    frequency: supplement.frequency ?? 'DAILY',
     timing: supplement.timing ?? undefined,
     notes: supplement.notes ?? '',
     active: supplement.active,
@@ -208,9 +209,7 @@ function SupplementRow({
         {!supplement.active ? ' (inactive)' : ''}
       </Text>
       <Text style={styles.rowSubtitle}>
-        {supplement.dosage}
-        {supplement.unit} · {enumLabel(supplement.frequency)}
-        {supplement.timing ? ` · ${enumLabel(supplement.timing)}` : ''}
+        {describeSupplement(supplement) || 'No dose set'}
       </Text>
       <View style={styles.row}>
         <Button title="Edit" size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />

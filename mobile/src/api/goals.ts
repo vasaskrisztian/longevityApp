@@ -13,6 +13,7 @@ interface RawGoal {
   targetUnit: string | null;
   targetDate: string | null;
   status: string;
+  protocolId: string | null;
 }
 
 export interface Goal {
@@ -25,11 +26,14 @@ export interface Goal {
   /** Plain yyyy-mm-dd, or null. */
   targetDate: string | null;
   status: string;
+  /** The protocol the goal belongs to, or null. */
+  protocolId: string | null;
 }
 
 function toGoal(raw: RawGoal): Goal {
   return {
     ...raw,
+    protocolId: raw.protocolId ?? null,
     targetValue: raw.targetValue === null ? null : Number(raw.targetValue),
     targetDate: raw.targetDate ? raw.targetDate.slice(0, 10) : null,
   };

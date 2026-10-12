@@ -128,6 +128,8 @@ export const CreateGoalSchema = z.object({
   targetUnit: z.string().trim().max(20).optional(),
   targetDate: z.string().trim().optional(),
   status: GoalStatusEnum.default('ACTIVE'),
+  // Only sent when a goal is created: the protocol it belongs to (null = none).
+  protocolId: z.string().uuid().nullable().optional(),
 });
 export type CreateGoalInput = z.infer<typeof CreateGoalSchema>;
 
@@ -177,7 +179,8 @@ export const CreateProtocolSchema = z.object({
   targetSleepMinutes: optionalCoercedInt(0, 1440),
   targetWeeklyWorkouts: optionalCoercedInt(0, 50),
   targetDailyActiveCalories: optionalCoercedInt(0, 20_000),
-  supplements: z.array(ProtocolSupplementSchema).max(50).default([]),
+  // Ids of the user's own supplements (Plan > Supplements is the single list).
+  supplementIds: z.array(z.string().uuid()).max(50).default([]),
 });
 export type CreateProtocolInput = z.infer<typeof CreateProtocolSchema>;
 

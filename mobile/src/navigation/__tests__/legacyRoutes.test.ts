@@ -2,9 +2,13 @@ import { legacyProfileHref } from '@/src/navigation/legacyRoutes';
 
 describe('legacyProfileHref', () => {
   it('maps the Plan pages', () => {
-    for (const page of ['goals', 'supplements', 'protocols', 'challenges']) {
+    for (const page of ['supplements', 'protocols', 'challenges']) {
       expect(legacyProfileHref([page])).toBe(`/plan/${page}`);
     }
+  });
+
+  it('sends the old Goals page to Protocols, where goals now live', () => {
+    expect(legacyProfileHref(['goals'])).toBe('/plan/protocols');
   });
 
   it('maps community pages', () => {

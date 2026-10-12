@@ -46,9 +46,8 @@ export default function PlanScreen() {
   const hub = (
     <HubList
       items={[
-        { label: 'Protocols', description: 'The routine you follow and its daily targets', icon: 'clipboard-outline', onPress: () => router.push('/plan/protocols') },
-        { label: 'Supplements', description: 'What you take and when', icon: 'medkit-outline', onPress: () => router.push('/plan/supplements') },
-        { label: 'Goals', description: 'Personal targets you track', icon: 'flag-outline', onPress: () => router.push('/plan/goals') },
+        { label: 'Protocols and goals', description: 'The routine you follow, its daily targets and the goals behind it', icon: 'clipboard-outline', onPress: () => router.push('/plan/protocols') },
+        { label: 'Supplements', description: 'Everything you take; protocols pick from this list', icon: 'medkit-outline', onPress: () => router.push('/plan/supplements') },
         { label: 'My challenges', description: 'Challenges you set for yourself', icon: 'trophy-outline', onPress: () => router.push('/plan/challenges') },
       ]}
     />

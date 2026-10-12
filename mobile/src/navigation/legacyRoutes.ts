@@ -14,7 +14,7 @@ export function legacyProfileHref(rest: string[]): Href {
     case 'supplements':
     case 'protocols':
     case 'challenges':
-      return `/plan/${first}` as Href;
+      return `/plan/${first === 'goals' ? 'protocols' : first}` as Href;
     case 'discover':
       return '/community?tab=creators';
     case 'wellbeing':

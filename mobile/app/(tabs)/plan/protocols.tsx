@@ -1,51 +1,29 @@
 import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { ZodIssue } from 'zod';
 
 import { createProtocol, deleteProtocol, listProtocols, updateProtocol, type Protocol } from '@/src/api/protocols';
 import { getPublicProfileStatus } from '@/src/api/creators';
+import { listGoals, type Goal } from '@/src/api/goals';
+import { listSupplements, type Supplement } from '@/src/api/supplements';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
-import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
+import { ChipMultiSelect } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { GoalsPanel } from '@/src/screens/GoalsPanel';
+import { describeSupplement } from '@/src/screens/supplementText';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily } from '@/src/theme/tokens';
-import {
-  CreateProtocolSchema,
-  SupplementFrequencyEnum,
-  SupplementTimingEnum,
-  enumLabel,
-  type CreateProtocolInput,
-} from '@/src/validation/schemas';
+import { CreateProtocolSchema, type CreateProtocolInput } from '@/src/validation/schemas';
 
 /**
- * Mirrors the web app's profile/protocols/protocols-manager.tsx: list +
- * inline add/edit form (name, description, 4 numeric targets, a dynamic
- * supplement sub-form) + delete + "Set as active" + (for a consenting
- * creator) a Publish/Make-private toggle. React Native has no
- * react-hook-form useFieldArray equivalent in this codebase's established
- * pattern (every other mobile form here is plain useState + Zod
- * .safeParse(), not react-hook-form — see supplements.tsx) — the
- * supplement rows are just a plain array in component state instead.
+ * Plan > Protocols and goals: list + inline add/edit form (name, description,
+ * 4 numeric targets, supplements picked from the user's own list) + delete +
+ * "Set as active" + (for a consenting creator) Publish/Make private. Each
+ * protocol shows its goals underneath (add / edit / delete in place); goals
+ * without a protocol have their own section at the bottom.
  */
-
-const FREQUENCY_OPTIONS: ChipOption[] = SupplementFrequencyEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
-const TIMING_OPTIONS: ChipOption[] = SupplementTimingEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
-
-interface SupplementRowState {
-  name: string;
-  dosage: string;
-  unit: string;
-  frequency: string | undefined;
-  timing: string | undefined;
-}
 
 interface ProtocolFormState {
   name: string;
@@ -54,10 +32,8 @@ interface ProtocolFormState {
   targetSleepMinutes: string;
   targetWeeklyWorkouts: string;
   targetDailyActiveCalories: string;
-  supplements: SupplementRowState[];
+  supplementIds: string[];
 }
-
-const EMPTY_SUPPLEMENT: SupplementRowState = { name: '', dosage: '', unit: '', frequency: undefined, timing: undefined };
 
 const EMPTY_FORM: ProtocolFormState = {
   name: '',
@@ -66,7 +42,7 @@ const EMPTY_FORM: ProtocolFormState = {
   targetSleepMinutes: '',
   targetWeeklyWorkouts: '',
   targetDailyActiveCalories: '',
-  supplements: [],
+  supplementIds: [],
 };
 
 function protocolToFormState(protocol: Protocol): ProtocolFormState {
@@ -78,13 +54,7 @@ function protocolToFormState(protocol: Protocol): ProtocolFormState {
     targetWeeklyWorkouts: protocol.targetWeeklyWorkouts != null ? String(protocol.targetWeeklyWorkouts) : '',
     targetDailyActiveCalories:
       protocol.targetDailyActiveCalories != null ? String(protocol.targetDailyActiveCalories) : '',
-    supplements: protocol.supplements.map((s) => ({
-      name: s.name,
-      dosage: s.dosage != null ? String(s.dosage) : '',
-      unit: s.unit ?? '',
-      frequency: s.frequency ?? undefined,
-      timing: s.timing ?? undefined,
-    })),
+    supplementIds: protocol.supplements.map((s) => s.supplementId).filter((id): id is string => id !== null),
   };
 }
 
@@ -95,35 +65,22 @@ function formatMinutes(totalMinutes: number | null): string | null {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-function supplementIssue(issues: ZodIssue[], index: number, field: string): string | undefined {
-  return issues.find((i) => i.path[0] === 'supplements' && i.path[1] === index && i.path[2] === field)?.message;
-}
-
 function ProtocolForm({
   initial,
+  supplements,
   onCancel,
   onSaved,
 }: {
   initial: ProtocolFormState;
+  /** The user's own supplement list — what a protocol can pick from. */
+  supplements: Supplement[];
   onCancel?: () => void;
   onSaved: (data: CreateProtocolInput) => Promise<void>;
 }) {
   const [form, setForm] = useState(initial);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [issues, setIssues] = useState<ZodIssue[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  function updateSupplement(index: number, patch: Partial<SupplementRowState>) {
-    setForm((f) => ({
-      ...f,
-      supplements: f.supplements.map((s, i) => (i === index ? { ...s, ...patch } : s)),
-    }));
-  }
-
-  function removeSupplement(index: number) {
-    setForm((f) => ({ ...f, supplements: f.supplements.filter((_, i) => i !== index) }));
-  }
 
   async function submit() {
     const parsed = CreateProtocolSchema.safeParse(form);
@@ -133,11 +90,9 @@ function ProtocolForm({
           Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
         ),
       );
-      setIssues(parsed.error.issues);
       return;
     }
     setFieldErrors({});
-    setIssues([]);
     setServerError(null);
     setSubmitting(true);
     try {
@@ -198,56 +153,18 @@ function ProtocolForm({
         />
       </View>
 
-      <View style={styles.supplementsHeader}>
-        <Text style={styles.sectionLabel}>Supplements</Text>
-        <Button
-          title="Add supplement"
-          size="sm"
-          variant="outline"
-          onPress={() => setForm((f) => ({ ...f, supplements: [...f.supplements, { ...EMPTY_SUPPLEMENT }] }))}
+      <Text style={styles.sectionLabel}>Supplements</Text>
+      {supplements.length === 0 ? (
+        <Text style={styles.empty}>Your supplement list is empty. Add what you take there, then pick it here.</Text>
+      ) : (
+        <ChipMultiSelect
+          label="Part of this protocol"
+          options={supplements.map((s) => ({ value: s.id, label: s.name }))}
+          values={form.supplementIds}
+          onChange={(supplementIds) => setForm({ ...form, supplementIds })}
         />
-      </View>
-      {form.supplements.length === 0 ? <Text style={styles.empty}>No supplements added.</Text> : null}
-      {form.supplements.map((supplement, index) => (
-        // eslint-disable-next-line react/no-array-index-key
-        <Card key={index} style={styles.supplementCard}>
-          <TextField
-            label="Name"
-            value={supplement.name}
-            onChangeText={(v) => updateSupplement(index, { name: v })}
-            error={supplementIssue(issues, index, 'name')}
-          />
-          <View style={styles.row}>
-            <TextField
-              label="Dosage"
-              keyboardType="numeric"
-              style={styles.flex1}
-              value={supplement.dosage}
-              onChangeText={(v) => updateSupplement(index, { dosage: v })}
-              error={supplementIssue(issues, index, 'dosage')}
-            />
-            <TextField
-              label="Unit"
-              style={styles.flex1}
-              value={supplement.unit}
-              onChangeText={(v) => updateSupplement(index, { unit: v })}
-            />
-          </View>
-          <ChipSingleSelect
-            label="Frequency"
-            options={FREQUENCY_OPTIONS}
-            value={supplement.frequency}
-            onChange={(v) => updateSupplement(index, { frequency: v })}
-          />
-          <ChipSingleSelect
-            label="Timing"
-            options={TIMING_OPTIONS}
-            value={supplement.timing}
-            onChange={(v) => updateSupplement(index, { timing: v })}
-          />
-          <Button title="Remove supplement" size="sm" variant="destructive" onPress={() => removeSupplement(index)} />
-        </Card>
-      ))}
+      )}
+      <Button title="Manage my supplements" size="sm" variant="outline" onPress={() => router.push('/plan/supplements')} />
 
       <View style={styles.row}>
         <Button title={submitting ? 'Saving…' : 'Save'} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
@@ -259,16 +176,26 @@ function ProtocolForm({
 
 function ProtocolRow({
   protocol,
+  supplements,
+  goals,
   canPublish,
   onUpdated,
   onDeleted,
   onActivated,
+  onGoalCreated,
+  onGoalUpdated,
+  onGoalDeleted,
 }: {
   protocol: Protocol;
+  supplements: Supplement[];
+  goals: Goal[];
   canPublish: boolean;
   onUpdated: (p: Protocol) => void;
   onDeleted: () => void;
   onActivated: (id: string) => void;
+  onGoalCreated: (goal: Goal) => void;
+  onGoalUpdated: (goal: Goal) => void;
+  onGoalDeleted: (goalId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -317,7 +244,12 @@ function ProtocolRow({
 
   if (editing) {
     return (
-      <ProtocolForm initial={protocolToFormState(protocol)} onCancel={() => setEditing(false)} onSaved={handleSave} />
+      <ProtocolForm
+        initial={protocolToFormState(protocol)}
+        supplements={supplements}
+        onCancel={() => setEditing(false)}
+        onSaved={handleSave}
+      />
     );
   }
 
@@ -346,8 +278,17 @@ function ProtocolRow({
       {protocol.description ? <Text style={styles.rowSubtitle}>{protocol.description}</Text> : null}
       {targets.length > 0 ? <Text style={styles.rowSubtitle}>{targets.join(' · ')}</Text> : null}
       {protocol.supplements.length > 0 ? (
-        <Text style={styles.rowSubtitle}>Supplements: {protocol.supplements.map((s) => s.name).join(', ')}</Text>
+        <View style={styles.supplementList}>
+          <Text style={styles.rowSubtitle}>Supplements</Text>
+          {protocol.supplements.map((s, i) => (
+            <Text key={`${s.supplementId ?? s.name}-${i}`} style={styles.rowSubtitle}>
+              • {s.name}
+              {describeSupplement(s) ? ` — ${describeSupplement(s)}` : ''}
+            </Text>
+          ))}
+        </View>
       ) : null}
+
 
       <View style={styles.actionsStack}>
         {!protocol.isActive ? (
@@ -367,20 +308,40 @@ function ProtocolRow({
           <Button title={deleting ? 'Deleting…' : 'Delete'} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} style={styles.flex1} />
         </View>
       </View>
+
+      <View style={styles.goalsBlock}>
+        <GoalsPanel
+          title="Goals of this protocol"
+          goals={goals}
+          protocolId={protocol.id}
+          onCreated={onGoalCreated}
+          onUpdated={onGoalUpdated}
+          onDeleted={onGoalDeleted}
+        />
+      </View>
     </Card>
   );
 }
 
 export default function ProtocolsScreen() {
   const [protocols, setProtocols] = useState<Protocol[] | null>(null);
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [canPublish, setCanPublish] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listProtocols(), getPublicProfileStatus().catch(() => ({ canPublish: false, accountType: 'MEMBER' as const }))])
-      .then(([list, status]) => {
+    Promise.all([
+      listProtocols(),
+      listSupplements(),
+      listGoals(),
+      getPublicProfileStatus().catch(() => ({ canPublish: false, accountType: 'MEMBER' as const })),
+    ])
+      .then(([list, ownSupplements, ownGoals, status]) => {
         setProtocols(list);
+        setSupplements(ownSupplements);
+        setGoals(ownGoals);
         setCanPublish(status.canPublish);
       })
       .catch(() => setError('Could not load your protocols.'));
@@ -391,6 +352,11 @@ export default function ProtocolsScreen() {
     setProtocols((prev) => [created, ...(prev ?? [])]);
     setAdding(false);
   }
+
+  const addGoal = (goal: Goal) => setGoals((prev) => [goal, ...prev]);
+  const replaceGoal = (goal: Goal) => setGoals((prev) => prev.map((g) => (g.id === goal.id ? goal : g)));
+  const removeGoal = (goalId: string) => setGoals((prev) => prev.filter((g) => g.id !== goalId));
+  const goalsWithoutProtocol = goals.filter((g) => g.protocolId === null || !protocols?.some((p) => p.id === g.protocolId));
 
   if (!protocols) {
     return (
@@ -403,7 +369,7 @@ export default function ProtocolsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {adding ? (
-        <ProtocolForm initial={EMPTY_FORM} onCancel={() => setAdding(false)} onSaved={handleCreate} />
+        <ProtocolForm initial={EMPTY_FORM} supplements={supplements} onCancel={() => setAdding(false)} onSaved={handleCreate} />
       ) : (
         <Button title="Add protocol" size="sm" onPress={() => setAdding(true)} />
       )}
@@ -414,14 +380,36 @@ export default function ProtocolsScreen() {
         <ProtocolRow
           key={protocol.id}
           protocol={protocol}
+          supplements={supplements}
+          goals={goals.filter((g) => g.protocolId === protocol.id)}
           canPublish={canPublish}
+          onGoalCreated={addGoal}
+          onGoalUpdated={replaceGoal}
+          onGoalDeleted={removeGoal}
           onUpdated={(updated) => setProtocols((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
-          onDeleted={() => setProtocols((prev) => (prev ?? []).filter((p) => p.id !== protocol.id))}
+          onDeleted={() => {
+            setProtocols((prev) => (prev ?? []).filter((p) => p.id !== protocol.id));
+            // The server keeps the goals of a deleted protocol (without a protocol).
+            setGoals((prev) => prev.map((g) => (g.protocolId === protocol.id ? { ...g, protocolId: null } : g)));
+          }}
           onActivated={(id) =>
             setProtocols((prev) => (prev ?? []).map((p) => ({ ...p, isActive: p.id === id })))
           }
         />
       ))}
+
+      {goalsWithoutProtocol.length > 0 || protocols.length === 0 ? (
+        <Card>
+          <GoalsPanel
+            title="Goals without a protocol"
+            goals={goalsWithoutProtocol}
+            protocolId={null}
+            onCreated={addGoal}
+            onUpdated={replaceGoal}
+            onDeleted={removeGoal}
+          />
+        </Card>
+      ) : null}
     </ScrollView>
   );
 }
@@ -445,13 +433,11 @@ const styles = StyleSheet.create({
   formCard: {
     gap: 12,
   },
-  supplementCard: {
-    gap: 10,
+  supplementList: {
+    marginTop: 4,
   },
-  supplementsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  goalsBlock: {
+    marginTop: 12,
   },
   sectionLabel: {
     fontFamily: fontFamily.sansMedium,

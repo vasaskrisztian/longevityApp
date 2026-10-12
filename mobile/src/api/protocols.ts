@@ -9,6 +9,8 @@ import type { CreateProtocolInput } from '@/src/validation/schemas';
  * envelope — can reuse the one conversion function instead of duplicating
  * the Decimal-to-number logic a second time. */
 export interface RawProtocolSupplement {
+  /** The user's own supplement this line points at (the single source of its values). */
+  supplementId?: string | null;
   name: string;
   dosage: string | number | null;
   unit: string | null;
@@ -30,6 +32,7 @@ export interface RawProtocol {
 }
 
 export interface ProtocolSupplement {
+  supplementId: string | null;
   name: string;
   dosage: number | null;
   unit: string | null;
@@ -62,6 +65,7 @@ export function toProtocol(raw: RawProtocol): Protocol {
     targetDailyActiveCalories: raw.targetDailyActiveCalories ?? null,
     visibility: raw.visibility ?? 'PRIVATE',
     supplements: (raw.supplements ?? []).map((s) => ({
+      supplementId: s.supplementId ?? null,
       name: s.name,
       dosage: s.dosage === null || s.dosage === undefined ? null : Number(s.dosage),
       unit: s.unit ?? null,
