@@ -102,15 +102,25 @@ export default function TabLayout() {
   // bar/camera cut-out. Plan, Community, Me and Admin are nested Stacks with
   // their own native header, which already handles the inset — they must NOT
   // get it twice. (On web and in the desktop shell the inset is 0.)
-  const headerlessScene = { sceneStyle: { paddingTop: insets.top } };
+  const headerlessScreens = ['index', 'notifications'];
 
   const tabs = (
     <Tabs
       // On a wide web window the bottom bar is replaced by DesktopShell's
       // sidebar (the navigator itself, routes and guards are identical).
       tabBar={isDesktop ? () => null : undefined}
-      screenOptions={{
+      screenOptions={({ route, navigation }) => ({
         headerShown: false,
+        // Headerless scenes clear the status bar (see above).
+        // On the web, react-native-screens is not active, so a tab that is not
+        // in front is only stacked behind the focused one (z-index -1) and the
+        // opaque scene background used to hide it. The scenes are transparent
+        // now (the backdrop shows through), so hide the blurred ones outright;
+        // they stay mounted, so their state survives a tab switch.
+        sceneStyle: [
+          headerlessScreens.includes(route.name) ? { paddingTop: insets.top } : null,
+          Platform.OS === 'web' && !navigation.isFocused() ? { display: 'none' as const } : null,
+        ],
         tabBarActiveTintColor: colors.primary.default,
         tabBarInactiveTintColor: colors.muted.foreground,
         // The selected tab sits on a soft gold wash (green icon + label).
@@ -120,11 +130,10 @@ export default function TabLayout() {
           backgroundColor: colors.card.default,
           borderTopColor: colors.card.border,
         },
-      }}>
+      })}>
       <Tabs.Screen
         name="index"
         options={{
-          ...headerlessScene,
           title: 'Today',
           tabBarIcon: ({ color, size }) => <Ionicons name="sunny-outline" size={size} color={color} />,
         }}
@@ -152,7 +161,7 @@ export default function TabLayout() {
         }}
       />
       {/* Notifications is reached from the bell in every header, not from the tab bar. */}
-      <Tabs.Screen name="notifications" options={{ ...headerlessScene, title: 'Notifications', href: null }} />
+      <Tabs.Screen name="notifications" options={{ title: 'Notifications', href: null }} />
       <Tabs.Screen
         name="admin"
         options={{
