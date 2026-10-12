@@ -12,10 +12,10 @@ export default function AdminStackLayout() {
   return (
     <Stack screenOptions={mainStackScreenOptions}>
       <Stack.Screen name="index" options={{ title: 'Admin' }} />
-      <Stack.Screen name="users/[id]" options={{ title: 'User detail' }} />
+      <Stack.Screen name="users/[id]" options={{ title: 'Person' }} />
       <Stack.Screen name="groups/index" options={{ headerShown: false }} />
       <Stack.Screen name="groups/[id]/index" options={{ title: 'Group' }} />
-      <Stack.Screen name="groups/[id]/members/[userId]" options={{ title: 'Member health' }} />
+      <Stack.Screen name="groups/[id]/members/[userId]" options={{ title: 'Person' }} />
       <Stack.Screen name="groups/[id]/challenges/[challengeId]" options={{ title: 'Challenge' }} />
     </Stack>
   );
