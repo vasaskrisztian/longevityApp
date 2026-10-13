@@ -12,39 +12,40 @@ import type { CreateProtocolInput, UpdateProtocolInput } from '@/lib/validation/
  * route's per-resource ownership check doesn't (and can't) cover on its own.
  */
 
-export type ProtocolWithSupplements = Protocol & { supplements: ProtocolSupplement[] };
+/**
+ * A protocol line as the API reports it: the link row plus the linked
+ * supplement's own name/dose/frequency/timing (the line itself stores only the
+ * link).
+ */
+export type ProtocolLine = ProtocolSupplement & Pick<Supplement, 'name' | 'dosage' | 'unit' | 'frequency' | 'timing'>;
+
+export type ProtocolWithSupplements = Protocol & { supplements: ProtocolLine[] };
 
 /**
  * A protocol's supplements are lines that point at the user's own supplement
  * list (the single source of name, dose, frequency and timing). Reads join the
  * supplement in and report ITS values on each line, so editing a supplement in
- * Plan > Supplements is reflected in every protocol that uses it. The
- * name/dose/... columns on the line itself are only the snapshot taken when it
- * was written (and the fallback for any line that was never linked).
+ * Plan > Supplements is reflected in every protocol that uses it.
  */
 export const PROTOCOL_INCLUDE = {
   supplements: { include: { supplement: true }, orderBy: { createdAt: 'asc' } },
 } as const;
 
 type ProtocolRow = Protocol & {
-  supplements: (ProtocolSupplement & { supplement: Supplement | null })[];
+  supplements: (ProtocolSupplement & { supplement: Supplement })[];
 };
 
 export function flattenProtocol(row: ProtocolRow): ProtocolWithSupplements {
   return {
     ...row,
-    supplements: (row.supplements ?? []).map(({ supplement, ...line }: ProtocolRow['supplements'][number]) =>
-      supplement
-        ? {
-            ...line,
-            name: supplement.name,
-            dosage: supplement.dosage,
-            unit: supplement.unit,
-            frequency: supplement.frequency,
-            timing: supplement.timing,
-          }
-        : line,
-    ),
+    supplements: (row.supplements ?? []).map(({ supplement, ...line }: ProtocolRow['supplements'][number]) => ({
+      ...line,
+      name: supplement.name,
+      dosage: supplement.dosage,
+      unit: supplement.unit,
+      frequency: supplement.frequency,
+      timing: supplement.timing,
+    })),
   };
 }
 
@@ -107,14 +108,7 @@ export async function resolveSupplements(
 }
 
 function lineFor(supplement: Supplement) {
-  return {
-    supplementId: supplement.id,
-    name: supplement.name,
-    dosage: supplement.dosage,
-    unit: supplement.unit,
-    frequency: supplement.frequency,
-    timing: supplement.timing,
-  };
+  return { supplementId: supplement.id };
 }
 
 export async function listProtocols(userId: string): Promise<ProtocolWithSupplements[]> {

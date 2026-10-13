@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
-import type { Challenge, Protocol, ProtocolSupplement } from '@prisma/client';
+import type { Challenge } from '@prisma/client';
 import { computeProgress, type ChallengeWithProgress } from '@/modules/challenges/challenges.service';
-import { PROTOCOL_INCLUDE, flattenProtocol } from '@/modules/protocols/protocols.service';
+import { PROTOCOL_INCLUDE, flattenProtocol, type ProtocolWithSupplements } from '@/modules/protocols/protocols.service';
 
 /**
  * Phase 13 (Creators & Followers) — ARCHITECTURE.md §4.2's private-by-default
@@ -106,7 +106,7 @@ export interface PublicMetricPoint {
   activeCalories: number | null;
 }
 
-export type PublicProtocol = Protocol & { supplements: ProtocolSupplement[] };
+export type PublicProtocol = ProtocolWithSupplements;
 
 export interface CreatorPublicProfile {
   id: string;

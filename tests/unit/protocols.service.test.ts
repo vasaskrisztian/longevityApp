@@ -42,14 +42,8 @@ const {
 const INCLUDE = { supplements: { include: { supplement: true }, orderBy: { createdAt: 'asc' } } };
 
 const MAGNESIUM = { id: 's1', userId: 'u1', name: 'Magnesium', dosage: '400', unit: 'mg', frequency: 'DAILY', timing: 'EVENING' };
-const MAGNESIUM_LINE = {
-  supplementId: 's1',
-  name: 'Magnesium',
-  dosage: '400',
-  unit: 'mg',
-  frequency: 'DAILY',
-  timing: 'EVENING',
-};
+// A line stores only the link; the values live on the supplement.
+const MAGNESIUM_LINE = { supplementId: 's1' };
 
 const CREATE_INPUT = {
   name: 'Base building',
@@ -232,11 +226,6 @@ describe('flattenProtocol', () => {
           id: 'l1',
           protocolId: 'p1',
           supplementId: 's1',
-          name: 'Magnesium (old snapshot)',
-          dosage: '200',
-          unit: 'mg',
-          frequency: 'DAILY',
-          timing: null,
           supplement: MAGNESIUM,
         },
       ],
@@ -244,15 +233,6 @@ describe('flattenProtocol', () => {
 
     expect(result.supplements[0]).toMatchObject({ id: 'l1', supplementId: 's1', name: 'Magnesium', dosage: '400', timing: 'EVENING' });
     expect(result.supplements[0]).not.toHaveProperty('supplement');
-  });
-
-  it('falls back to the line\'s own values when it was never linked', () => {
-    const result = flattenProtocol({
-      id: 'p1',
-      supplements: [{ id: 'l2', supplementId: null, name: 'Legacy', dosage: null, supplement: null }],
-    } as never);
-
-    expect(result.supplements[0]).toMatchObject({ name: 'Legacy' });
   });
 });
 
