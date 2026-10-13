@@ -6,6 +6,8 @@ import { getTrends, type TrendPoint, type TrendRangeDays } from '@/src/api/dashb
 import { Card } from '@/src/components/ui/Card';
 import { LineChart, type LineChartSeries } from '@/src/components/charts/LineChart';
 import { durationAxisMax, durationLabel } from '@/src/components/charts/chartFormat';
+import { InfoLabel } from '@/src/components/ui/InfoLabel';
+import type { GlossaryKey } from '@/src/content/glossary';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { niceAxisMax } from '@/src/wellbeing/format';
 
@@ -66,6 +68,7 @@ function hasAnyData(points: TrendPoint[]): boolean {
 
 function ChartCard({
   title,
+  term,
   description,
   points,
   series,
@@ -76,6 +79,8 @@ function ChartCard({
   formatValue,
 }: {
   title: string;
+  /** Glossary entry explained by the "i" next to the title. */
+  term?: GlossaryKey;
   description: string;
   points: TrendPoint[];
   series: LineChartSeries[];
@@ -90,7 +95,13 @@ function ChartCard({
   const tooltipLabels = useMemo(() => points.map((p) => formatTooltipDate(p.date)), [points]);
   return (
     <Card>
-      <Text style={styles.chartTitle}>{title}</Text>
+      {term ? (
+        <InfoLabel term={term} textStyle={styles.chartTitle}>
+          {title}
+        </InfoLabel>
+      ) : (
+        <Text style={styles.chartTitle}>{title}</Text>
+      )}
       <Text style={styles.chartDescription}>{description}</Text>
       {hasAnyData(points) ? (
         <View style={styles.chartBody}>
@@ -241,6 +252,7 @@ export default function TrendsScreen() {
         <View style={styles.chartsStack}>
           <ChartCard
             title="Scores"
+            term="scores"
             description="Sleep, readiness and activity — higher is better, 0-100. Tap a name to show or hide it."
             points={points}
             series={scoreSeries}
@@ -251,6 +263,7 @@ export default function TrendsScreen() {
 
           <ChartCard
             title="HRV"
+            term="hrv"
             description="Average heart rate variability (ms)."
             points={points}
             yMin={0}
@@ -260,6 +273,7 @@ export default function TrendsScreen() {
 
           <ChartCard
             title="Resting heart rate"
+            term="restingHr"
             description="Beats per minute."
             points={points}
             yMin={0}
@@ -276,6 +290,7 @@ export default function TrendsScreen() {
 
           <ChartCard
             title="Sleep duration"
+            term="sleepDuration"
             description="Total sleep, in hours and minutes."
             points={points}
             yMin={0}
@@ -294,6 +309,7 @@ export default function TrendsScreen() {
 
           <ChartCard
             title="Steps"
+            term="steps"
             description="Daily step count."
             points={points}
             yMin={0}

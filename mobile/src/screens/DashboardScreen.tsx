@@ -16,6 +16,8 @@ import { useDeviceDataVersion, useDeviceSyncing } from '@/src/health/deviceSyncS
 import { Button } from '@/src/components/ui/Button';
 import { InsightsCard } from '@/src/components/InsightsCard';
 import { Card } from '@/src/components/ui/Card';
+import { InfoLabel } from '@/src/components/ui/InfoLabel';
+import type { GlossaryKey } from '@/src/content/glossary';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
@@ -59,18 +61,23 @@ function TargetLine({ target, unit }: { target: number | null | undefined; unit?
 
 function ScoreCard({
   label,
+  term,
   value,
   unit,
   target,
 }: {
   label: string;
+  /** Glossary entry explained by the "i" next to the label. */
+  term: GlossaryKey;
   value: number | null;
   unit?: string;
   target?: number | null;
 }) {
   return (
     <Card style={styles.scoreCard}>
-      <Text style={styles.scoreLabel}>{label}</Text>
+      <InfoLabel term={term} textStyle={styles.scoreLabel}>
+        {label}
+      </InfoLabel>
       <Text style={styles.scoreValue}>
         {value === null ? '—' : value}
         {value !== null && unit ? <Text style={styles.scoreUnit}> {unit}</Text> : null}
@@ -196,7 +203,9 @@ export default function DashboardScreen() {
 
   const sleepDurationCard = (
     <Card style={styles.scoreCard}>
-      <Text style={styles.scoreLabel}>Sleep duration</Text>
+      <InfoLabel term="sleepDuration" textStyle={styles.scoreLabel}>
+        Sleep duration
+      </InfoLabel>
       <Text style={styles.scoreValue}>{sleepDuration ?? '—'}</Text>
       {targetSleepDuration ? (
         <Text style={styles.targetText}>Target: {targetSleepDuration}</Text>
@@ -205,22 +214,23 @@ export default function DashboardScreen() {
       ) : null}
     </Card>
   );
-  const sleepCard = <ScoreCard label="Sleep" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />;
-  const readinessCard = <ScoreCard label="Readiness" value={snapshot?.readinessScore ?? null} />;
-  const activityCard = <ScoreCard label="Activity" value={snapshot?.activityScore ?? null} />;
-  const hrvCard = <ScoreCard label="HRV" value={snapshot?.averageHrv ?? null} unit="ms" />;
-  const restingHrCard = <ScoreCard label="Resting HR" value={snapshot?.restingHeartRate ?? null} unit="bpm" />;
-  const stepsCard = <ScoreCard label="Steps" value={snapshot?.steps ?? null} />;
+  const sleepCard = <ScoreCard label="Sleep" term="sleepScore" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />;
+  const readinessCard = <ScoreCard label="Readiness" term="readinessScore" value={snapshot?.readinessScore ?? null} />;
+  const activityCard = <ScoreCard label="Activity" term="activityScore" value={snapshot?.activityScore ?? null} />;
+  const hrvCard = <ScoreCard label="HRV" term="hrv" value={snapshot?.averageHrv ?? null} unit="ms" />;
+  const restingHrCard = <ScoreCard label="Resting HR" term="restingHr" value={snapshot?.restingHeartRate ?? null} unit="bpm" />;
+  const stepsCard = <ScoreCard label="Steps" term="steps" value={snapshot?.steps ?? null} />;
   const caloriesCard = (
     <ScoreCard
       label="Active calories (today)"
+      term="activeCalories"
       value={snapshot?.activeCalories ?? null}
       unit="kcal"
       target={activeProtocol?.targetDailyActiveCalories}
     />
   );
   const workoutsCard = (
-    <ScoreCard label="Workouts (last 7 days)" value={weeklyWorkoutCount} target={activeProtocol?.targetWeeklyWorkouts} />
+    <ScoreCard label="Workouts (last 7 days)" term="workouts" value={weeklyWorkoutCount} target={activeProtocol?.targetWeeklyWorkouts} />
   );
   // Phone: 3 / 2 / 2 / 2 cards per row. Desktop (wide main column): three rows of three, grouped by theme.
   const rows = isDesktop

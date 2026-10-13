@@ -16,6 +16,7 @@ import {
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { InfoLabel } from '@/src/components/ui/InfoLabel';
 import { TextField } from '@/src/components/ui/TextField';
 import { LineChart } from '@/src/components/charts/LineChart';
 import { confirmDestructive } from '@/src/utils/confirm';
@@ -52,10 +53,12 @@ function formatValue(value: number | null, unit?: string): string {
   return unit ? `${value}${unit}` : `${value}`;
 }
 
-function CurrentValueCard({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
+function CurrentValueCard({ label, term, value, unit }: { label: string; term: NumericField; value: number | null; unit?: string }) {
   return (
     <Card style={styles.valueCard}>
-      <Text style={styles.valueLabel}>{label}</Text>
+      <InfoLabel term={term} textStyle={styles.valueLabel}>
+        {label}
+      </InfoLabel>
       <Text style={styles.valueNumber}>
         {value === null ? '—' : value}
         {value !== null && unit ? <Text style={styles.valueUnit}> {unit}</Text> : null}
@@ -81,7 +84,9 @@ function TrendChartCard({
 
   return (
     <Card>
-      <Text style={styles.chartTitle}>{title}</Text>
+      <InfoLabel term={dataKey} textStyle={styles.chartTitle}>
+        {title}
+      </InfoLabel>
       {hasData ? (
         <View style={styles.chartBody}>
           <LineChart labels={labels} series={[{ key: dataKey, name: title, color: METRIC_COLOR, values }]} />
@@ -416,7 +421,7 @@ export default function InBodyScreen() {
             <Text style={styles.sectionSubtitle}>From the scan on {formatDateTime(latest.measuredAt)}.</Text>
             <View style={styles.valuesGrid}>
               {FIELD_DEFS.map((field) => (
-                <CurrentValueCard key={field.key} label={field.label} value={latest[field.key]} unit={field.unit} />
+                <CurrentValueCard key={field.key} label={field.label} term={field.key} value={latest[field.key]} unit={field.unit} />
               ))}
             </View>
           </>

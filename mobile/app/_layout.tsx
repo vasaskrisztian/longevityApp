@@ -5,10 +5,12 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import 'react-native-reanimated';
 
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
+import { InfoTipHost } from '@/src/components/ui/InfoTipHost';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -63,27 +65,31 @@ export default function RootLayout() {
   // Expo Router version (pre Stack.Protected).
   return (
     <ThemeProvider value={brandTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="register" options={{ headerShown: false }} />
-        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-        <Stack.Screen name="invite/[token]" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="onboarding"
-          options={{
-            title: 'Set up your profile',
-            headerStyle: { backgroundColor: colors.card.default },
-            headerTitleStyle: { fontFamily: fontFamily.sansSemibold },
-            headerShadowVisible: false,
-            headerBackVisible: false,
-            gestureEnabled: false,
-          }}
-        />
-        <Stack.Screen name="creators/index" options={{ headerShown: false }} />
-        <Stack.Screen name="creators/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      <View style={{ flex: 1 }}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="register" options={{ headerShown: false }} />
+          <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+          <Stack.Screen name="invite/[token]" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="onboarding"
+            options={{
+              title: 'Set up your profile',
+              headerStyle: { backgroundColor: colors.card.default },
+              headerTitleStyle: { fontFamily: fontFamily.sansSemibold },
+              headerShadowVisible: false,
+              headerBackVisible: false,
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen name="creators/index" options={{ headerShown: false }} />
+          <Stack.Screen name="creators/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        {/* Explanation popovers (InfoLabel) are drawn here, above every screen. */}
+        <InfoTipHost />
+      </View>
     </ThemeProvider>
   );
 }

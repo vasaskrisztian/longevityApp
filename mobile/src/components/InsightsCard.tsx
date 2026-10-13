@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { Insights, InsightSeverity } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
+import { InfoLabel } from '@/src/components/ui/InfoLabel';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 const SEVERITY: Record<InsightSeverity, { color: string; label: string }> = {
@@ -19,7 +20,9 @@ const SEVERITY: Record<InsightSeverity, { color: string; label: string }> = {
 export function InsightsCard({ insights }: { insights: Insights }) {
   return (
     <Card style={styles.card} testID="insights-card">
-      <Text style={styles.kicker}>Your day at a glance</Text>
+      <InfoLabel term="baseline" textStyle={styles.kicker}>
+        Your day at a glance
+      </InfoLabel>
       <Text style={styles.headline}>{insights.headline}</Text>
       {insights.items.map((item) => {
         const tone = SEVERITY[item.severity];
