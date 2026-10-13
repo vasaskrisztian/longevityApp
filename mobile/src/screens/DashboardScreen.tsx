@@ -2,11 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 
-import { getDashboardSnapshot, getProtocolOverlay, type DashboardSnapshot, type ProtocolOverlay } from '@/src/api/dashboard';
+import {
+  getDashboardSnapshot,
+  getInsights,
+  getProtocolOverlay,
+  type DashboardSnapshot,
+  type Insights,
+  type ProtocolOverlay,
+} from '@/src/api/dashboard';
 import { getConnections, type ConnectionSummary } from '@/src/api/wearables';
 import { getProfileBundle } from '@/src/api/profile';
 import { useDeviceDataVersion, useDeviceSyncing } from '@/src/health/deviceSyncStore';
 import { Button } from '@/src/components/ui/Button';
+import { InsightsCard } from '@/src/components/InsightsCard';
 import { Card } from '@/src/components/ui/Card';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
@@ -82,6 +90,8 @@ interface DashboardState {
   appleHealthConnection: ConnectionSummary | null;
   firstName: string | null;
   protocolOverlay: ProtocolOverlay | null;
+  /** null when the summary could not be loaded — the rest of the dashboard still renders. */
+  insights: Insights | null;
 }
 
 export default function DashboardScreen() {
@@ -104,11 +114,13 @@ export default function DashboardScreen() {
     }
     setError(null);
     try {
-      const [snapshot, connections, profileBundle, protocolOverlay] = await Promise.all([
+      const [snapshot, connections, profileBundle, protocolOverlay, insights] = await Promise.all([
         getDashboardSnapshot(),
         getConnections(),
         getProfileBundle(),
         getProtocolOverlay(),
+        // The summary is an extra: if it fails, the score cards must still show.
+        getInsights().catch(() => null),
       ]);
       setState({
         snapshot,
@@ -116,6 +128,7 @@ export default function DashboardScreen() {
         appleHealthConnection: connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null,
         firstName: profileBundle.profile?.fullName?.split(' ')[0] ?? null,
         protocolOverlay,
+        insights,
       });
     } catch {
       setError('Could not load your dashboard. Pull down to try again.');
@@ -260,6 +273,8 @@ export default function DashboardScreen() {
           </Text>
         </View>
       ) : null}
+
+      {state?.insights ? <InsightsCard insights={state.insights} /> : null}
 
       {isDesktop ? (
         <View style={styles.desktopColumns}>

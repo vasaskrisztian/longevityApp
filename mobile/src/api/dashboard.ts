@@ -71,3 +71,27 @@ export async function getProtocolOverlay(): Promise<ProtocolOverlay> {
     weeklyWorkoutCount: raw.weeklyWorkoutCount,
   };
 }
+
+export type InsightSeverity = 'good' | 'info' | 'attention';
+
+export interface Insight {
+  key: string;
+  severity: InsightSeverity;
+  title: string;
+  message: string;
+}
+
+/** Mirrors modules/dashboard/insights.ts's InsightsResult. */
+export interface Insights {
+  headline: string;
+  items: Insight[];
+  /** Plain yyyy-mm-dd of the most recent day with data, or null. */
+  latestDataDate: string | null;
+  baselineDays: number;
+  hasEnoughHistory: boolean;
+}
+
+/** GET /api/dashboard/insights — personal-baseline summary for the Today screen (rules-based, no AI). */
+export function getInsights(): Promise<Insights> {
+  return apiFetchJson<Insights>('/api/dashboard/insights');
+}

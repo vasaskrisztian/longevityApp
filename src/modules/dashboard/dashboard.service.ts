@@ -136,6 +136,11 @@ export async function getTodaySnapshot(userId: string): Promise<DailyMetricSnaps
  * itself is exactly how many points come back.
  */
 export async function getTrend(userId: string, rangeDays: TrendRangeDays): Promise<TrendPoint[]> {
+  return getDailyWindow(userId, rangeDays);
+}
+
+/** Same gap-free window as getTrend, for any length (the insights use 33 days: 30 of baseline + the last 3). */
+export async function getDailyWindow(userId: string, rangeDays: number): Promise<TrendPoint[]> {
   const today = utcMidnight(new Date());
   const from = new Date(today);
   from.setUTCDate(from.getUTCDate() - (rangeDays - 1));
