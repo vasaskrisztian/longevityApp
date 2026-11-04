@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import { countQualifyingPeriodsFor, dailyTotalsFor, sumMetricFor } from '@/modules/challenges/challenges.service';
+import { fetchYouTubeMetadata } from '@/lib/video/youtube-metadata';
 import { createNotification, createNotificationsForUsers } from '@/modules/notifications/notifications.service';
 import { listMemberIds } from './groups.service';
 import {
@@ -52,6 +53,7 @@ export class GroupChallengeError extends Error {
       | 'ended'
       | 'invalid_dates'
       | 'not_video'
+      | 'video_unavailable'
       | 'not_active'
       | 'not_participant'
       | 'watch_not_found'
@@ -235,6 +237,21 @@ export async function createGroupChallenge(
     throw new GroupChallengeError('invalid_dates', 'The challenge cannot end in the past');
   }
 
+  // A video challenge needs the video's length: the admin's own value, else YouTube's.
+  let videoTitle = input.videoTitle ?? null;
+  let videoDurationSec = input.videoDurationSec ?? null;
+  if (input.type === 'VIDEO_SESSIONS' && input.videoId && !videoDurationSec) {
+    const metadata = await fetchYouTubeMetadata(input.videoId);
+    if (!metadata) {
+      throw new GroupChallengeError(
+        'video_unavailable',
+        'Could not read the length of this video from YouTube (is it private or removed?). Enter the length yourself.',
+      );
+    }
+    videoDurationSec = metadata.durationSec;
+    if (!input.videoTitle || input.videoTitle === input.name) videoTitle = metadata.title ?? videoTitle;
+  }
+
   const row: any = await prisma.groupChallenge.create({
     data: {
       groupId,
@@ -247,7 +264,7 @@ export async function createGroupChallenge(
       mode: input.mode ?? 'INDIVIDUAL',
       targetTotal: input.targetTotal ?? null,
       ...(input.type === 'VIDEO_SESSIONS'
-        ? { videoId: input.videoId ?? null, videoTitle: input.videoTitle ?? null, videoDurationSec: input.videoDurationSec ?? null }
+        ? { videoId: input.videoId ?? null, videoTitle, videoDurationSec }
         : {}),
       startsAt,
       endsAt,

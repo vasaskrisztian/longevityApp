@@ -13,6 +13,7 @@ export function groupChallengeErrorResponse(error: unknown): Response | null {
     case 'ended':
     case 'invalid_dates':
     case 'not_video':
+    case 'video_unavailable':
     case 'not_active':
     case 'not_participant':
     case 'too_early':

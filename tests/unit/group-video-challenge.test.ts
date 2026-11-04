@@ -33,6 +33,8 @@ vi.mock('@/modules/notifications/notifications.service', () => ({
 }));
 const listMemberIds = vi.fn();
 vi.mock('@/modules/groups/groups.service', () => ({ listMemberIds }));
+const fetchYouTubeMetadata = vi.fn();
+vi.mock('@/lib/video/youtube-metadata', () => ({ fetchYouTubeMetadata }));
 
 const {
   toChallengeDTO,
@@ -136,6 +138,12 @@ describe('CreateGroupChallengeSchema — video challenges', () => {
     });
   });
 
+  it('the length is optional — it is read from YouTube when left out', () => {
+    const parsed = CreateGroupChallengeSchema.parse({ ...base, videoDurationSec: undefined });
+    expect(parsed.videoDurationSec).toBeNull();
+    expect(parsed.videoId).toBe('dQw4w9WgXcQ');
+  });
+
   it('keeps an explicit video title', () => {
     expect(CreateGroupChallengeSchema.parse({ ...base, videoTitle: '5-minute stretch' }).videoTitle).toBe('5-minute stretch');
   });
@@ -151,7 +159,6 @@ describe('CreateGroupChallengeSchema — video challenges', () => {
     const badUrl = CreateGroupChallengeSchema.safeParse({ ...base, videoUrl: 'https://vimeo.com/1' });
     expect(badUrl.success).toBe(false);
     if (!badUrl.success) expect(badUrl.error.issues[0]!.path).toEqual(['videoUrl']);
-    expect(CreateGroupChallengeSchema.safeParse({ ...base, videoDurationSec: undefined }).success).toBe(false);
     expect(CreateGroupChallengeSchema.safeParse({ ...base, videoDurationSec: 5 }).success).toBe(false);
     expect(CreateGroupChallengeSchema.safeParse({ ...base, videoDurationSec: 99_999 }).success).toBe(false);
   });
@@ -251,6 +258,50 @@ describe('createGroupChallenge — video', () => {
       videoDurationSec: 300,
     });
     expect(createNotificationsForUsers).toHaveBeenCalledWith(['u1'], expect.objectContaining({ title: 'New video challenge: Desk stretch' }));
+  });
+});
+
+describe('createGroupChallenge — video length from YouTube', () => {
+  const input = {
+    name: 'Desk stretch',
+    type: 'VIDEO_SESSIONS' as const,
+    threshold: 0,
+    requiredCount: 5,
+    videoId: 'dQw4w9WgXcQ',
+    videoTitle: 'Desk stretch', // = the challenge name when the admin gave no title
+    startDate: '2026-10-10',
+    endDate: '2026-10-16',
+  };
+  beforeEach(() => {
+    prismaMock.wellbeingGroup.findUnique.mockResolvedValue({ id: 'g1', name: 'Acme' });
+    prismaMock.groupChallenge.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'c1', ...data }));
+    listMemberIds.mockResolvedValue([]);
+  });
+
+  it('reads the length and the title from YouTube when the admin gave neither', async () => {
+    fetchYouTubeMetadata.mockResolvedValue({ durationSec: 312, title: '5 Minute Desk Stretch' });
+    await createGroupChallenge('admin', 'g1', input, NOW);
+    expect(fetchYouTubeMetadata).toHaveBeenCalledWith('dQw4w9WgXcQ');
+    expect(prismaMock.groupChallenge.create.mock.calls[0]![0].data).toMatchObject({ videoDurationSec: 312, videoTitle: '5 Minute Desk Stretch' });
+  });
+
+  it('keeps an admin-typed title but still reads the length', async () => {
+    fetchYouTubeMetadata.mockResolvedValue({ durationSec: 312, title: 'YouTube title' });
+    await createGroupChallenge('admin', 'g1', { ...input, videoTitle: 'Our stretch' }, NOW);
+    expect(prismaMock.groupChallenge.create.mock.calls[0]![0].data).toMatchObject({ videoDurationSec: 312, videoTitle: 'Our stretch' });
+  });
+
+  it('does not ask YouTube when the admin gave the length', async () => {
+    await createGroupChallenge('admin', 'g1', { ...input, videoDurationSec: 300 }, NOW);
+    expect(fetchYouTubeMetadata).not.toHaveBeenCalled();
+    expect(prismaMock.groupChallenge.create.mock.calls[0]![0].data).toMatchObject({ videoDurationSec: 300 });
+  });
+
+  it('refuses, creating nothing, when the length cannot be read and was not given', async () => {
+    fetchYouTubeMetadata.mockResolvedValue(null);
+    await expect(createGroupChallenge('admin', 'g1', input, NOW)).rejects.toMatchObject({ code: 'video_unavailable' });
+    expect(prismaMock.groupChallenge.create).not.toHaveBeenCalled();
+    expect(createNotificationsForUsers).not.toHaveBeenCalled();
   });
 });
 
@@ -413,6 +464,7 @@ describe('error mapping', () => {
     ['watch_not_found', 404],
     ['not_member', 404],
     ['not_video', 400],
+    ['video_unavailable', 400],
     ['not_active', 400],
     ['not_participant', 400],
     ['too_early', 400],

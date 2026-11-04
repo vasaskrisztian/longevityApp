@@ -93,7 +93,7 @@ export interface ChallengeFormValues {
   /** VIDEO_SESSIONS only. */
   videoUrl?: string;
   videoTitle?: string;
-  /** "5:00" (or minutes) — VIDEO_SESSIONS only. */
+  /** "5:00" (or minutes) — VIDEO_SESSIONS only; empty = read from YouTube. */
   videoDuration?: string;
 }
 
@@ -106,7 +106,10 @@ export function validateGoal(values: ChallengeFormValues): Record<string, string
   if (values.type === 'VIDEO_SESSIONS') {
     if (!values.videoUrl?.trim()) errors.videoUrl = 'Paste the YouTube link of the video.';
     else if (!looksLikeYouTubeUrl(values.videoUrl)) errors.videoUrl = 'This is not a YouTube video link.';
-    if (parseVideoDuration(values.videoDuration ?? '') === null) errors.videoDuration = 'Enter the length as m:ss, for example 5:00.';
+    // Optional: left empty, the server reads the length from YouTube.
+    if (values.videoDuration?.trim() && parseVideoDuration(values.videoDuration) === null) {
+      errors.videoDuration = 'Enter the length as m:ss, for example 5:00 — or leave it empty.';
+    }
   }
   if (values.mode === 'COLLECTIVE') {
     if (!isPositiveInt(Number(values.targetTotal.replace(/\s/g, '')))) errors.targetTotal = message;
@@ -127,7 +130,7 @@ export function goalPayload(
       ? {
           videoUrl: (values.videoUrl ?? '').trim(),
           ...(values.videoTitle?.trim() ? { videoTitle: values.videoTitle.trim() } : {}),
-          videoDurationSec: parseVideoDuration(values.videoDuration ?? '') ?? undefined,
+          ...(values.videoDuration?.trim() ? { videoDurationSec: parseVideoDuration(values.videoDuration) ?? undefined } : {}),
         }
       : {};
   if (values.mode === 'COLLECTIVE') {

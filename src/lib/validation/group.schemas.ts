@@ -86,9 +86,9 @@ export const MAX_COLLECTIVE_TARGET = 100_000_000;
  * `mode` COLLECTIVE: the participants' steps / workouts are summed and the team
  * shares one `targetTotal` ("100 000 steps together in a month"); `threshold`
  * and `requiredCount` do not apply and come out normalised as 0 / 1.
- * `type` VIDEO_SESSIONS: the challenge is about one YouTube video (`videoUrl`,
- * and its length `videoDurationSec`, which "watched to the end" is measured
- * against). One finished viewing per person per day counts as one session;
+ * `type` VIDEO_SESSIONS: the challenge is about one YouTube video (`videoUrl`;
+ * its length `videoDurationSec`, which "watched to the end" is measured
+ * against, is read from YouTube unless the admin gives it). One finished viewing per person per day counts as one session;
  * INDIVIDUAL asks for `requiredCount` days, COLLECTIVE for `targetTotal`
  * sessions. `threshold` does not apply and comes out as 0.
  */
@@ -136,9 +136,6 @@ export const CreateGroupChallengeSchema = z
     } else if (!parseYouTubeVideoId(data.videoUrl)) {
       ctx.addIssue({ code: 'custom', path: ['videoUrl'], message: 'This is not a YouTube video link' });
     }
-    if (data.videoDurationSec === undefined) {
-      ctx.addIssue({ code: 'custom', path: ['videoDurationSec'], message: 'Enter the length of the video' });
-    }
   })
   .superRefine((data, ctx) => {
     if (data.mode === 'COLLECTIVE') {
@@ -167,7 +164,8 @@ export const CreateGroupChallengeSchema = z
     targetTotal: data.mode === 'COLLECTIVE' ? (data.targetTotal as number) : null,
     videoId: data.type === 'VIDEO_SESSIONS' ? (parseYouTubeVideoId(data.videoUrl as string) as string) : null,
     videoTitle: data.type === 'VIDEO_SESSIONS' ? data.videoTitle || data.name : null,
-    videoDurationSec: data.type === 'VIDEO_SESSIONS' ? (data.videoDurationSec as number) : null,
+    // Left out = the server reads it from YouTube when the challenge is created.
+    videoDurationSec: data.type === 'VIDEO_SESSIONS' ? (data.videoDurationSec ?? null) : null,
     startDate: data.startDate,
     endDate: data.endDate,
   }));

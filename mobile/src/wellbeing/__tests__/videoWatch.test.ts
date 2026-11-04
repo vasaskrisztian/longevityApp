@@ -136,7 +136,12 @@ describe('video challenge form', () => {
     expect(validateGoal({ ...values, videoUrl: '' })).toEqual({ videoUrl: expect.any(String) });
     expect(validateGoal({ ...values, videoUrl: 'https://vimeo.com/1' })).toEqual({ videoUrl: expect.any(String) });
     expect(validateGoal({ ...values, videoDuration: 'x' })).toEqual({ videoDuration: expect.any(String) });
+    expect(validateGoal({ ...values, videoDuration: '' })).toEqual({}); // optional: read from YouTube
+    expect(validateGoal({ ...values, videoDuration: '  ' })).toEqual({});
     expect(validateGoal({ ...values, requiredCount: '0' })).toEqual({ requiredCount: expect.any(String) });
+  });
+  it('leaves the length out of the request when it is empty (the server reads it from YouTube)', () => {
+    expect(goalPayload({ ...values, videoDuration: '' })).toEqual({ mode: 'INDIVIDUAL', requiredCount: 10, videoUrl: 'https://youtu.be/dQw4w9WgXcQ' });
   });
   it('builds the request body, personal and team', () => {
     expect(goalPayload(values)).toEqual({ mode: 'INDIVIDUAL', requiredCount: 10, videoUrl: 'https://youtu.be/dQw4w9WgXcQ', videoDurationSec: 300 });

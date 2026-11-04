@@ -331,7 +331,7 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   const [requiredCount, setRequiredCount] = useState('10');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoTitle, setVideoTitle] = useState('');
-  const [videoDuration, setVideoDuration] = useState('5:00');
+  const [videoDuration, setVideoDuration] = useState('');
   const [startDate, setStartDate] = useState(todayDay());
   const [endDate, setEndDate] = useState(addDays(todayDay(), 29));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -410,8 +410,10 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
         <>
           <TextField label="YouTube link" value={videoUrl} onChangeText={setVideoUrl} autoCapitalize="none" keyboardType="url" error={errors.videoUrl} maxLength={500} />
           <TextField label="Video title (optional)" value={videoTitle} onChangeText={setVideoTitle} maxLength={200} />
-          <TextField label="Length of the video (m:ss)" value={videoDuration} onChangeText={setVideoDuration} autoCapitalize="none" error={errors.videoDuration} />
-          <Text style={styles.muted}>The video counts as watched when about 90% of this length has really played — enter it exactly.</Text>
+          <TextField label="Length of the video (m:ss, optional)" value={videoDuration} onChangeText={setVideoDuration} autoCapitalize="none" error={errors.videoDuration} />
+          <Text style={styles.muted}>
+            The length is read from YouTube automatically — only fill it in if that fails. The video counts as watched when about 90% of it has really played.
+          </Text>
         </>
       ) : null}
       {collectiveFields ? (
