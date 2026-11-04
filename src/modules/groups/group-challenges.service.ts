@@ -6,6 +6,8 @@ import { createNotification, createNotificationsForUsers } from '@/modules/notif
 import { listMemberIds } from './groups.service';
 import {
   buildCollectiveSeries,
+  evaluateVideoCompletion,
+  videoSessionDay,
   goalReachedNotification,
   collectiveCreatorSummaryNotification,
   collectiveParticipantSummaryNotification,
@@ -32,8 +34,11 @@ import {
 import type { CreateGroupChallengeInput as ParsedGroupChallengeInput } from '@/lib/validation/group.schemas';
 
 /** The parsed request body; `mode` and `targetTotal` may be left out (= INDIVIDUAL, no team total). */
-type CreateGroupChallengeInput = Omit<ParsedGroupChallengeInput, 'mode' | 'targetTotal' | 'description'> &
-  Partial<Pick<ParsedGroupChallengeInput, 'mode' | 'targetTotal' | 'description'>>;
+type CreateGroupChallengeInput = Omit<
+  ParsedGroupChallengeInput,
+  'mode' | 'targetTotal' | 'description' | 'videoId' | 'videoTitle' | 'videoDurationSec'
+> &
+  Partial<Pick<ParsedGroupChallengeInput, 'mode' | 'targetTotal' | 'description' | 'videoId' | 'videoTitle' | 'videoDurationSec'>>;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,7 +46,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class GroupChallengeError extends Error {
   constructor(
-    public readonly code: 'not_member' | 'not_found' | 'ended' | 'invalid_dates',
+    public readonly code:
+      | 'not_member'
+      | 'not_found'
+      | 'ended'
+      | 'invalid_dates'
+      | 'not_video'
+      | 'not_active'
+      | 'not_participant'
+      | 'watch_not_found'
+      | 'too_early'
+      | 'not_watched'
+      | 'expired',
     message: string,
   ) {
     super(message);
@@ -69,6 +85,8 @@ export interface GroupChallengeDTO {
   target: string;
   /** Whole days left (ACTIVE only), else null. */
   daysRemaining: number | null;
+  /** VIDEO_SESSIONS only: the YouTube video to watch (its id, a title and its length), else null. */
+  video: { videoId: string; title: string; durationSec: number } | null;
 }
 
 /** A COLLECTIVE challenge always carries its `targetTotal`; rows from before the mode existed have neither. */
@@ -96,6 +114,10 @@ export function toChallengeDTO(row: any, now: Date = new Date()): GroupChallenge
       ? describeCollectiveTarget(row.type, row.targetTotal)
       : describeChallengeTarget(row.type, row.threshold, row.requiredCount),
     daysRemaining: status === 'ACTIVE' ? Math.max(1, Math.ceil((row.endsAt.getTime() - now.getTime()) / DAY_MS)) : null,
+    video:
+      row.type === 'VIDEO_SESSIONS' && row.videoId
+        ? { videoId: row.videoId, title: row.videoTitle ?? row.name, durationSec: row.videoDurationSec ?? 0 }
+        : null,
   };
 }
 
@@ -144,6 +166,7 @@ async function loadJoins(challengeId: string | undefined, userIds: string[]): Pr
  */
 export async function computeParticipantProgress(
   challenge: {
+    id?: string;
     type: GroupChallengeType;
     threshold: number;
     requiredCount: number;
@@ -156,6 +179,18 @@ export async function computeParticipantProgress(
   now: Date = new Date(),
   join?: ParticipantJoin,
 ): Promise<MemberProgress> {
+  if (challenge.type === 'VIDEO_SESSIONS') {
+    const target = isCollectiveChallenge(challenge) ? (challenge.targetTotal as number) : challenge.requiredCount;
+    if (!challenge.id || now.getTime() < challenge.startsAt.getTime()) return memberProgress(0, target);
+    const sessions = await prisma.groupVideoSession.count({
+      where: {
+        challengeId: challenge.id,
+        userId,
+        ...(join ? { completedAt: { gte: join.joinedAt } } : {}),
+      },
+    });
+    return memberProgress(sessions, target);
+  }
   const window = personalWindow(challenge, now, join);
   if (isCollectiveChallenge(challenge)) {
     const target = challenge.targetTotal as number;
@@ -211,6 +246,9 @@ export async function createGroupChallenge(
       requiredCount: input.requiredCount,
       mode: input.mode ?? 'INDIVIDUAL',
       targetTotal: input.targetTotal ?? null,
+      ...(input.type === 'VIDEO_SESSIONS'
+        ? { videoId: input.videoId ?? null, videoTitle: input.videoTitle ?? null, videoDurationSec: input.videoDurationSec ?? null }
+        : {}),
       startsAt,
       endsAt,
     },
@@ -287,6 +325,30 @@ async function collectiveSeriesFor(challenge: any, participantIds: string[], now
   if (!isCollectiveChallenge(challenge)) return null;
   const window = countingWindow(challenge, now);
   if (!window) return { targetTotal: challenge.targetTotal, points: [] };
+  if (challenge.type === 'VIDEO_SESSIONS') {
+    // Finished viewings per day, each person's counting from when they joined.
+    const joins = await loadJoins(challenge.id, participantIds);
+    const rows: any[] =
+      participantIds.length === 0
+        ? []
+        : await prisma.groupVideoSession.findMany({
+            where: { challengeId: challenge.id, userId: { in: participantIds } },
+            select: { userId: true, day: true, completedAt: true },
+          });
+    const amounts = new Map<string, number>();
+    for (const row of rows) {
+      const joinedAt = joins.get(row.userId)?.joinedAt;
+      if (joinedAt && row.completedAt.getTime() < joinedAt.getTime()) continue;
+      const day = row.day.toISOString().slice(0, 10);
+      amounts.set(day, (amounts.get(day) ?? 0) + 1);
+    }
+    return buildCollectiveSeries(
+      challenge.startsAt.toISOString().slice(0, 10),
+      window.to.toISOString().slice(0, 10),
+      amounts,
+      challenge.targetTotal,
+    );
+  }
   // Each person's days count from when they joined, so the chart is summed per participant.
   const joins = await loadJoins(challenge.id, participantIds);
   const amounts = new Map<string, number>();
@@ -428,6 +490,8 @@ export interface MyGroupChallengeDTO extends GroupChallengeDTO {
   series: CollectiveSeries | null;
   /** Aggregate only: how many joined, how many reached the goal, mean progress. No other person's data. */
   team: TeamSummary;
+  /** VIDEO_SESSIONS only: whether the caller already finished the video today (their own day), else null. */
+  videoDoneToday: boolean | null;
 }
 
 async function requireMembership(groupId: string, userId: string) {
@@ -460,6 +524,11 @@ export async function listMyGroupChallenges(
       const { progresses, collective, team } = await teamProgress(challenge, participantIds, memberCount, now);
       const series = await collectiveSeriesFor(challenge, participantIds, now);
       const myIndex = participantIds.indexOf(userId);
+      let videoDoneToday: boolean | null = null;
+      if (challenge.type === 'VIDEO_SESSIONS') {
+        videoDoneToday =
+          myIndex >= 0 && (await videoDoneOn(challenge.id, userId, videoSessionDay(now, await userTimezone(userId))));
+      }
       return {
         ...toChallengeDTO(challenge, now),
         joined: myIndex >= 0,
@@ -467,9 +536,133 @@ export async function listMyGroupChallenges(
         collective,
         series,
         team,
+        videoDoneToday,
       };
     }),
   );
+}
+
+async function userTimezone(userId: string): Promise<string | null> {
+  const profile: any = await prisma.profile.findUnique({ where: { userId }, select: { timezone: true } });
+  return profile?.timezone ?? null;
+}
+
+async function videoDoneOn(challengeId: string, userId: string, day: Date): Promise<boolean> {
+  const row = await prisma.groupVideoSession.findUnique({
+    where: { challengeId_userId_day: { challengeId, userId, day } },
+    select: { id: true },
+  });
+  return Boolean(row);
+}
+
+/** The caller's membership, the running video challenge and their participation — or the matching error. */
+async function loadVideoContext(userId: string, groupId: string, challengeId: string, now: Date) {
+  await requireMembership(groupId, userId);
+  const challenge: any = await prisma.groupChallenge.findUnique({ where: { id: challengeId } });
+  if (!challenge || challenge.groupId !== groupId) throw new GroupChallengeError('not_found', 'Challenge not found');
+  if (challenge.type !== 'VIDEO_SESSIONS' || !challenge.videoId || !challenge.videoDurationSec) {
+    throw new GroupChallengeError('not_video', 'This challenge has no video');
+  }
+  if (groupChallengeStatus(challenge, now) !== 'ACTIVE') {
+    throw new GroupChallengeError('not_active', 'This challenge is not running right now');
+  }
+  const participant: any = await prisma.groupChallengeParticipant.findUnique({
+    where: { challengeId_userId: { challengeId, userId } },
+    select: { createdAt: true },
+  });
+  if (!participant) throw new GroupChallengeError('not_participant', 'Join the challenge first');
+  return challenge;
+}
+
+/**
+ * Starts a viewing of a video challenge's video. The returned `watchId` has to
+ * be presented when the viewing is finished, and the real time between the two
+ * has to be about the video's length — that is what stops skipping to the end.
+ * Only one open viewing per person and challenge is kept.
+ */
+export async function startVideoWatch(
+  userId: string,
+  groupId: string,
+  challengeId: string,
+  now: Date = new Date(),
+): Promise<{ watchId: string; startedAt: Date }> {
+  await loadVideoContext(userId, groupId, challengeId, now);
+  await prisma.groupVideoWatch.deleteMany({ where: { challengeId, userId, completedAt: null } });
+  const watch: any = await prisma.groupVideoWatch.create({ data: { challengeId, userId, startedAt: now } });
+  return { watchId: watch.id, startedAt: watch.startedAt ?? now };
+}
+
+export interface VideoCompletionResult {
+  /** False when today's session had already been counted. */
+  counted: boolean;
+  /** Finished viewings of this challenge so far (the caller's own). */
+  sessions: number;
+  /** The day the session is credited to (`yyyy-mm-dd`, the caller's own date). */
+  day: string;
+}
+
+/**
+ * Finishes a viewing. It counts as one session for the person's own calendar
+ * day (one per day per challenge) when the viewing was started here, enough
+ * real time has passed and the player reported enough playing time. A viewing
+ * can be used once; a too-early attempt leaves it open so the video can simply
+ * be finished.
+ */
+export async function completeVideoWatch(
+  userId: string,
+  groupId: string,
+  challengeId: string,
+  input: { watchId: string; watchedSeconds: number },
+  now: Date = new Date(),
+): Promise<VideoCompletionResult> {
+  const challenge = await loadVideoContext(userId, groupId, challengeId, now);
+  const watch: any = await prisma.groupVideoWatch.findUnique({ where: { id: input.watchId } });
+  if (!watch || watch.userId !== userId || watch.challengeId !== challengeId || watch.completedAt) {
+    throw new GroupChallengeError('watch_not_found', 'This viewing was not started or is already used');
+  }
+
+  const check = evaluateVideoCompletion({
+    durationSec: challenge.videoDurationSec,
+    startedAt: watch.startedAt,
+    now,
+    watchedSeconds: input.watchedSeconds,
+  });
+  if (!check.ok) {
+    const messages = {
+      too_early: 'The video has not been played long enough yet',
+      not_watched: 'The video was not watched to the end',
+      expired: 'This viewing has expired — start the video again',
+    } as const;
+    throw new GroupChallengeError(check.reason, messages[check.reason]);
+  }
+
+  const day = videoSessionDay(now, await userTimezone(userId));
+  if (day.getTime() < challenge.startsAt.getTime() || day.getTime() >= challenge.endsAt.getTime()) {
+    throw new GroupChallengeError('not_active', 'This challenge is not running today');
+  }
+
+  const claim = await prisma.groupVideoWatch.updateMany({
+    where: { id: watch.id, completedAt: null },
+    data: { completedAt: now },
+  });
+  if (claim.count !== 1) throw new GroupChallengeError('watch_not_found', 'This viewing was not started or is already used');
+
+  let counted = true;
+  if (await videoDoneOn(challengeId, userId, day)) {
+    counted = false;
+  } else {
+    try {
+      await prisma.groupVideoSession.create({
+        data: { challengeId, userId, day, completedAt: now, watchedSeconds: Math.round(input.watchedSeconds) },
+      });
+    } catch (error) {
+      // Two finishes racing for the same day: the unique key keeps exactly one.
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+      counted = false;
+    }
+  }
+  const sessions = await prisma.groupVideoSession.count({ where: { challengeId, userId } });
+  return { counted, sessions, day: day.toISOString().slice(0, 10) };
 }
 
 export async function joinGroupChallenge(userId: string, groupId: string, challengeId: string, now: Date = new Date()) {

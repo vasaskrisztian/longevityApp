@@ -4,7 +4,10 @@ const prismaMock = {
   wellbeingGroup: { findUnique: vi.fn() },
   groupMembership: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
   groupChallenge: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), delete: vi.fn(), updateMany: vi.fn() },
-  groupChallengeParticipant: { upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
+  groupChallengeParticipant: { upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+  groupVideoWatch: { create: vi.fn(), findUnique: vi.fn(), deleteMany: vi.fn(), updateMany: vi.fn() },
+  groupVideoSession: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+  profile: { findUnique: vi.fn() },
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/logging/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

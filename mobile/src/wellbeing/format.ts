@@ -37,7 +37,16 @@ export function formatAmount(value: number): string {
 
 /** "100 000 steps" / "1 workout" / "40 workouts" — a count in the unit of a team total. */
 export function collectiveAmountLabel(type: GroupChallengeType, amount: number): string {
-  const unit = type === 'DAILY_STEPS' ? 'steps' : amount === 1 ? 'workout' : 'workouts';
+  const unit =
+    type === 'DAILY_STEPS'
+      ? 'steps'
+      : type === 'VIDEO_SESSIONS'
+        ? amount === 1
+          ? 'video session'
+          : 'video sessions'
+        : amount === 1
+          ? 'workout'
+          : 'workouts';
   return `${formatAmount(amount)} ${unit}`;
 }
 

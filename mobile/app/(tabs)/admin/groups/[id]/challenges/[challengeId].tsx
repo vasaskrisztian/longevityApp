@@ -8,6 +8,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
+import { formatVideoDuration } from '@/src/wellbeing/challengeForm';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/src/wellbeing/format';
@@ -85,6 +86,11 @@ export default function AdminGroupChallengeScreen() {
         {left ? ` · ${left}` : ''}
       </Text>
       {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
+      {challenge.video ? (
+        <Text style={styles.muted}>
+          Video: {challenge.video.title} ({formatVideoDuration(challenge.video.durationSec)}) · youtu.be/{challenge.video.videoId}
+        </Text>
+      ) : null}
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Team</Text>

@@ -5,7 +5,7 @@
  * end-of-challenge notifications show is derived here, so they cannot disagree.
  */
 
-export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
+export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS' | 'VIDEO_SESSIONS';
 export type GroupChallengeMode = 'INDIVIDUAL' | 'COLLECTIVE';
 export type GroupChallengeStatus = 'UPCOMING' | 'ACTIVE' | 'ENDED';
 
@@ -182,7 +182,16 @@ const formatNumber = (value: number) => value.toLocaleString('en-US').replace(/,
 
 /** "100 000 steps" / "40 workouts" — the unit of a team total. */
 export function describeCollectiveAmount(type: GroupChallengeType, amount: number): string {
-  const word = type === 'DAILY_STEPS' ? 'steps' : amount === 1 ? 'workout' : 'workouts';
+  const word =
+    type === 'DAILY_STEPS'
+      ? 'steps'
+      : type === 'VIDEO_SESSIONS'
+        ? amount === 1
+          ? 'video session'
+          : 'video sessions'
+        : amount === 1
+          ? 'workout'
+          : 'workouts';
   return `${formatNumber(amount)} ${word}`;
 }
 
@@ -200,6 +209,8 @@ export function describeChallengeTarget(type: GroupChallengeType, threshold: num
       return `${requiredCount} ${requiredCount === 1 ? 'day' : 'days'} with more than ${threshold} steps`;
     case 'WEEKLY_WORKOUTS':
       return `${requiredCount} ${requiredCount === 1 ? 'week' : 'weeks'} with more than ${threshold} ${threshold === 1 ? 'workout' : 'workouts'}`;
+    case 'VIDEO_SESSIONS':
+      return `Watch the video to the end on ${requiredCount} ${requiredCount === 1 ? 'day' : 'days'}`;
   }
 }
 
@@ -219,9 +230,21 @@ export function newChallengeNotification(params: {
 }): { title: string; body: string } {
   const range = `from ${formatDay(params.startsAt)} to ${formatDay(params.endsAt)}`;
   if (params.mode === 'COLLECTIVE' && params.targetTotal) {
+    if (params.type === 'VIDEO_SESSIONS') {
+      return {
+        title: `New team video challenge: ${params.name}`,
+        body: `${params.groupName} started a team video challenge — ${describeCollectiveTarget(params.type, params.targetTotal).toLowerCase()}, ${range}. Watch the video to the end (once a day counts) to add to the shared total. Join it from the Wellbeing page if you want to take part.`,
+      };
+    }
     return {
       title: `New team challenge: ${params.name}`,
       body: `${params.groupName} started a team challenge — ${describeCollectiveTarget(params.type, params.targetTotal).toLowerCase()}, ${range}. Everyone who joins adds to the shared total. Join it from the Wellbeing page if you want to take part.`,
+    };
+  }
+  if (params.type === 'VIDEO_SESSIONS') {
+    return {
+      title: `New video challenge: ${params.name}`,
+      body: `${params.groupName} started a video challenge — ${describeChallengeTarget(params.type, params.threshold, params.requiredCount).toLowerCase()}, ${range}. Join it from the Wellbeing page if you want to take part.`,
     };
   }
   return {
@@ -290,4 +313,37 @@ export function creatorSummaryNotification(params: {
     title: `Challenge finished: ${params.name}`,
     body: `${params.groupName} — ${team.participants} of ${team.members} members took part; ${team.completed} reached the goal, average progress ${team.averagePercent}%.`,
   };
+}
+
+/** Share of the video that must really have been watched (and elapsed) for a viewing to count. */
+export const VIDEO_COMPLETION_RATIO = 0.9;
+/** A started viewing is only valid for this long — a stale one cannot be completed. */
+export const VIDEO_WATCH_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+export type VideoCompletionCheck =
+  | { ok: true }
+  | { ok: false; reason: 'too_early' | 'not_watched' | 'expired' };
+
+/**
+ * Decides whether a viewing counts. Two independent checks, both against the
+ * length the admin gave: real time since the viewing started (so skipping to
+ * the end gives nothing) and the playing time the player reported.
+ */
+export function evaluateVideoCompletion(params: {
+  durationSec: number;
+  startedAt: Date;
+  now: Date;
+  watchedSeconds: number;
+}): VideoCompletionCheck {
+  const needed = Math.floor(params.durationSec * VIDEO_COMPLETION_RATIO);
+  const elapsedMs = params.now.getTime() - params.startedAt.getTime();
+  if (elapsedMs > VIDEO_WATCH_MAX_AGE_MS) return { ok: false, reason: 'expired' };
+  if (elapsedMs < needed * 1000) return { ok: false, reason: 'too_early' };
+  if (params.watchedSeconds < needed) return { ok: false, reason: 'not_watched' };
+  return { ok: true };
+}
+
+/** The person's own calendar day of `moment` (UTC midnight of that date) — the day a viewing is credited to. */
+export function videoSessionDay(moment: Date, timezone?: string | null): Date {
+  return participantFirstDay({ joinedAt: moment, timezone });
 }

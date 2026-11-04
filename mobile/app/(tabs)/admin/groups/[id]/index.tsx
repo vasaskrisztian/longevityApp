@@ -302,6 +302,7 @@ const TYPE_OPTIONS = [
   { value: 'DAILY_STEPS', label: 'Daily steps' },
   { value: 'SLEEP_SCORE', label: 'Sleep score' },
   { value: 'WEEKLY_WORKOUTS', label: 'Weekly workouts' },
+  { value: 'VIDEO_SESSIONS', label: 'Video' },
 ];
 
 const TYPE_FIELDS: Record<GroupChallengeType, { threshold: string; count: string; hint: string }> = {
@@ -311,6 +312,11 @@ const TYPE_FIELDS: Record<GroupChallengeType, { threshold: string; count: string
     threshold: 'Workouts per week (more than)',
     count: 'Number of weeks',
     hint: 'A week counts when the person logged more workouts than the limit.',
+  },
+  VIDEO_SESSIONS: {
+    threshold: '',
+    count: 'Number of days',
+    hint: 'Members watch the video to the end in the app (a YouTube link — unlisted works well). A day counts when the video was finished that day; once a day at most.',
   },
 };
 
@@ -323,6 +329,9 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   const [targetTotal, setTargetTotal] = useState(COLLECTIVE_FIELDS.DAILY_STEPS?.default ?? '');
   const [threshold, setThreshold] = useState('8000');
   const [requiredCount, setRequiredCount] = useState('10');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoDuration, setVideoDuration] = useState('5:00');
   const [startDate, setStartDate] = useState(todayDay());
   const [endDate, setEndDate] = useState(addDays(todayDay(), 29));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -348,7 +357,7 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
   async function create() {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = 'Give the challenge a name.';
-    const goal = { mode, type, threshold, requiredCount, targetTotal };
+    const goal = { mode, type, threshold, requiredCount, targetTotal, videoUrl, videoTitle, videoDuration };
     Object.assign(next, validateGoal(goal));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) next.startDate = 'Use yyyy-mm-dd.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) next.endDate = 'Use yyyy-mm-dd.';
@@ -369,6 +378,8 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
       });
       setName('');
       setDescription('');
+      setVideoUrl('');
+      setVideoTitle('');
       setOpen(false);
       onCreated();
     } catch (err) {
@@ -395,11 +406,21 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
       <Text style={styles.muted}>{MODE_HINT[mode]}</Text>
       <ChipSingleSelect label="Type" options={typeOptions} value={type} onChange={changeType} />
       <Text style={styles.muted}>{collectiveFields ? collectiveFields.hint : fields.hint}</Text>
+      {type === 'VIDEO_SESSIONS' ? (
+        <>
+          <TextField label="YouTube link" value={videoUrl} onChangeText={setVideoUrl} autoCapitalize="none" keyboardType="url" error={errors.videoUrl} maxLength={500} />
+          <TextField label="Video title (optional)" value={videoTitle} onChangeText={setVideoTitle} maxLength={200} />
+          <TextField label="Length of the video (m:ss)" value={videoDuration} onChangeText={setVideoDuration} autoCapitalize="none" error={errors.videoDuration} />
+          <Text style={styles.muted}>The video counts as watched when about 90% of this length has really played — enter it exactly.</Text>
+        </>
+      ) : null}
       {collectiveFields ? (
         <TextField label={collectiveFields.label} value={targetTotal} onChangeText={setTargetTotal} keyboardType="numeric" error={errors.targetTotal} />
       ) : (
         <>
-          <TextField label={fields.threshold} value={threshold} onChangeText={setThreshold} keyboardType="numeric" error={errors.threshold} />
+          {type === 'VIDEO_SESSIONS' ? null : (
+            <TextField label={fields.threshold} value={threshold} onChangeText={setThreshold} keyboardType="numeric" error={errors.threshold} />
+          )}
           <TextField label={fields.count} value={requiredCount} onChangeText={setRequiredCount} keyboardType="numeric" error={errors.requiredCount} />
         </>
       )}

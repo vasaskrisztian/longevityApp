@@ -138,6 +138,9 @@ enum ChallengeType {
   SLEEP_SCORE
   DAILY_STEPS
   WEEKLY_WORKOUTS
+  /// Group challenges only: watching the challenge's video to the end counts
+  /// one session per person per day. Personal challenges never use it.
+  VIDEO_SESSIONS
 }
 
 /// Corporate wellbeing: where a group invitation stands. "Expired" is not a
@@ -312,6 +315,8 @@ model User {
   acceptedGroupInvitations    GroupInvitation[]           @relation("GroupInvitationAcceptedBy")
   createdGroupChallenges      GroupChallenge[]            @relation("GroupChallengeCreator")
   groupChallengeParticipations GroupChallengeParticipant[]
+  groupVideoWatches            GroupVideoWatch[]
+  groupVideoSessions           GroupVideoSession[]
   notifications               Notification[]
 
   // Auth.js (NextAuth) linkage — enables Google OAuth later without a schema change.
@@ -896,7 +901,15 @@ model GroupChallenge {
   /// COLLECTIVE only: when the "goal reached" notifications went out (once, mid-challenge).
   goalReachedAt DateTime?
 
-  participants GroupChallengeParticipant[]
+  /// VIDEO_SESSIONS only: the YouTube video members must watch to the end.
+  /// `videoDurationSec` is entered by the admin and is what "watched to the end" is measured against.
+  videoId          String?
+  videoTitle       String?
+  videoDurationSec Int?
+
+  participants  GroupChallengeParticipant[]
+  videoWatches  GroupVideoWatch[]
+  videoSessions GroupVideoSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -919,6 +932,41 @@ model GroupChallengeParticipant {
   @@unique([challengeId, userId])
   @@index([userId])
   @@map("group_challenge_participants")
+}
+
+/// A started viewing of a video challenge's video. The completion call must
+/// present this id and enough real time must have passed since `startedAt`.
+/// `completedAt` is set when it is used, so one viewing counts once.
+model GroupVideoWatch {
+  id          String         @id @default(uuid())
+  challengeId String
+  challenge   GroupChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([challengeId, userId])
+  @@map("group_video_watches")
+}
+
+/// One finished viewing: at most one per person per video challenge per
+/// calendar day (`day` = the person's own local date, stored as UTC midnight).
+model GroupVideoSession {
+  id          String         @id @default(uuid())
+  challengeId String
+  challenge   GroupChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  day            DateTime @db.Date
+  completedAt    DateTime @default(now())
+  watchedSeconds Int
+
+  @@unique([challengeId, userId, day])
+  @@index([challengeId, day])
+  @@map("group_video_sessions")
 }
 
 /// In-app notification (web bell + mobile). `data` carries the ids needed to

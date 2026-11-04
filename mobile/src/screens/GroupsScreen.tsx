@@ -18,6 +18,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { Checkbox } from '@/src/components/ui/Checkbox';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
+import { VideoChallengePanel } from '@/src/components/wellbeing/VideoChallengePanel';
 import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { setPendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
@@ -109,6 +110,7 @@ function ChallengeCard({
         {left ? ` · ${left}` : ''}
       </Text>
       {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
+      {challenge.video ? <VideoChallengePanel challenge={challenge} groupId={groupId} onChanged={onChanged} /> : null}
 
       {challenge.collective ? (
         <>

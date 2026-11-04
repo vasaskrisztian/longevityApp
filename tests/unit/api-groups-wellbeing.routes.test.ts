@@ -60,6 +60,8 @@ const challengesService = {
   listMyGroupChallenges: vi.fn(),
   joinGroupChallenge: vi.fn(),
   leaveGroupChallenge: vi.fn(),
+  startVideoWatch: vi.fn(),
+  completeVideoWatch: vi.fn(),
   lazyGroupChallengeChecks: vi.fn().mockResolvedValue(undefined),
   GroupChallengeError,
 };
@@ -90,6 +92,8 @@ const myInvitationAccept = await import('@/app/api/me/wellbeing/invitations/[id]
 const myGroup = await import('@/app/api/me/wellbeing/groups/[groupId]/route');
 const myChallenges = await import('@/app/api/me/wellbeing/groups/[groupId]/challenges/route');
 const myParticipation = await import('@/app/api/me/wellbeing/groups/[groupId]/challenges/[challengeId]/participation/route');
+const videoStart = await import('@/app/api/me/wellbeing/groups/[groupId]/challenges/[challengeId]/video/start/route');
+const videoComplete = await import('@/app/api/me/wellbeing/groups/[groupId]/challenges/[challengeId]/video/complete/route');
 const notifications = await import('@/app/api/notifications/route');
 const notificationsRead = await import('@/app/api/notifications/read/route');
 
@@ -151,6 +155,8 @@ describe('every member endpoint needs a signed-in user', () => {
     ['GET my challenges', () => myChallenges.GET(get(), { params: { groupId: 'g1' } })],
     ['POST join', () => myParticipation.POST(get(), { params: { groupId: 'g1', challengeId: 'c1' } })],
     ['DELETE leave challenge', () => myParticipation.DELETE(get(), { params: { groupId: 'g1', challengeId: 'c1' } })],
+    ['POST video start', () => videoStart.POST(get(), { params: { groupId: 'g1', challengeId: 'c1' } })],
+    ['POST video complete', () => videoComplete.POST(json({ watchId: 'w', watchedSeconds: 1 }), { params: { groupId: 'g1', challengeId: 'c1' } })],
     ['GET notifications', () => notifications.GET(get())],
     ['POST notifications/read', () => notificationsRead.POST(json({ ids: 'all' }))],
   ];
@@ -361,5 +367,44 @@ describe('notifications', () => {
     expect(await res.json()).toEqual({ updated: 3 });
     expect(notificationsService.markNotificationsRead).toHaveBeenCalledWith('u1', 'all');
     expect((await notificationsRead.POST(json({ ids: [] }))).status).toBe(400);
+  });
+});
+
+describe('video challenge endpoints', () => {
+  const P = { params: { groupId: 'g1', challengeId: 'c1' } };
+
+  it('start answers 201 with the watch id and passes the caller', async () => {
+    challengesService.startVideoWatch.mockResolvedValue({ watchId: 'w1', startedAt: new Date('2026-10-12T09:00:00Z') });
+    const res = await videoStart.POST(get(), P);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ watchId: 'w1', startedAt: '2026-10-12T09:00:00.000Z' });
+    expect(challengesService.startVideoWatch).toHaveBeenCalledWith('u1', 'g1', 'c1');
+  });
+
+  it('start maps service errors (not a member → 404, not a participant → 400)', async () => {
+    challengesService.startVideoWatch.mockRejectedValueOnce(new GroupChallengeError('not_member'));
+    expect((await videoStart.POST(get(), P)).status).toBe(404);
+    challengesService.startVideoWatch.mockRejectedValueOnce(new GroupChallengeError('not_participant', 'Join the challenge first'));
+    const res = await videoStart.POST(get(), P);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Join the challenge first');
+  });
+
+  it('complete validates the body, then reports the result', async () => {
+    expect((await videoComplete.POST(json({ watchedSeconds: 10 }), P)).status).toBe(400);
+    expect(challengesService.completeVideoWatch).not.toHaveBeenCalled();
+
+    challengesService.completeVideoWatch.mockResolvedValue({ counted: true, sessions: 2, day: '2026-10-12' });
+    const res = await videoComplete.POST(json({ watchId: 'w1', watchedSeconds: 299 }), P);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ counted: true, sessions: 2, day: '2026-10-12' });
+    expect(challengesService.completeVideoWatch).toHaveBeenCalledWith('u1', 'g1', 'c1', { watchId: 'w1', watchedSeconds: 299 });
+  });
+
+  it('complete: too early → 400, unknown viewing → 404', async () => {
+    challengesService.completeVideoWatch.mockRejectedValueOnce(new GroupChallengeError('too_early', 'The video has not been played long enough yet'));
+    expect((await videoComplete.POST(json({ watchId: 'w1', watchedSeconds: 299 }), P)).status).toBe(400);
+    challengesService.completeVideoWatch.mockRejectedValueOnce(new GroupChallengeError('watch_not_found'));
+    expect((await videoComplete.POST(json({ watchId: 'w1', watchedSeconds: 299 }), P)).status).toBe(404);
   });
 });

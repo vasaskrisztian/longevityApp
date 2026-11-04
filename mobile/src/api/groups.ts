@@ -8,9 +8,9 @@ import { API_BASE_URL } from '@/src/config/env';
  * are gated server-side by requireAdmin(), so nothing here checks a role.
  */
 
-export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
+export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS' | 'VIDEO_SESSIONS';
 export type GroupChallengeStatus = 'UPCOMING' | 'ACTIVE' | 'ENDED';
-/** INDIVIDUAL: everyone has their own goal. COLLECTIVE: one shared team total (steps or workouts). */
+/** INDIVIDUAL: everyone has their own goal. COLLECTIVE: one shared team total (steps, workouts or video sessions). */
 export type GroupChallengeMode = 'INDIVIDUAL' | 'COLLECTIVE';
 
 export interface GroupSummary {
@@ -147,6 +147,8 @@ export interface GroupChallenge {
   status: GroupChallengeStatus;
   target: string;
   daysRemaining: number | null;
+  /** VIDEO_SESSIONS only: the YouTube video to watch to the end. */
+  video: { videoId: string; title: string; durationSec: number } | null;
 }
 
 export interface AdminGroupChallengeListItem extends GroupChallenge {
@@ -162,8 +164,12 @@ export interface CreateGroupChallengeInput {
   mode?: GroupChallengeMode;
   threshold?: number;
   requiredCount?: number;
-  /** COLLECTIVE: the total (steps or workouts) the whole team has to reach. */
+  /** COLLECTIVE: the total (steps, workouts or video sessions) the whole team has to reach. */
   targetTotal?: number;
+  /** VIDEO_SESSIONS: the YouTube link, an optional player title, and the video's length in seconds. */
+  videoUrl?: string;
+  videoTitle?: string;
+  videoDurationSec?: number;
   startDate: string;
   endDate: string;
 }
@@ -269,6 +275,8 @@ export interface MyGroupChallenge extends GroupChallenge {
   /** The team's running total per day — COLLECTIVE only; aggregate numbers. */
   series: CollectiveSeries | null;
   team: TeamSummary;
+  /** VIDEO_SESSIONS only: whether the video was already finished today (own day), else null. */
+  videoDoneToday: boolean | null;
 }
 
 export const listMyGroupChallenges = (groupId: string) =>
@@ -283,6 +291,29 @@ export const joinGroupChallenge = (groupId: string, challengeId: string) =>
 
 export const leaveGroupChallenge = (groupId: string, challengeId: string) =>
   expectNoContent(`/api/me/wellbeing/groups/${groupId}/challenges/${challengeId}/participation`, { method: 'DELETE' });
+
+export interface VideoWatchStart {
+  watchId: string;
+  startedAt: string;
+}
+
+export interface VideoWatchResult {
+  /** False when today's session had already been counted. */
+  counted: boolean;
+  sessions: number;
+  day: string;
+}
+
+/** Starts a viewing of the challenge's video; the `watchId` is needed to finish it. */
+export const startVideoWatch = (groupId: string, challengeId: string) =>
+  apiFetchJson<VideoWatchStart>(`/api/me/wellbeing/groups/${groupId}/challenges/${challengeId}/video/start`, { method: 'POST' });
+
+/** Reports the video as watched to the end; the server checks the real time and the playing time. */
+export const completeVideoWatch = (groupId: string, challengeId: string, input: { watchId: string; watchedSeconds: number }) =>
+  apiFetchJson<VideoWatchResult>(`/api/me/wellbeing/groups/${groupId}/challenges/${challengeId}/video/complete`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 
 // --------------------------------------------------- public invitation
 

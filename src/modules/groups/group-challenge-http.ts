@@ -8,8 +8,16 @@ export function groupChallengeErrorResponse(error: unknown): Response | null {
     case 'not_found':
       // One shape for both: a non-member must not learn which challenge ids exist.
       return Response.json({ error: 'Not found' }, { status: 404 });
+    case 'watch_not_found':
+      return Response.json({ error: error.message }, { status: 404 });
     case 'ended':
     case 'invalid_dates':
+    case 'not_video':
+    case 'not_active':
+    case 'not_participant':
+    case 'too_early':
+    case 'not_watched':
+    case 'expired':
       return Response.json({ error: error.message }, { status: 400 });
   }
 }
