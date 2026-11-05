@@ -13,6 +13,7 @@ import { useSession } from '@/src/auth/useSession';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { t, tDynamic, useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
@@ -32,29 +33,25 @@ import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 type ChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
 
-const TYPE_META: Record<ChallengeType, { label: string; periodNoun: string; thresholdLabel: string; thresholdUnit: string }> = {
-  SLEEP_SCORE: { label: 'Sleep score', periodNoun: 'nights', thresholdLabel: 'Sleep score above', thresholdUnit: 'points' },
-  DAILY_STEPS: { label: 'Daily steps', periodNoun: 'days', thresholdLabel: 'Steps above', thresholdUnit: 'steps' },
-  WEEKLY_WORKOUTS: { label: 'Weekly workouts', periodNoun: 'weeks', thresholdLabel: 'Workouts above', thresholdUnit: 'per week' },
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Draft',
-  ACTIVE: 'Active',
-  COMPLETED: 'Completed',
-  FAILED: 'Failed',
-};
-
 function describeTerms(c: { type: ChallengeType; requiredCount: number; threshold: number; windowDays: number }): string {
-  const meta = TYPE_META[c.type];
-  return `${meta.thresholdLabel} ${c.threshold} ${meta.thresholdUnit}, for ${c.requiredCount} ${meta.periodNoun}, within ${c.windowDays} days of activation`;
+  return t(`creators.terms.${c.type}`, {
+    threshold: c.threshold,
+    requiredCount: c.requiredCount,
+    windowDays: c.windowDays,
+  });
+}
+
+function statusLabel(status: string): string {
+  const key = `creators.status.${status}`;
+  const label = tDynamic(key);
+  return label === key ? status : label;
 }
 
 function formatMinutes(totalMinutes: number | null): string | null {
   if (totalMinutes === null) return null;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return hours > 0 ? t('creators.profile.duration.hoursMinutes', { hours, minutes }) : t('creators.profile.duration.minutes', { minutes });
 }
 
 function ProgressBar({ current, required }: { current: number; required: number }) {
@@ -67,11 +64,12 @@ function ProgressBar({ current, required }: { current: number; required: number 
 }
 
 function PublicProtocolCard({ protocol }: { protocol: CreatorPublicProfile['protocols'][number] }) {
+  useT();
   const targets = [
-    protocol.targetSleepScore != null ? `Sleep score ≥ ${protocol.targetSleepScore}` : null,
-    formatMinutes(protocol.targetSleepMinutes) ? `Sleep ${formatMinutes(protocol.targetSleepMinutes)}` : null,
-    protocol.targetWeeklyWorkouts != null ? `${protocol.targetWeeklyWorkouts} workouts/week` : null,
-    protocol.targetDailyActiveCalories != null ? `${protocol.targetDailyActiveCalories} active kcal/day` : null,
+    protocol.targetSleepScore != null ? t('creators.profile.target.sleepScore', { value: protocol.targetSleepScore }) : null,
+    formatMinutes(protocol.targetSleepMinutes) ? t('creators.profile.target.sleepDuration', { duration: formatMinutes(protocol.targetSleepMinutes) ?? '' }) : null,
+    protocol.targetWeeklyWorkouts != null ? t('creators.profile.target.workouts', { value: protocol.targetWeeklyWorkouts }) : null,
+    protocol.targetDailyActiveCalories != null ? t('creators.profile.target.activeCalories', { value: protocol.targetDailyActiveCalories }) : null,
   ].filter(Boolean);
 
   return (
@@ -80,24 +78,25 @@ function PublicProtocolCard({ protocol }: { protocol: CreatorPublicProfile['prot
       {protocol.description ? <Text style={styles.rowSubtitle}>{protocol.description}</Text> : null}
       {targets.length > 0 ? <Text style={styles.rowSubtitle}>{targets.join(' · ')}</Text> : null}
       {protocol.supplements.length > 0 ? (
-        <Text style={styles.rowSubtitle}>Supplements: {protocol.supplements.map((s) => s.name).join(', ')}</Text>
+        <Text style={styles.rowSubtitle}>{t('creators.profile.supplements', { names: protocol.supplements.map((s) => s.name).join(', ') })}</Text>
       ) : null}
     </Card>
   );
 }
 
 function PublicChallengeCard({ challenge }: { challenge: CreatorPublicProfile['challenges'][number] }) {
+  useT();
   const { status, currentCount, requiredCount } = challenge.progress;
   return (
     <Card>
-      <Text style={styles.rowTitle}>{challenge.name || TYPE_META[challenge.type].label}</Text>
-      <Text style={styles.rowSubtitle}>{STATUS_LABEL[status] ?? status}</Text>
+      <Text style={styles.rowTitle}>{challenge.name || tDynamic(`enum.${challenge.type}`)}</Text>
+      <Text style={styles.rowSubtitle}>{statusLabel(status)}</Text>
       <Text style={styles.rowSubtitle}>{describeTerms(challenge)}</Text>
       {status !== 'DRAFT' ? (
         <View style={styles.progressBlock}>
           <ProgressBar current={currentCount} required={requiredCount} />
           <Text style={styles.rowSubtitle}>
-            {currentCount}/{requiredCount} {TYPE_META[challenge.type].periodNoun}
+            {t(`creators.progress.${challenge.type}`, { current: currentCount, required: requiredCount })}
           </Text>
         </View>
       ) : null}
@@ -106,12 +105,13 @@ function PublicChallengeCard({ challenge }: { challenge: CreatorPublicProfile['c
 }
 
 export default function CreatorPublicProfileScreen() {
+  const { t, locale } = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useSession();
   const [profile, setProfile] = useState<CreatorPublicProfile | null | undefined>(undefined);
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -120,7 +120,7 @@ export default function CreatorPublicProfileScreen() {
         setProfile(profileData);
         setFollowing(isFollowing);
       })
-      .catch(() => setError('Could not load this creator.'));
+      .catch(() => setError(true));
   }, [id]);
 
   useEffect(load, [load]);
@@ -146,7 +146,7 @@ export default function CreatorPublicProfileScreen() {
   if (profile === undefined) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {error ? <Alert variant="destructive">{t('creators.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -154,7 +154,7 @@ export default function CreatorPublicProfileScreen() {
   if (profile === null) {
     return (
       <View style={styles.centered}>
-        <Alert variant="destructive">This creator profile isn&apos;t available.</Alert>
+        <Alert variant="destructive">{t('creators.profile.unavailable')}</Alert>
       </View>
     );
   }
@@ -164,14 +164,14 @@ export default function CreatorPublicProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.header}>
-        <Text style={styles.name}>{profile.fullName ?? 'Creator'}</Text>
+        <Text style={styles.name}>{profile.fullName ?? t('creators.fallbackName')}</Text>
         <Text style={styles.rowSubtitle}>
-          Member since {new Date(profile.memberSince).toLocaleDateString()} · {profile.followerCount} follower
-          {profile.followerCount === 1 ? '' : 's'}
+          {t('creators.memberSince', { date: new Date(profile.memberSince).toLocaleDateString(locale) })} ·{' '}
+          {t('creators.followers', { count: profile.followerCount })}
         </Text>
         {!isOwnProfile ? (
           <Button
-            title={followBusy ? 'Updating…' : following ? 'Unfollow' : 'Follow'}
+            title={followBusy ? t('creators.profile.updating') : following ? t('creators.unfollow') : t('creators.follow')}
             variant={following ? 'outline' : 'primary'}
             size="sm"
             onPress={handleFollowToggle}
@@ -180,29 +180,36 @@ export default function CreatorPublicProfileScreen() {
         ) : null}
       </Card>
 
-      <Text style={styles.sectionTitle}>Protocols</Text>
+      <Text style={styles.sectionTitle}>{t('creators.profile.protocols')}</Text>
       {profile.protocols.length === 0 ? (
-        <Text style={styles.empty}>No public protocols yet.</Text>
+        <Text style={styles.empty}>{t('creators.profile.noProtocols')}</Text>
       ) : (
         profile.protocols.map((p) => <PublicProtocolCard key={p.id} protocol={p} />)
       )}
 
-      <Text style={styles.sectionTitle}>Challenges</Text>
+      <Text style={styles.sectionTitle}>{t('creators.profile.challenges')}</Text>
       {profile.challenges.length === 0 ? (
-        <Text style={styles.empty}>No public challenges yet.</Text>
+        <Text style={styles.empty}>{t('creators.profile.noChallenges')}</Text>
       ) : (
         profile.challenges.map((c) => <PublicChallengeCard key={c.id} challenge={c} />)
       )}
 
-      <Text style={styles.sectionTitle}>Recent health data</Text>
+      <Text style={styles.sectionTitle}>{t('creators.profile.recentData')}</Text>
       {profile.recentMetrics.length === 0 ? (
-        <Text style={styles.empty}>No recent data shared.</Text>
+        <Text style={styles.empty}>{t('creators.profile.noRecentData')}</Text>
       ) : (
         <Card>
           <ScrollView horizontal style={styles.tableScroll}>
             <View>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                {['Date', 'Sleep', 'Steps', 'Resting HR', 'HRV', 'Active kcal'].map((h) => (
+                {[
+                  t('creators.profile.table.date'),
+                  t('creators.profile.table.sleep'),
+                  t('creators.profile.table.steps'),
+                  t('creators.profile.table.restingHr'),
+                  t('creators.profile.table.hrv'),
+                  t('creators.profile.table.activeKcal'),
+                ].map((h) => (
                   <Text key={h} style={styles.tableHeaderCell}>
                     {h}
                   </Text>

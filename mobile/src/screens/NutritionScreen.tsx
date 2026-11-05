@@ -7,6 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, screenBackground } from '@/src/theme/tokens';
 import { DietTypeEnum, NutritionProfileSchema, enumLabel, type NutritionProfileInput } from '@/src/validation/schemas';
 import { formatTagList, parseTagList } from '@/src/utils/tagList';
@@ -15,8 +16,6 @@ import { formatTagList, parseTagList } from '@/src/utils/tagList';
  * (phase 18) — loads the bundle's nutritionProfile, saves the whole form on
  * submit (no per-field save like Goals/Supplements, since there's exactly
  * one record per user, same as the web version). */
-
-const DIET_OPTIONS: ChipOption[] = DietTypeEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
 
 interface NutritionFormState {
   dietType: string;
@@ -41,12 +40,13 @@ const DEFAULT_FORM: NutritionFormState = {
 };
 
 export default function NutritionScreen() {
+  const { t } = useT();
   const [form, setForm] = useState<NutritionFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<'load' | 'save' | null>(null);
 
   useEffect(() => {
     getProfileBundle()
@@ -63,7 +63,7 @@ export default function NutritionScreen() {
           notes: n?.notes ?? '',
         });
       })
-      .catch(() => setServerError('Could not load your nutrition profile.'))
+      .catch(() => setServerError('load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -77,7 +77,7 @@ export default function NutritionScreen() {
     });
     if (!parsed.success) {
       setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
+        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
       ));
       return;
     }
@@ -89,7 +89,7 @@ export default function NutritionScreen() {
       await updateNutritionProfile(parsed.data as NutritionProfileInput);
       setSaved(true);
     } catch {
-      setServerError('Could not save your changes. Please try again.');
+      setServerError('save');
     } finally {
       setSaving(false);
     }
@@ -106,18 +106,22 @@ export default function NutritionScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.card}>
-        {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
-        {saved ? <Alert variant="success">Saved.</Alert> : null}
+        {serverError ? (
+          <Alert variant="destructive">
+            {serverError === 'load' ? t('profile.nutrition.loadFailed') : t('profile.saveFailed')}
+          </Alert>
+        ) : null}
+        {saved ? <Alert variant="success">{t('profile.saved')}</Alert> : null}
 
         <ChipSingleSelect
-          label="Diet type"
-          options={DIET_OPTIONS}
+          label={t('profile.field.dietType')}
+          options={DietTypeEnum.options.map((v): ChipOption => ({ value: v, label: enumLabel(v) }))}
           value={form.dietType}
           onChange={(v) => setForm({ ...form, dietType: v })}
         />
         <View style={styles.row}>
           <TextField
-            label="Meals / day (optional)"
+            label={t('profile.field.mealsPerDay')}
             keyboardType="numeric"
             style={styles.flex1}
             value={form.dailyMealCount}
@@ -125,7 +129,7 @@ export default function NutritionScreen() {
             error={errors.dailyMealCount}
           />
           <TextField
-            label="Calories / day (optional)"
+            label={t('profile.field.caloriesPerDay')}
             keyboardType="numeric"
             style={styles.flex1}
             value={form.dailyCaloriesKcal}
@@ -134,33 +138,33 @@ export default function NutritionScreen() {
           />
         </View>
         <TextField
-          label="Protein (g/day, optional)"
+          label={t('profile.field.protein')}
           keyboardType="numeric"
           value={form.dailyProteinGrams}
           onChangeText={(v) => setForm({ ...form, dailyProteinGrams: v })}
           error={errors.dailyProteinGrams}
         />
         <TextField
-          label="Allergies (comma-separated, optional)"
+          label={t('profile.field.allergies')}
           value={form.allergies}
           onChangeText={(v) => setForm({ ...form, allergies: v })}
         />
         <TextField
-          label="Intolerances (comma-separated, optional)"
+          label={t('profile.field.intolerances')}
           value={form.intolerances}
           onChangeText={(v) => setForm({ ...form, intolerances: v })}
         />
         <TextField
-          label="Avoided foods (comma-separated, optional)"
+          label={t('profile.field.avoidedFoods')}
           value={form.avoidedFoods}
           onChangeText={(v) => setForm({ ...form, avoidedFoods: v })}
         />
         <TextField
-          label="Notes (optional)"
+          label={t('profile.field.notes')}
           value={form.notes}
           onChangeText={(v) => setForm({ ...form, notes: v })}
         />
-        <Button title={saving ? 'Saving…' : 'Save changes'} onPress={save} loading={saving} />
+        <Button title={saving ? t('common.saving') : t('profile.saveChanges')} onPress={save} loading={saving} />
       </Card>
     </ScrollView>
   );

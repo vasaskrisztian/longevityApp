@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { generateRawToken, hashToken } from '@/lib/auth/tokens';
 import { logger } from '@/lib/logging/logger';
+import { normalizeLanguage, type Language } from '@/lib/i18n/languages';
 import type { RegisterInput } from '@/lib/validation/auth.schemas';
 import { completeInvitation, requireUsableInvitationForEmail } from '@/modules/groups/invitations.service';
 
@@ -54,6 +55,7 @@ export async function registerUser(input: RegisterInput): Promise<{
       passwordHash,
       termsAcceptedAt: now,
       privacyAcceptedAt: now,
+      language: normalizeLanguage(input.language),
       ...(invitation ? { emailVerifiedAt: now } : {}),
     },
   });
@@ -94,10 +96,21 @@ export async function registerUser(input: RegisterInput): Promise<{
   return { userId: user.id, verificationToken };
 }
 
+/** The language of the account with this address (English when there is none or the lookup fails). */
+export async function getLanguageByEmail(email: string): Promise<Language> {
+  try {
+    const user = await prisma.user.findUnique({ where: { email }, select: { language: true } });
+    return normalizeLanguage(user?.language);
+  } catch {
+    return 'en';
+  }
+}
+
 export interface VerifiedCredentialsUser {
   id: string;
   role: UserRole;
   email: string;
+  language: Language;
 }
 
 /**
@@ -140,7 +153,7 @@ export async function verifyUserCredentials(
 
   logger.info('login_success', { userId: user.id });
 
-  return { id: user.id, role: user.role, email: user.email };
+  return { id: user.id, role: user.role, email: user.email, language: normalizeLanguage(user.language) };
 }
 
 export async function verifyEmail(rawToken: string): Promise<boolean> {

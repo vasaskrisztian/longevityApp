@@ -7,6 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { GenderEnum, PersonalInfoSchema, enumLabel, type PersonalInfoInput } from '@/src/validation/schemas';
 
@@ -16,8 +17,6 @@ import { GenderEnum, PersonalInfoSchema, enumLabel, type PersonalInfoInput } fro
  * public-profile toggle that used to share this screen now live in the Plan
  * area and Me > Account.
  */
-
-const GENDER_OPTIONS: ChipOption[] = GenderEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
 
 interface PersonalFormState {
   fullName: string;
@@ -29,12 +28,13 @@ interface PersonalFormState {
 }
 
 export default function PersonalScreen() {
+  const { t } = useT();
   const [form, setForm] = useState<PersonalFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<'load' | 'save' | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -49,7 +49,7 @@ export default function PersonalScreen() {
           timezone: bundle.profile?.timezone ?? 'UTC',
         });
       })
-      .catch(() => setServerError('Could not load your profile.'))
+      .catch(() => setServerError('load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -60,7 +60,7 @@ export default function PersonalScreen() {
     const parsed = PersonalInfoSchema.safeParse(form);
     if (!parsed.success) {
       setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
+        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
       ));
       return;
     }
@@ -72,7 +72,7 @@ export default function PersonalScreen() {
       await updatePersonalInfo(parsed.data as PersonalInfoInput);
       setSaved(true);
     } catch {
-      setServerError('Could not save your changes. Please try again.');
+      setServerError('save');
     } finally {
       setSaving(false);
     }
@@ -89,51 +89,55 @@ export default function PersonalScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Personal information</Text>
-        <Text style={styles.cardDescription}>Used for your dashboard and to personalize insights.</Text>
+        <Text style={styles.cardTitle}>{t('profile.personal.title')}</Text>
+        <Text style={styles.cardDescription}>{t('profile.personal.description')}</Text>
 
-        {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
-        {saved ? <Alert variant="success">Saved.</Alert> : null}
+        {serverError ? (
+          <Alert variant="destructive">
+            {serverError === 'load' ? t('profile.personal.loadFailed') : t('profile.saveFailed')}
+          </Alert>
+        ) : null}
+        {saved ? <Alert variant="success">{t('profile.saved')}</Alert> : null}
 
         <TextField
-          label="Full name"
+          label={t('profile.field.fullName')}
           value={form.fullName}
           onChangeText={(v) => setForm({ ...form, fullName: v })}
           error={errors.fullName}
         />
         <TextField
-          label="Birth date (yyyy-mm-dd)"
+          label={t('profile.field.birthDate')}
           value={form.birthDate}
           onChangeText={(v) => setForm({ ...form, birthDate: v })}
           error={errors.birthDate}
         />
         <ChipSingleSelect
-          label="Gender"
-          options={GENDER_OPTIONS}
+          label={t('profile.field.gender')}
+          options={GenderEnum.options.map((v): ChipOption => ({ value: v, label: enumLabel(v) }))}
           value={form.gender}
           onChange={(v) => setForm({ ...form, gender: v })}
         />
         <TextField
-          label="Height (cm)"
+          label={t('profile.field.height')}
           keyboardType="numeric"
           value={form.heightCm}
           onChangeText={(v) => setForm({ ...form, heightCm: v })}
           error={errors.heightCm}
         />
         <TextField
-          label="Weight (kg)"
+          label={t('profile.field.weight')}
           keyboardType="numeric"
           value={form.weightKg}
           onChangeText={(v) => setForm({ ...form, weightKg: v })}
           error={errors.weightKg}
         />
         <TextField
-          label="Timezone"
+          label={t('profile.field.timezone')}
           value={form.timezone}
           onChangeText={(v) => setForm({ ...form, timezone: v })}
           error={errors.timezone}
         />
-        <Button title={saving ? 'Saving…' : 'Save changes'} onPress={save} loading={saving} />
+        <Button title={saving ? t('common.saving') : t('profile.saveChanges')} onPress={save} loading={saving} />
       </Card>
 
     </ScrollView>

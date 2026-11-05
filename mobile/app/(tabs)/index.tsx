@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { BellButton } from '@/src/components/BellButton';
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { useT } from '@/src/i18n';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import DashboardScreen from '@/src/screens/DashboardScreen';
 import InBodyScreen from '@/src/screens/InBodyScreen';
@@ -17,20 +18,21 @@ const SEGMENTS = ['today', 'trends', 'body'] as const;
  * behind one segmented switch — "how am I doing" lives in a single place.
  */
 export default function TodayScreen() {
+  const { t } = useT();
   const [segment, setSegment] = useTabParam(SEGMENTS, 'today');
   return (
     <View style={styles.container}>
       <ScreenBackdrop />
       <View style={styles.header}>
-        <Text style={styles.title}>Today</Text>
+        <Text style={styles.title}>{t('nav.tab.today')}</Text>
         <BellButton />
       </View>
       <View style={styles.segments}>
         <SegmentedControl
           options={[
-            { value: 'today', label: 'Today' },
-            { value: 'trends', label: 'Trends' },
-            { value: 'body', label: 'Body' },
+            { value: 'today', label: t('nav.segment.today') },
+            { value: 'trends', label: t('nav.segment.trends') },
+            { value: 'body', label: t('nav.segment.body') },
           ]}
           value={segment}
           onChange={setSegment}

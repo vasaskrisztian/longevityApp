@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { useT } from '@/src/i18n';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import FollowedCreatorsScreen from '@/src/screens/FollowedCreatorsScreen';
 import GroupsScreen from '@/src/screens/GroupsScreen';
@@ -11,6 +12,7 @@ const SEGMENTS = ['groups', 'creators'] as const;
 
 /** Community: Groups (invitations, team challenges) | Creators (the ones you follow; browse from there). */
 export default function CommunityScreen() {
+  const { t } = useT();
   const [segment, setSegment] = useTabParam(SEGMENTS, 'groups');
   return (
     <View style={styles.container}>
@@ -18,8 +20,8 @@ export default function CommunityScreen() {
       <View style={styles.segments}>
         <SegmentedControl
           options={[
-            { value: 'groups', label: 'Groups' },
-            { value: 'creators', label: 'Creators' },
+            { value: 'groups', label: t('nav.segment.groups') },
+            { value: 'creators', label: t('nav.segment.creators') },
           ]}
           value={segment}
           onChange={setSegment}

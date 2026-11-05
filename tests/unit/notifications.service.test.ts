@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const prismaMock = {
+  user: { findMany: vi.fn() },
   notification: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
 };
 vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
@@ -8,6 +9,8 @@ vi.mock('@/lib/db/prisma', () => ({ prisma: prismaMock }));
 const {
   createNotification,
   createNotificationsForUsers,
+  createLocalizedNotificationsForUsers,
+  getUserLanguages,
   listNotifications,
   markNotificationsRead,
   countUnreadNotifications,
@@ -29,6 +32,29 @@ describe('notifications.service', () => {
     prismaMock.notification.createMany.mockClear();
     await createNotificationsForUsers([], { type: 'GROUP_CHALLENGE_NEW', title: 'T', body: 'B' });
     expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+
+  it('writes each recipient’s notification in their own language, one insert per language', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'u1', language: 'hu' },
+      { id: 'u2', language: 'de' },
+      { id: 'u3', language: 'hu' },
+      { id: 'u4', language: null },
+    ]);
+    const build = vi.fn((language: string) => ({ title: `T-${language}`, body: `B-${language}` }));
+    await createLocalizedNotificationsForUsers(['u1', 'u2', 'u3', 'u4', 'u5'], { type: 'GROUP_CHALLENGE_NEW' }, build);
+
+    const inserts = prismaMock.notification.createMany.mock.calls.map((c) => c[0].data);
+    expect(inserts).toHaveLength(3);
+    const byTitle = Object.fromEntries(inserts.map((rows: { title: string; userId: string }[]) => [rows[0]!.title, rows.map((r) => r.userId)]));
+    expect(byTitle['T-hu']).toEqual(['u1', 'u3']);
+    expect(byTitle['T-de']).toEqual(['u2']);
+    expect(byTitle['T-en']).toEqual(['u4', 'u5']); // unset and unknown people read English
+  });
+
+  it('falls back to English when the language lookup fails', async () => {
+    prismaMock.user.findMany.mockRejectedValue(new Error('db down'));
+    expect((await getUserLanguages(['u1'])).size).toBe(0);
   });
 
   it('lists only the caller’s notifications, newest first, with the unread count and ISO dates', async () => {

@@ -8,6 +8,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { TextField } from '@/src/components/ui/TextField';
 import { useSession, InvalidCredentialsError } from '@/src/auth/useSession';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { safeNextPath } from '@/src/wellbeing/inviteFlow';
 
@@ -24,6 +25,7 @@ const LoginFormSchema = z.object({
 });
 
 export default function LoginScreen() {
+  const { t } = useT();
   const { status, login } = useSession();
   const router = useRouter();
   // The verify-email API route redirects here with ?verified=1 once the
@@ -47,7 +49,7 @@ export default function LoginScreen() {
     setError(null);
     const parsed = LoginFormSchema.safeParse({ email, password });
     if (!parsed.success) {
-      setError('Enter your email address and password.');
+      setError(t('auth.login.enterBoth'));
       return;
     }
 
@@ -59,8 +61,8 @@ export default function LoginScreen() {
       // whether the password was wrong or the account is unverified/suspended.
       setError(
         err instanceof InvalidCredentialsError
-          ? 'Invalid email or password, or your account is not verified yet.'
-          : 'Could not log in. Please try again.',
+          ? t('auth.login.invalid')
+          : t('auth.login.failed'),
       );
     } finally {
       setSubmitting(false);
@@ -68,12 +70,12 @@ export default function LoginScreen() {
   }
 
   return (
-    <AuthLayout title="Log in">
-      {verified === '1' ? <Alert variant="success">Your email is verified — you can log in now.</Alert> : null}
+    <AuthLayout title={t('auth.login.title')}>
+      {verified === '1' ? <Alert variant="success">{t('auth.login.verified')}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
 
       <TextField
-        label="Email"
+        label={t('auth.field.email')}
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
@@ -81,7 +83,7 @@ export default function LoginScreen() {
         onChangeText={setEmail}
       />
       <TextField
-        label="Password"
+        label={t('auth.field.password')}
         secureTextEntry
         autoComplete="password"
         value={password}
@@ -89,14 +91,14 @@ export default function LoginScreen() {
         onSubmitEditing={handleSubmit}
       />
 
-      <Button title={submitting ? 'Logging in…' : 'Log in'} onPress={handleSubmit} loading={submitting} />
+      <Button title={submitting ? t('auth.login.submitting') : t('auth.login.submit')} onPress={handleSubmit} loading={submitting} />
 
       <View style={styles.links}>
         <Pressable onPress={() => router.push('/register')} accessibilityRole="link">
-          <Text style={styles.link}>Create an account</Text>
+          <Text style={styles.link}>{t('auth.login.createAccount')}</Text>
         </Pressable>
         <Pressable onPress={() => router.push('/reset-password')} accessibilityRole="link">
-          <Text style={styles.link}>Forgot password?</Text>
+          <Text style={styles.link}>{t('auth.login.forgot')}</Text>
         </Pressable>
       </View>
     </AuthLayout>

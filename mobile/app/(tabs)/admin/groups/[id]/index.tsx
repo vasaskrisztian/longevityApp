@@ -20,6 +20,7 @@ import {
 } from '@/src/api/groups';
 import { Alert } from '@/src/components/ui/Alert';
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { t, useT } from '@/src/i18n';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
@@ -39,6 +40,7 @@ import { confirmDestructive } from '@/src/utils/confirm';
 import { pickLogo, type PickedLogo } from '@/src/utils/logoPicker';
 import {
   addDays,
+  challengeTargetText,
   daysLeftLabel,
   displayName,
   formatDateRange,
@@ -60,6 +62,7 @@ import {
 const GROUP_SEGMENTS = ['overview', 'challenges', 'settings'] as const;
 
 function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: () => void }) {
+  const { t } = useT();
   const [name, setName] = useState(group.name);
   const [logo, setLogo] = useState<Extract<PickedLogo, { ok: true }> | null>(null);
   const [removeLogo, setRemoveLogo] = useState(false);
@@ -78,7 +81,7 @@ function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: ()
 
   async function save() {
     const trimmed = name.trim();
-    if (!trimmed) return setError('The group needs a name.');
+    if (!trimmed) return setError(t('admin.group.details.nameRequired'));
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -92,7 +95,7 @@ function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: ()
       setSaved(true);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the group.');
+      setError(err instanceof Error ? err.message : t('admin.group.details.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -102,21 +105,21 @@ function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: ()
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Group details</Text>
+      <Text style={styles.cardTitle}>{t('admin.group.details.title')}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
-      {saved ? <Alert variant="success">Saved.</Alert> : null}
-      <TextField label="Group name" value={name} onChangeText={setName} maxLength={120} />
+      {saved ? <Alert variant="success">{t('admin.group.details.saved')}</Alert> : null}
+      <TextField label={t('admin.groups.name')} value={name} onChangeText={setName} maxLength={120} />
       <View style={styles.logoRow}>
         {logo ? (
-          <Image source={{ uri: logo.previewUri }} style={styles.logoPreview} resizeMode="contain" accessibilityLabel="Selected logo" alt="Selected logo" />
+          <Image source={{ uri: logo.previewUri }} style={styles.logoPreview} resizeMode="contain" accessibilityLabel={t('admin.logo.selected')} alt={t('admin.logo.selected')} />
         ) : (
           <GroupLogo logoUrl={showCurrent ? group.logoUrl : null} size={56} />
         )}
         <View style={styles.logoActions}>
-          <Button title="Choose a logo" size="sm" variant="outline" onPress={chooseLogo} />
+          <Button title={t('admin.logo.choose')} size="sm" variant="outline" onPress={chooseLogo} />
           {(group.logoUrl || logo) && !removeLogo ? (
             <Button
-              title="Remove logo"
+              title={t('admin.logo.remove')}
               size="sm"
               variant="ghost"
               onPress={() => {
@@ -127,12 +130,13 @@ function EditGroupCard({ group, onChanged }: { group: GroupDetail; onChanged: ()
           ) : null}
         </View>
       </View>
-      <Button title="Save" onPress={save} loading={saving} />
+      <Button title={t('common.save')} onPress={save} loading={saving} />
     </Card>
   );
 }
 
 function InviteCard({ groupId, onInvited }: { groupId: string; onInvited: () => void }) {
+  const { t } = useT();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +144,7 @@ function InviteCard({ groupId, onInvited }: { groupId: string; onInvited: () => 
   const emails = parseEmails(text);
 
   async function send() {
-    if (emails.length === 0) return setError('Enter at least one email address.');
+    if (emails.length === 0) return setError(t('admin.group.invite.needOne'));
     setBusy(true);
     setError(null);
     setResults(null);
@@ -150,7 +154,7 @@ function InviteCard({ groupId, onInvited }: { groupId: string; onInvited: () => 
       setText('');
       onInvited();
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : 'Could not send the invitations.');
+      setError(err instanceof Error && err.message ? err.message : t('admin.group.invite.sendFailed'));
     } finally {
       setBusy(false);
     }
@@ -161,57 +165,59 @@ function InviteCard({ groupId, onInvited }: { groupId: string; onInvited: () => 
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Invite people</Text>
-      <Text style={styles.muted}>
-        They get an email with a link. Whoever accepts and registers (or signs in) joins the group and shows up below.
-      </Text>
+      <Text style={styles.cardTitle}>{t('admin.group.invite.title')}</Text>
+      <Text style={styles.muted}>{t('admin.group.invite.description')}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {results ? (
         <Alert variant="success">
-          {`${invited} ${invited === 1 ? 'invitation' : 'invitations'} sent.${already.length ? ` Already members: ${already.join(', ')}.` : ''}`}
+          {`${t('admin.group.invite.sent', { count: invited })}${already.length ? ` ${t('admin.group.invite.alreadyMembers', { emails: already.join(', ') })}` : ''}`}
         </Alert>
       ) : null}
       <TextField
-        label="Email addresses"
+        label={t('admin.group.invite.emailsLabel')}
         value={text}
         onChangeText={setText}
-        placeholder="anna@company.com, bela@company.com"
+        placeholder={t('admin.group.invite.emailsPlaceholder')}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="email-address"
         multiline
         numberOfLines={3}
       />
-      <Text style={styles.muted}>Separate addresses with commas, spaces or new lines.{emails.length ? ` ${emails.length} recognised.` : ''}</Text>
-      <Button title={busy ? 'Sending…' : 'Send invitations'} onPress={send} loading={busy} disabled={emails.length === 0} />
+      <Text style={styles.muted}>
+        {t('admin.group.invite.separatorHint')}
+        {emails.length ? ` ${t('admin.group.invite.recognised', { count: emails.length })}` : ''}
+      </Text>
+      <Button title={busy ? t('admin.group.invite.sending') : t('admin.group.invite.send')} onPress={send} loading={busy} disabled={emails.length === 0} />
     </Card>
   );
 }
 
 function MembersCard({ group, onChanged }: { group: GroupDetail; onChanged: () => void }) {
+  const { t } = useT();
   const [error, setError] = useState<string | null>(null);
 
   async function remove(userId: string, label: string) {
     const ok = await confirmDestructive(
-      `Remove ${label}?`,
-      'They leave the group and its challenges, and you will no longer see their health data.',
-      'Remove',
+      t('admin.group.members.removeTitle', { name: label }),
+      t('admin.group.members.removeMessage'),
+      t('common.remove'),
     );
     if (!ok) return;
     try {
       await removeGroupMember(group.id, userId);
       onChanged();
     } catch {
-      setError('Could not remove the member.');
+      setError(t('admin.group.members.removeFailed'));
     }
   }
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Members ({group.members.length})</Text>
+      <Text style={styles.cardTitle}>{t('admin.group.members.title', { count: group.members.length })}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {group.members.length === 0 ? (
-        <Text style={styles.muted}>Nobody has joined yet. People appear here once they accept their invitation.</Text>
+        <Text style={styles.muted}>{t('admin.group.members.empty')}</Text>
       ) : null}
       {group.members.map((member) => (
         <View key={member.userId} style={styles.listRow}>
@@ -224,12 +230,17 @@ function MembersCard({ group, onChanged }: { group: GroupDetail; onChanged: () =
             {member.fullName ? <Text style={styles.muted}>{member.email}</Text> : null}
             <Text style={styles.muted}>
               {member.connectedProviders.length
-                ? `${member.connectedProviders.map(providerLabel).join(', ')} · ${member.lastSyncAt ? `synced ${timeAgo(member.lastSyncAt)}` : 'not synced yet'}`
-                : 'No device connected'}
+                ? member.lastSyncAt
+                  ? t('admin.group.members.synced', {
+                      providers: member.connectedProviders.map(providerLabel).join(', '),
+                      when: timeAgo(member.lastSyncAt),
+                    })
+                  : t('admin.group.members.notSynced', { providers: member.connectedProviders.map(providerLabel).join(', ') })
+                : t('admin.group.members.noDevice')}
             </Text>
           </Pressable>
           <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
-          <Button title="Remove" size="sm" variant="ghost" onPress={() => remove(member.userId, displayName(member))} />
+          <Button title={t('common.remove')} size="sm" variant="ghost" onPress={() => remove(member.userId, displayName(member))} />
         </View>
       ))}
     </Card>
@@ -237,6 +248,7 @@ function MembersCard({ group, onChanged }: { group: GroupDetail; onChanged: () =
 }
 
 function InvitationsCard({ group, onChanged }: { group: GroupDetail; onChanged: () => void }) {
+  const { t } = useT();
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   if (group.invitations.length === 0) return null;
@@ -248,7 +260,7 @@ function InvitationsCard({ group, onChanged }: { group: GroupDetail; onChanged: 
       await inviteToGroup(group.id, [email]);
       onChanged();
     } catch {
-      setError('Could not resend the invitation.');
+      setError(t('admin.group.invitations.resendFailed'));
     } finally {
       setBusyId(null);
     }
@@ -261,7 +273,7 @@ function InvitationsCard({ group, onChanged }: { group: GroupDetail; onChanged: 
       await revokeGroupInvitation(group.id, id);
       onChanged();
     } catch {
-      setError('Could not cancel the invitation.');
+      setError(t('admin.group.invitations.cancelFailed'));
     } finally {
       setBusyId(null);
     }
@@ -269,58 +281,74 @@ function InvitationsCard({ group, onChanged }: { group: GroupDetail; onChanged: 
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Invitations not accepted yet ({group.invitations.length})</Text>
+      <Text style={styles.cardTitle}>{t('admin.group.invitations.title', { count: group.invitations.length })}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {group.invitations.map((invitation) => (
         <View key={invitation.id} style={styles.listRow}>
           <View style={styles.flex}>
             <Text style={styles.rowTitle}>{invitation.email}</Text>
             <Text style={[styles.muted, invitation.state === 'EXPIRED' && { color: colors.warning }]}>
-              {invitation.state === 'EXPIRED' ? 'Expired' : 'Waiting'} · sent {timeAgo(invitation.sentAt)}
-              {invitation.state === 'PENDING' ? ` · valid until ${formatDay(invitation.expiresAt.slice(0, 10))}` : ''}
+              {invitation.state === 'EXPIRED'
+                ? t('admin.group.invitations.expired', { sent: timeAgo(invitation.sentAt) })
+                : invitation.state === 'PENDING'
+                  ? t('admin.group.invitations.waitingUntil', {
+                      sent: timeAgo(invitation.sentAt),
+                      until: formatDay(invitation.expiresAt.slice(0, 10)),
+                    })
+                  : t('admin.group.invitations.waiting', { sent: timeAgo(invitation.sentAt) })}
             </Text>
           </View>
-          <Button title="Resend" size="sm" variant="outline" loading={busyId === invitation.id} onPress={() => resend(invitation.id, invitation.email)} />
-          <Button title="Cancel" size="sm" variant="ghost" disabled={busyId === invitation.id} onPress={() => cancel(invitation.id)} />
+          <Button title={t('admin.group.invitations.resend')} size="sm" variant="outline" loading={busyId === invitation.id} onPress={() => resend(invitation.id, invitation.email)} />
+          <Button title={t('common.cancel')} size="sm" variant="ghost" disabled={busyId === invitation.id} onPress={() => cancel(invitation.id)} />
         </View>
       ))}
     </Card>
   );
 }
 
-const MODE_OPTIONS = [
-  { value: 'INDIVIDUAL', label: 'Personal goals' },
-  { value: 'COLLECTIVE', label: 'Team total' },
+const modeOptions = () => [
+  { value: 'INDIVIDUAL', label: t('admin.challengeForm.modeIndividual') },
+  { value: 'COLLECTIVE', label: t('admin.challengeForm.modeCollective') },
 ];
 
-const MODE_HINT: Record<GroupChallengeMode, string> = {
-  INDIVIDUAL: 'Everyone has to reach their own target.',
-  COLLECTIVE: 'Everyone’s results are added up to one shared target.',
-};
+const modeHint = (mode: GroupChallengeMode): string =>
+  mode === 'INDIVIDUAL' ? t('admin.challengeForm.modeHintIndividual') : t('admin.challengeForm.modeHintCollective');
 
-const TYPE_OPTIONS = [
-  { value: 'DAILY_STEPS', label: 'Daily steps' },
-  { value: 'SLEEP_SCORE', label: 'Sleep score' },
-  { value: 'WEEKLY_WORKOUTS', label: 'Weekly workouts' },
-  { value: 'VIDEO_SESSIONS', label: 'Video' },
+const typeOptions = () => [
+  { value: 'DAILY_STEPS', label: t('enum.DAILY_STEPS') },
+  { value: 'SLEEP_SCORE', label: t('enum.SLEEP_SCORE') },
+  { value: 'WEEKLY_WORKOUTS', label: t('enum.WEEKLY_WORKOUTS') },
+  { value: 'VIDEO_SESSIONS', label: t('admin.challengeForm.typeVideo') },
 ];
 
-const TYPE_FIELDS: Record<GroupChallengeType, { threshold: string; count: string; hint: string }> = {
-  DAILY_STEPS: { threshold: 'Steps per day (more than)', count: 'Number of days', hint: 'A day counts when the steps are above the limit.' },
-  SLEEP_SCORE: { threshold: 'Sleep score (above)', count: 'Number of nights', hint: 'A night counts when the sleep score is above the limit.' },
-  WEEKLY_WORKOUTS: {
-    threshold: 'Workouts per week (more than)',
-    count: 'Number of weeks',
-    hint: 'A week counts when the person logged more workouts than the limit.',
-  },
-  VIDEO_SESSIONS: {
-    threshold: '',
-    count: 'Number of days',
-    hint: 'Members watch the video to the end in the app (a YouTube link — unlisted works well). A day counts when the video was finished that day; once a day at most.',
-  },
+/** The labels and hint of a personal-goal challenge type (translated when read). */
+const typeFields = (type: GroupChallengeType): { threshold: string; count: string; hint: string } => {
+  switch (type) {
+    case 'DAILY_STEPS':
+      return {
+        threshold: t('admin.challengeForm.stepsThreshold'),
+        count: t('admin.challengeForm.stepsCount'),
+        hint: t('admin.challengeForm.stepsHint'),
+      };
+    case 'SLEEP_SCORE':
+      return {
+        threshold: t('admin.challengeForm.sleepThreshold'),
+        count: t('admin.challengeForm.sleepCount'),
+        hint: t('admin.challengeForm.sleepHint'),
+      };
+    case 'WEEKLY_WORKOUTS':
+      return {
+        threshold: t('admin.challengeForm.workoutsThreshold'),
+        count: t('admin.challengeForm.workoutsCount'),
+        hint: t('admin.challengeForm.workoutsHint'),
+      };
+    case 'VIDEO_SESSIONS':
+      return { threshold: '', count: t('admin.challengeForm.videoCount'), hint: t('admin.challengeForm.videoHint') };
+  }
 };
 
 function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: () => void }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -356,12 +384,12 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
 
   async function create() {
     const next: Record<string, string> = {};
-    if (!name.trim()) next.name = 'Give the challenge a name.';
+    if (!name.trim()) next.name = t('admin.challengeForm.nameRequired');
     const goal = { mode, type, threshold, requiredCount, targetTotal, videoUrl, videoTitle, videoDuration };
     Object.assign(next, validateGoal(goal));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) next.startDate = 'Use yyyy-mm-dd.';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) next.endDate = 'Use yyyy-mm-dd.';
-    if (!next.startDate && !next.endDate && endDate < startDate) next.endDate = 'The end cannot be before the start.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) next.startDate = t('admin.challengeForm.dateFormat');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) next.endDate = t('admin.challengeForm.dateFormat');
+    if (!next.startDate && !next.endDate && endDate < startDate) next.endDate = t('admin.challengeForm.endBeforeStart');
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -383,37 +411,35 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
       setOpen(false);
       onCreated();
     } catch (err) {
-      setServerError(err instanceof Error && err.message ? err.message : 'Could not create the challenge.');
+      setServerError(err instanceof Error && err.message ? err.message : t('admin.challengeForm.createFailed'));
     } finally {
       setBusy(false);
     }
   }
 
   if (!open) {
-    return <Button title="New challenge" variant="outline" onPress={() => setOpen(true)} />;
+    return <Button title={t('admin.challengeForm.new')} variant="outline" onPress={() => setOpen(true)} />;
   }
-  const fields = TYPE_FIELDS[type];
+  const fields = typeFields(type);
   const collectiveFields = mode === 'COLLECTIVE' ? COLLECTIVE_FIELDS[type] : undefined;
-  const typeOptions = typeOptionsFor(mode, TYPE_OPTIONS);
+  const typeChips = typeOptionsFor(mode, typeOptions());
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>New challenge</Text>
-      <Text style={styles.muted}>Every member gets an in-app notification and can join voluntarily.</Text>
+      <Text style={styles.cardTitle}>{t('admin.challengeForm.new')}</Text>
+      <Text style={styles.muted}>{t('admin.challengeForm.intro')}</Text>
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
-      <TextField label="Name" value={name} onChangeText={setName} error={errors.name} maxLength={200} />
-      <TextField label="Description (optional)" value={description} onChangeText={setDescription} multiline numberOfLines={2} maxLength={1000} />
-      <ChipSingleSelect label="How is it won?" options={MODE_OPTIONS} value={mode} onChange={changeMode} />
-      <Text style={styles.muted}>{MODE_HINT[mode]}</Text>
-      <ChipSingleSelect label="Type" options={typeOptions} value={type} onChange={changeType} />
+      <TextField label={t('admin.challengeForm.name')} value={name} onChangeText={setName} error={errors.name} maxLength={200} />
+      <TextField label={t('admin.challengeForm.description')} value={description} onChangeText={setDescription} multiline numberOfLines={2} maxLength={1000} />
+      <ChipSingleSelect label={t('admin.challengeForm.mode')} options={modeOptions()} value={mode} onChange={changeMode} />
+      <Text style={styles.muted}>{modeHint(mode)}</Text>
+      <ChipSingleSelect label={t('admin.challengeForm.type')} options={typeChips} value={type} onChange={changeType} />
       <Text style={styles.muted}>{collectiveFields ? collectiveFields.hint : fields.hint}</Text>
       {type === 'VIDEO_SESSIONS' ? (
         <>
-          <TextField label="YouTube link" value={videoUrl} onChangeText={setVideoUrl} autoCapitalize="none" keyboardType="url" error={errors.videoUrl} maxLength={500} />
-          <TextField label="Video title (optional)" value={videoTitle} onChangeText={setVideoTitle} maxLength={200} />
-          <TextField label="Length of the video (m:ss, optional)" value={videoDuration} onChangeText={setVideoDuration} autoCapitalize="none" error={errors.videoDuration} />
-          <Text style={styles.muted}>
-            The length is read from YouTube automatically — only fill it in if that fails. The video counts as watched when about 90% of it has really played.
-          </Text>
+          <TextField label={t('admin.challengeForm.youtubeLink')} value={videoUrl} onChangeText={setVideoUrl} autoCapitalize="none" keyboardType="url" error={errors.videoUrl} maxLength={500} />
+          <TextField label={t('admin.challengeForm.videoTitle')} value={videoTitle} onChangeText={setVideoTitle} maxLength={200} />
+          <TextField label={t('admin.challengeForm.videoLength')} value={videoDuration} onChangeText={setVideoDuration} autoCapitalize="none" error={errors.videoDuration} />
+          <Text style={styles.muted}>{t('admin.challengeForm.videoLengthHint')}</Text>
         </>
       ) : null}
       {collectiveFields ? (
@@ -426,11 +452,11 @@ function NewChallengeCard({ groupId, onCreated }: { groupId: string; onCreated: 
           <TextField label={fields.count} value={requiredCount} onChangeText={setRequiredCount} keyboardType="numeric" error={errors.requiredCount} />
         </>
       )}
-      <TextField label="First day (yyyy-mm-dd)" value={startDate} onChangeText={setStartDate} autoCapitalize="none" error={errors.startDate} />
-      <TextField label="Last day (yyyy-mm-dd)" value={endDate} onChangeText={setEndDate} autoCapitalize="none" error={errors.endDate} />
+      <TextField label={t('admin.challengeForm.firstDay')} value={startDate} onChangeText={setStartDate} autoCapitalize="none" error={errors.startDate} />
+      <TextField label={t('admin.challengeForm.lastDay')} value={endDate} onChangeText={setEndDate} autoCapitalize="none" error={errors.endDate} />
       <View style={styles.buttonRow}>
-        <Button title="Cancel" variant="outline" style={styles.flex} onPress={() => setOpen(false)} />
-        <Button title="Create challenge" style={styles.flex} loading={busy} onPress={create} />
+        <Button title={t('common.cancel')} variant="outline" style={styles.flex} onPress={() => setOpen(false)} />
+        <Button title={t('admin.challengeForm.create')} style={styles.flex} loading={busy} onPress={create} />
       </View>
     </Card>
   );
@@ -445,12 +471,13 @@ function ChallengesCard({
   challenges: AdminGroupChallengeListItem[] | null;
   onChanged: () => void;
 }) {
+  const { t } = useT();
   return (
     <View style={styles.stack}>
-      <Text style={styles.sectionTitle}>Challenges</Text>
+      <Text style={styles.sectionTitle}>{t('admin.challenges.title')}</Text>
       <NewChallengeCard groupId={groupId} onCreated={onChanged} />
       {challenges === null ? <ActivityIndicator color={colors.primary.default} /> : null}
-      {challenges && challenges.length === 0 ? <Text style={styles.muted}>No challenges yet.</Text> : null}
+      {challenges && challenges.length === 0 ? <Text style={styles.muted}>{t('admin.challenges.none')}</Text> : null}
       {challenges?.map((challenge) => (
         <Pressable
           key={challenge.id}
@@ -462,7 +489,7 @@ function ChallengesCard({
               <Text style={[styles.rowTitle, styles.flex]}>{challenge.name}</Text>
               <StatusBadge status={challenge.status} />
             </View>
-            <Text style={styles.body}>{challenge.target}</Text>
+            <Text style={styles.body}>{challengeTargetText(challenge)}</Text>
             <Text style={styles.muted}>
               {formatDateRange(challenge.startDate, challenge.endDate)}
               {daysLeftLabel(challenge.daysRemaining) ? ` · ${daysLeftLabel(challenge.daysRemaining)}` : ''}
@@ -476,7 +503,7 @@ function ChallengesCard({
               </>
             )}
             <Text style={styles.muted}>
-              {challenge.team.participants} of {challenge.team.members} members joined
+              {t('admin.challenges.joined', { participants: challenge.team.participants, members: challenge.team.members })}
             </Text>
           </Card>
         </Pressable>
@@ -486,6 +513,7 @@ function ChallengesCard({
 }
 
 export default function AdminGroupScreen() {
+  const { t } = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [segment, setSegment] = useTabParam(GROUP_SEGMENTS, 'overview');
   const [group, setGroup] = useState<GroupDetail | null>(null);
@@ -500,20 +528,20 @@ export default function AdminGroupScreen() {
         setGroup(detail);
         setError(null);
       })
-      .catch(() => setError('Could not load this group.'));
+      .catch(() => setError(t('admin.group.loadFailed')));
     listAdminGroupChallenges(id)
       .then(setChallenges)
       .catch(() => setChallenges([]));
-  }, [id]);
+  }, [id, t]);
 
   useFocusEffect(load);
 
   async function handleDelete() {
     if (!group) return;
     const ok = await confirmDestructive(
-      `Delete ${group.name}?`,
-      'This removes the group, its invitations, memberships and challenges. The people keep their accounts and data.',
-      'Delete group',
+      t('admin.group.deleteTitle', { name: group.name }),
+      t('admin.group.deleteMessage'),
+      t('admin.group.deleteConfirm'),
     );
     if (!ok) return;
     setDeleting(true);
@@ -521,7 +549,7 @@ export default function AdminGroupScreen() {
       await deleteAdminGroup(group.id);
       router.replace('/admin?tab=groups');
     } catch {
-      setError('Could not delete the group.');
+      setError(t('admin.group.deleteFailed'));
       setDeleting(false);
     }
   }
@@ -548,8 +576,8 @@ export default function AdminGroupScreen() {
         <View style={styles.flex}>
           <Text style={styles.title}>{group.name}</Text>
           <Text style={styles.muted}>
-            {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}
-            {group.pendingInvitationCount ? ` · ${group.pendingInvitationCount} invitations waiting` : ''}
+            {t('admin.memberCount', { count: group.memberCount })}
+            {group.pendingInvitationCount ? ` · ${t('admin.group.invitationsWaiting', { count: group.pendingInvitationCount })}` : ''}
           </Text>
         </View>
       </View>
@@ -557,9 +585,9 @@ export default function AdminGroupScreen() {
 
       <SegmentedControl
         options={[
-          { value: 'overview', label: 'Overview' },
-          { value: 'challenges', label: 'Challenges' },
-          { value: 'settings', label: 'Settings' },
+          { value: 'overview', label: t('admin.group.segment.overview') },
+          { value: 'challenges', label: t('admin.group.segment.challenges') },
+          { value: 'settings', label: t('admin.group.segment.settings') },
         ]}
         value={segment}
         onChange={setSegment}
@@ -578,7 +606,7 @@ export default function AdminGroupScreen() {
       {segment === 'settings' ? (
         <>
           <EditGroupCard key={`${group.name}:${group.logoUrl ?? ''}`} group={group} onChanged={load} />
-          <Button title="Delete this group" variant="destructive" loading={deleting} onPress={handleDelete} />
+          <Button title={t('admin.group.delete')} variant="destructive" loading={deleting} onPress={handleDelete} />
         </>
       ) : null}
     </ScrollView>

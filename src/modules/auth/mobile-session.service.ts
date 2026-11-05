@@ -2,6 +2,7 @@ import type { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { generateRawToken, hashToken } from '@/lib/auth/tokens';
 import { signMobileAccessToken, MOBILE_ACCESS_TOKEN_TTL_SECONDS } from '@/lib/auth/mobile-jwt';
+import { normalizeLanguage, type Language } from '@/lib/i18n/languages';
 import { logger } from '@/lib/logging/logger';
 
 // 30 days — long enough that a user isn't forced to re-enter their
@@ -20,6 +21,8 @@ export interface MobileSession {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  /** The person's preferred language — set when the session is issued from a stored user (refresh). */
+  language?: Language;
 }
 
 /** Issues a brand-new access+refresh pair for a user who just logged in. */
@@ -80,7 +83,8 @@ export async function rotateMobileRefreshToken(rawToken: string): Promise<Mobile
 
   logger.info('mobile_refresh_token_rotated', { userId: record.userId });
 
-  return issueMobileSession({ id: record.user.id, role: record.user.role, email: record.user.email });
+  const session = await issueMobileSession({ id: record.user.id, role: record.user.role, email: record.user.email });
+  return { ...session, language: normalizeLanguage(record.user.language) };
 }
 
 /** Best-effort logout — revokes the token if it's still active; never throws. */

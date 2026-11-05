@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCreatorDirectory, type CreatorDirectoryItem } from '@/src/api/creators';
 import { Alert } from '@/src/components/ui/Alert';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
@@ -18,18 +19,19 @@ import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
  */
 
 function DirectoryRow({ creator }: { creator: CreatorDirectoryItem }) {
+  const { t, locale } = useT();
   return (
     <Pressable onPress={() => router.push(`/community/creators/${creator.id}`)}>
       <Card style={styles.row}>
         <View style={styles.rowText}>
-          <Text style={styles.rowTitle}>{creator.fullName ?? 'Creator'}</Text>
+          <Text style={styles.rowTitle}>{creator.fullName ?? t('creators.fallbackName')}</Text>
           <Text style={styles.rowSubtitle}>
-            Member since {new Date(creator.memberSince).toLocaleDateString()} · {creator.followerCount} follower
-            {creator.followerCount === 1 ? '' : 's'}
+            {t('creators.memberSince', { date: new Date(creator.memberSince).toLocaleDateString(locale) })} ·{' '}
+            {t('creators.followers', { count: creator.followerCount })}
           </Text>
           <Text style={styles.rowSubtitle}>
-            {creator.publicProtocolCount} protocol{creator.publicProtocolCount === 1 ? '' : 's'} ·{' '}
-            {creator.publicChallengeCount} challenge{creator.publicChallengeCount === 1 ? '' : 's'}
+            {t('creators.protocols', { count: creator.publicProtocolCount })} ·{' '}
+            {t('creators.challenges', { count: creator.publicChallengeCount })}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
@@ -39,17 +41,18 @@ function DirectoryRow({ creator }: { creator: CreatorDirectoryItem }) {
 }
 
 export default function CreatorsDirectoryScreen() {
+  const { t } = useT();
   const [creators, setCreators] = useState<CreatorDirectoryItem[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
-    setError(null);
+    setError(false);
     try {
       setCreators(await getCreatorDirectory());
     } catch {
-      setError('Could not load the creators directory.');
+      setError(true);
     } finally {
       if (isRefresh) setRefreshing(false);
     }
@@ -62,7 +65,7 @@ export default function CreatorsDirectoryScreen() {
   if (!creators) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {error ? <Alert variant="destructive">{t('creators.directory.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -73,10 +76,10 @@ export default function CreatorsDirectoryScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
-      {error ? <Alert variant="destructive">{error}</Alert> : null}
+      {error ? <Alert variant="destructive">{t('creators.directory.loadFailed')}</Alert> : null}
 
       {creators.length === 0 ? (
-        <Text style={styles.empty}>No creators are publishing publicly yet.</Text>
+        <Text style={styles.empty}>{t('creators.directory.empty')}</Text>
       ) : (
         creators.map((creator) => <DirectoryRow key={creator.id} creator={creator} />)
       )}

@@ -1,3 +1,5 @@
+import { locale, t } from '@/src/i18n';
+
 /** Pure helpers for the charts (kept apart from the SVG component so they can be unit-tested). */
 
 /** Minutes as hours and minutes: 450 -> "7h 30m", 480 -> "8h", 45 -> "45m", 0 -> "0". */
@@ -6,8 +8,8 @@ export function durationLabel(minutes: number): string {
   if (total <= 0) return '0';
   const h = Math.floor(total / 60);
   const m = total % 60;
-  if (h === 0) return `${m}m`;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  if (h === 0) return t('chart.duration.minutes', { minutes: m });
+  return m === 0 ? t('chart.duration.hours', { hours: h }) : t('chart.duration.hoursMinutes', { hours: h, minutes: m });
 }
 
 /**
@@ -21,7 +23,7 @@ export function durationAxisMax(values: Array<number | null>): number {
 
 /** A value as shown in a tooltip: whole numbers as-is (with thousands separators), others to one decimal. */
 export function defaultValueLabel(value: number): string {
-  return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
+  return Number.isInteger(value) ? value.toLocaleString(locale()) : value.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 export interface TooltipBox {

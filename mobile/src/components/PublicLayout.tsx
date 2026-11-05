@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
@@ -13,6 +14,7 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  * <JoinCard>) the call to action that is the whole point of the page.
  */
 export function PublicLayout({ children }: { children: ReactNode }) {
+  const { t } = useT();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -29,7 +31,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           </Pressable>
           <View style={styles.headerActions}>
             <Pressable onPress={() => router.push('/login')} accessibilityRole="link">
-              <Text style={styles.headerLink}>Log in</Text>
+              <Text style={styles.headerLink}>{t('auth.login.submit')}</Text>
             </Pressable>
           </View>
         </View>
@@ -40,12 +42,13 @@ export function PublicLayout({ children }: { children: ReactNode }) {
 }
 
 export function JoinCard({ headline, body }: { headline: string; body: string }) {
+  const { t } = useT();
   return (
     <Card style={styles.join}>
       <Text style={styles.joinTitle}>{headline}</Text>
       <Text style={styles.joinBody}>{body}</Text>
-      <Button title="Create a free account" onPress={() => router.push('/register')} />
-      <Button title="I already have an account" variant="outline" onPress={() => router.push('/login')} />
+      <Button title={t('nav.public.createAccount')} onPress={() => router.push('/register')} />
+      <Button title={t('nav.public.haveAccount')} variant="outline" onPress={() => router.push('/login')} />
     </Card>
   );
 }

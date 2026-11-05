@@ -8,18 +8,20 @@ import {
   type GroupChallengeType,
   type MemberProgress,
 } from '@/src/api/groups';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
 import { collectiveLine, contributionLine, STATUS_LABEL } from '@/src/wellbeing/format';
 
 /** A group's logo, or a neutral placeholder when it has none. `uri` overrides (a just-picked local preview). */
 export function GroupLogo({ logoUrl, uri, size = 48 }: { logoUrl?: string | null; uri?: string | null; size?: number }) {
+  const { t } = useT();
   const source = uri ?? groupLogoUri(logoUrl ?? null);
   if (source) {
     return (
       <Image
         source={{ uri: source }}
-        accessibilityLabel="Group logo"
-        alt="Group logo"
+        accessibilityLabel={t('wellbeing.logo.alt')}
+        alt={t('wellbeing.logo.alt')}
         style={{ width: size, height: size, borderRadius: radii.xl / 2, backgroundColor: colors.muted.default }}
         resizeMode="contain"
       />
@@ -52,6 +54,7 @@ const BADGE_COLORS: Record<GroupChallengeStatus, { bg: string; fg: string }> = {
 };
 
 export function StatusBadge({ status }: { status: GroupChallengeStatus }) {
+  useT();
   const palette = BADGE_COLORS[status];
   return (
     <View style={[styles.badge, { backgroundColor: palette.bg }]}>
@@ -62,13 +65,17 @@ export function StatusBadge({ status }: { status: GroupChallengeStatus }) {
 
 /** "3 of 5 · 60%" with a bar — one person's progress. */
 export function ProgressLine({ progress, label }: { progress: MemberProgress; label?: string }) {
+  const { t } = useT();
   return (
     <View style={styles.progressLine}>
       <View style={styles.progressText}>
         {label ? <Text style={styles.progressLabel}>{label}</Text> : null}
         <Text style={styles.progressValue}>
-          {progress.currentCount} of {progress.requiredCount}
-          {progress.completed ? ' · goal reached' : ` · ${progress.percent}%`}
+          {t(progress.completed ? 'wellbeing.progress.goalReached' : 'wellbeing.progress.percent', {
+            current: progress.currentCount,
+            required: progress.requiredCount,
+            percent: progress.percent,
+          })}
         </Text>
       </View>
       <ProgressBar percent={progress.percent} completed={progress.completed} />
@@ -78,6 +85,7 @@ export function ProgressLine({ progress, label }: { progress: MemberProgress; la
 
 /** The team's shared total of a COLLECTIVE challenge, as a bar. */
 export function CollectiveBar({ type, collective }: { type: GroupChallengeType; collective: CollectiveProgress }) {
+  useT();
   return (
     <View style={styles.progressLine}>
       <Text style={styles.progressLabel}>{collectiveLine(type, collective)}</Text>
@@ -88,6 +96,7 @@ export function CollectiveBar({ type, collective }: { type: GroupChallengeType; 
 
 /** One person's contribution to a COLLECTIVE challenge (`progress.currentCount` of the team target). */
 export function ContributionLine({ type, progress, label }: { type: GroupChallengeType; progress: MemberProgress; label?: string }) {
+  useT();
   return (
     <View style={styles.progressLine}>
       <View style={styles.progressText}>

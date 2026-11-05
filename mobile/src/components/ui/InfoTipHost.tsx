@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { GLOSSARY } from '@/src/content/glossary';
+import { useT } from '@/src/i18n';
 import { hideTip, useOpenTip } from '@/src/components/ui/infoTipStore';
 import { tipLeft, tipTop, tipWidth } from '@/src/components/ui/infoTipLayout';
 import { colors, fontFamily, radii } from '@/src/theme/tokens';
@@ -18,6 +19,7 @@ const BUBBLE_ID = 'infotip-bubble';
  * click elsewhere), on scroll (web) and on Escape (web).
  */
 export function InfoTipHost() {
+  const { t } = useT();
   const tip = useOpenTip();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [height, setHeight] = useState<number | null>(null);
@@ -59,7 +61,7 @@ export function InfoTipHost() {
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {pinned && Platform.OS !== 'web' ? (
         <Pressable
-          accessibilityLabel="Close explanation"
+          accessibilityLabel={t('ui.info.close')}
           onPress={() => hideTip()}
           style={StyleSheet.absoluteFill}
         />

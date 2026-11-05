@@ -3,7 +3,11 @@ import { logger } from '@/lib/logging/logger';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import { countQualifyingPeriodsFor, dailyTotalsFor, sumMetricFor } from '@/modules/challenges/challenges.service';
 import { fetchYouTubeMetadata } from '@/lib/video/youtube-metadata';
-import { createNotification, createNotificationsForUsers } from '@/modules/notifications/notifications.service';
+import {
+  createLocalizedNotificationsForUsers,
+  createNotification,
+  getUserLanguages,
+} from '@/modules/notifications/notifications.service';
 import { listMemberIds } from './groups.service';
 import {
   buildCollectiveSeries,
@@ -272,22 +276,23 @@ export async function createGroupChallenge(
   });
 
   const memberIds = await listMemberIds(groupId);
-  const message = newChallengeNotification({
-    groupName: group.name,
-    name: row.name,
-    type: row.type,
-    threshold: row.threshold,
-    requiredCount: row.requiredCount,
-    mode: row.mode,
-    targetTotal: row.targetTotal,
-    startsAt,
-    endsAt: new Date(endsAt.getTime() - DAY_MS),
-  });
-  await createNotificationsForUsers(memberIds, {
-    type: 'GROUP_CHALLENGE_NEW',
-    ...message,
-    data: { groupId, challengeId: row.id },
-  });
+  await createLocalizedNotificationsForUsers(
+    memberIds,
+    { type: 'GROUP_CHALLENGE_NEW', data: { groupId, challengeId: row.id } },
+    (language) =>
+      newChallengeNotification({
+        groupName: group.name,
+        name: row.name,
+        type: row.type,
+        threshold: row.threshold,
+        requiredCount: row.requiredCount,
+        mode: row.mode,
+        targetTotal: row.targetTotal,
+        startsAt,
+        endsAt: new Date(endsAt.getTime() - DAY_MS),
+        language,
+      }),
+  );
 
   await recordAuditLog({
     actorUserId: adminId,
@@ -732,6 +737,8 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
       const memberCount = await prisma.groupMembership.count({ where: { groupId: challenge.groupId } });
       const { progresses, collective, team } = await teamProgress(challenge, participantIds, memberCount, now);
       const data = { groupId: challenge.groupId, challengeId: challenge.id };
+      const languages = await getUserLanguages([...participantIds, challenge.createdById]);
+      const languageOf = (userId: string) => languages.get(userId) ?? 'en';
 
       if (collective) {
         await Promise.all(
@@ -745,6 +752,7 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
                 collective,
                 myContribution: (progresses[index] as MemberProgress).currentCount,
                 participants: team.participants,
+                language: languageOf(userId),
               }),
               data,
             }),
@@ -759,6 +767,7 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
             collective,
             participants: team.participants,
             members: team.members,
+            language: languageOf(challenge.createdById),
           }),
           data,
         });
@@ -775,6 +784,7 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
               name: challenge.name,
               me: progresses[index] as MemberProgress,
               team,
+              language: languageOf(userId),
             }),
             data,
           }),
@@ -782,7 +792,12 @@ export async function finalizeEndedGroupChallenges(now: Date = new Date()): Prom
       );
       await createNotification(challenge.createdById, {
         type: 'GROUP_CHALLENGE_SUMMARY',
-        ...creatorSummaryNotification({ groupName: challenge.group.name, name: challenge.name, team }),
+        ...creatorSummaryNotification({
+          groupName: challenge.group.name,
+          name: challenge.name,
+          team,
+          language: languageOf(challenge.createdById),
+        }),
         data,
       });
       finalized += 1;
@@ -838,15 +853,14 @@ export async function notifyReachedCollectiveGoals(
       const daysRemaining = Math.max(1, Math.ceil((challenge.endsAt.getTime() - now.getTime()) / DAY_MS));
       const common = { groupName: challenge.group.name, name: challenge.name, type: challenge.type, collective, daysRemaining };
       const data = { groupId: challenge.groupId, challengeId: challenge.id };
-      await createNotificationsForUsers(participantIds, {
-        type: 'GROUP_CHALLENGE_GOAL_REACHED',
-        ...goalReachedNotification({ ...common, audience: 'participant' }),
-        data,
-      });
+      await createLocalizedNotificationsForUsers(participantIds, { type: 'GROUP_CHALLENGE_GOAL_REACHED', data }, (language) =>
+        goalReachedNotification({ ...common, audience: 'participant', language }),
+      );
       if (!participantIds.includes(challenge.createdById)) {
+        const creatorLanguage = (await getUserLanguages([challenge.createdById])).get(challenge.createdById) ?? 'en';
         await createNotification(challenge.createdById, {
           type: 'GROUP_CHALLENGE_GOAL_REACHED',
-          ...goalReachedNotification({ ...common, audience: 'creator' }),
+          ...goalReachedNotification({ ...common, audience: 'creator', language: creatorLanguage }),
           data,
         });
       }

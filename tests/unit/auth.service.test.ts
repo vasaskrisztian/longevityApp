@@ -67,6 +67,17 @@ describe('registerUser', () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
+  it('stores the language picked at registration', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'new-user-id' });
+    prismaMock.emailVerificationToken.create.mockResolvedValue({});
+    prismaMock.profile.create.mockResolvedValue({});
+
+    await registerUser({ ...VALID_INPUT, language: 'de' });
+
+    expect(prismaMock.user.create.mock.calls[0]![0].data.language).toBe('de');
+  });
+
   it('creates the user, an argon2 password hash, a profile, and a single-use hashed verification token', async () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({ id: 'new-user-id' });
@@ -87,6 +98,8 @@ describe('registerUser', () => {
     expect(createArgs.data.email).toBe('jane@example.com');
     expect(createArgs.data.termsAcceptedAt).toBeInstanceOf(Date);
     expect(createArgs.data.privacyAcceptedAt).toBeInstanceOf(Date);
+    // No language chosen (older app) → the account starts in English.
+    expect(createArgs.data.language).toBe('en');
 
     // Only the HASH of the verification token is persisted.
     const tokenArgs = prismaMock.emailVerificationToken.create.mock.calls[0]![0];

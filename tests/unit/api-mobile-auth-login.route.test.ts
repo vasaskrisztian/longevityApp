@@ -64,7 +64,7 @@ describe('POST /api/mobile/auth/login', () => {
   });
 
   it('issues a session and returns the token pair + user for valid credentials', async () => {
-    verifyUserCredentialsMock.mockResolvedValue({ id: 'u1', role: 'USER', email: 'jane@example.com' });
+    verifyUserCredentialsMock.mockResolvedValue({ id: 'u1', role: 'USER', email: 'jane@example.com', language: 'hu' });
     issueMobileSessionMock.mockResolvedValue({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
@@ -79,7 +79,7 @@ describe('POST /api/mobile/auth/login', () => {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresIn: 900,
-      user: { id: 'u1', email: 'jane@example.com', role: 'USER' },
+      user: { id: 'u1', email: 'jane@example.com', role: 'USER', language: 'hu' },
     });
   });
 });

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type
 
 import { GLOSSARY, type GlossaryKey } from '@/src/content/glossary';
 import { INFO_TRIGGER_ID_PREFIX } from '@/src/components/ui/InfoTipHost';
+import { useT } from '@/src/i18n';
 import { getOpenTip, hideTip, showTip, useOpenTip, type TipMode } from '@/src/components/ui/infoTipStore';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
@@ -23,6 +24,7 @@ export function InfoLabel({
   textStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { t } = useT();
   const entry = GLOSSARY[term];
   const id = useId();
   const triggerRef = useRef<View>(null);
@@ -48,7 +50,7 @@ export function InfoLabel({
         ref={triggerRef}
         nativeID={`${INFO_TRIGGER_ID_PREFIX}${id}`}
         accessibilityRole="button"
-        accessibilityLabel={`${entry.title}: what is this?`}
+        accessibilityLabel={t('ui.info.whatIsThis', { title: entry.title })}
         accessibilityHint={entry.text}
         accessibilityState={{ expanded: isOpen }}
         onHoverIn={() => {

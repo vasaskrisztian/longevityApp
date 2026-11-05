@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TextField } from '@/src/components/ui/TextField';
 import { GroupLogo } from '@/src/components/wellbeing/parts';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { pickLogo, type PickedLogo } from '@/src/utils/logoPicker';
 
@@ -18,6 +19,7 @@ import { pickLogo, type PickedLogo } from '@/src/utils/logoPicker';
  * challenges are managed inside the group (groups/[id]).
  */
 export default function AdminGroupsScreen() {
+  const { t } = useT();
   const [groups, setGroups] = useState<GroupSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +34,8 @@ export default function AdminGroupsScreen() {
         setGroups(list);
         setError(null);
       })
-      .catch(() => setError('Could not load the groups.'));
-  }, []);
+      .catch(() => setError(t('admin.groups.loadFailed')));
+  }, [t]);
 
   useFocusEffect(load);
 
@@ -51,7 +53,7 @@ export default function AdminGroupsScreen() {
   async function create() {
     const trimmed = name.trim();
     if (!trimmed) {
-      setFormError('Enter a name for the group.');
+      setFormError(t('admin.groups.nameRequired'));
       return;
     }
     setCreating(true);
@@ -62,7 +64,7 @@ export default function AdminGroupsScreen() {
       setLogo(null);
       router.push(`/admin/groups/${group.id}`);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not create the group.');
+      setFormError(err instanceof Error ? err.message : t('admin.groups.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -71,21 +73,21 @@ export default function AdminGroupsScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>New group</Text>
+        <Text style={styles.cardTitle}>{t('admin.groups.new')}</Text>
         {formError ? <Alert variant="destructive">{formError}</Alert> : null}
-        <TextField label="Group name" value={name} onChangeText={setName} placeholder="e.g. Acme Ltd." maxLength={120} />
+        <TextField label={t('admin.groups.name')} value={name} onChangeText={setName} placeholder={t('admin.groups.namePlaceholder')} maxLength={120} />
         <View style={styles.logoRow}>
           {logo ? (
-            <Image source={{ uri: logo.previewUri }} style={styles.logoPreview} resizeMode="contain" accessibilityLabel="Selected logo" alt="Selected logo" />
+            <Image source={{ uri: logo.previewUri }} style={styles.logoPreview} resizeMode="contain" accessibilityLabel={t('admin.logo.selected')} alt={t('admin.logo.selected')} />
           ) : (
             <GroupLogo size={56} />
           )}
           <View style={styles.logoActions}>
-            <Button title={logo ? 'Choose another logo' : 'Choose a logo (optional)'} size="sm" variant="outline" onPress={chooseLogo} />
-            {logo ? <Button title="Remove" size="sm" variant="ghost" onPress={() => setLogo(null)} /> : null}
+            <Button title={logo ? t('admin.logo.chooseAnother') : t('admin.logo.chooseOptional')} size="sm" variant="outline" onPress={chooseLogo} />
+            {logo ? <Button title={t('common.remove')} size="sm" variant="ghost" onPress={() => setLogo(null)} /> : null}
           </View>
         </View>
-        <Button title="Create group" onPress={create} loading={creating} />
+        <Button title={t('admin.groups.create')} onPress={create} loading={creating} />
       </Card>
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
@@ -94,7 +96,7 @@ export default function AdminGroupsScreen() {
           <ActivityIndicator color={colors.primary.default} />
         </View>
       ) : null}
-      {groups && groups.length === 0 ? <Text style={styles.empty}>No groups yet. Create the first one above.</Text> : null}
+      {groups && groups.length === 0 ? <Text style={styles.empty}>{t('admin.groups.empty')}</Text> : null}
 
       {groups?.map((group) => (
         <Pressable key={group.id} onPress={() => router.push(`/admin/groups/${group.id}`)} accessibilityRole="button">
@@ -103,9 +105,9 @@ export default function AdminGroupsScreen() {
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>{group.name}</Text>
               <Text style={styles.rowSubtitle}>
-                {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}
-                {group.pendingInvitationCount > 0 ? ` · ${group.pendingInvitationCount} pending` : ''}
-                {group.challengeCount > 0 ? ` · ${group.challengeCount} ${group.challengeCount === 1 ? 'challenge' : 'challenges'}` : ''}
+                {t('admin.memberCount', { count: group.memberCount })}
+                {group.pendingInvitationCount > 0 ? ` · ${t('admin.groups.pending', { count: group.pendingInvitationCount })}` : ''}
+                {group.challengeCount > 0 ? ` · ${t('admin.challengeCount', { count: group.challengeCount })}` : ''}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />

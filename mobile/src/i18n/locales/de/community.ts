@@ -1,0 +1,110 @@
+import type { Catalog } from '@/src/i18n/translate';
+import type { community as en } from '../en/community';
+
+export const community: Catalog<typeof en> = {
+  'creators.fallbackName': 'Creator',
+  'creators.memberSince': 'Mitglied seit {date}',
+  'creators.followers_one': '{count} Follower',
+  'creators.followers_other': '{count} Follower',
+  'creators.protocols_one': '{count} Protokoll',
+  'creators.protocols_other': '{count} Protokolle',
+  'creators.challenges_one': '{count} Challenge',
+  'creators.challenges_other': '{count} Challenges',
+  'creators.loadFailed': 'Dieser Creator konnte nicht geladen werden.',
+  'creators.follow': 'Folgen',
+  'creators.unfollow': 'Nicht mehr folgen',
+
+  'creators.directory.loadFailed': 'Das Creator-Verzeichnis konnte nicht geladen werden.',
+  'creators.directory.empty': 'Noch veröffentlicht kein Creator öffentliche Inhalte.',
+
+  'creators.public.heading': 'Creator',
+  'creators.public.lede': 'Lerne die Menschen kennen, die teilen, wie sie trainieren, schlafen und sich erholen.',
+  'creators.public.joinHeadline': 'Sieh, was sie wirklich tun',
+  'creators.public.joinBody':
+    'Erstelle ein kostenloses Konto, um ihre Protokolle zu lesen, ihren Challenges zu folgen und deinen eigenen Fortschritt neben ihrem zu verfolgen.',
+
+  'creators.teaser.back': '‹ Alle Creator',
+  'creators.teaser.rateLimited': 'Zu viele Anfragen — versuche es in einer Minute erneut.',
+  'creators.teaser.notFoundTitle': 'Creator nicht gefunden',
+  'creators.teaser.notFoundBody': 'Dieses Profil existiert nicht oder ist nicht öffentlich.',
+  'creators.teaser.unlockHeadline': 'Schalte das vollständige Profil von {name} frei',
+  'creators.teaser.unlockHeadlineAnon': 'Schalte das vollständige Profil dieses Creators frei',
+  'creators.teaser.joinBody':
+    'Erstelle ein kostenloses Konto, um ihre Protokolle zu lesen, ihren Challenges zu folgen und ihren aktuellen Schlaf, ihre Aktivität und Erholung zu sehen.',
+  'creators.stat.followers_one': 'Follower',
+  'creators.stat.followers_other': 'Follower',
+  'creators.stat.protocols_one': 'Protokoll',
+  'creators.stat.protocols_other': 'Protokolle',
+  'creators.stat.challenges_one': 'Challenge',
+  'creators.stat.challenges_other': 'Challenges',
+  'creators.stat.trackedDays_one': 'Tag erfasst',
+  'creators.stat.trackedDays_other': 'Tage erfasst',
+
+  'creators.profile.unavailable': 'Dieses Creator-Profil ist nicht verfügbar.',
+  'creators.profile.updating': 'Wird aktualisiert…',
+  'creators.profile.protocols': 'Protokolle',
+  'creators.profile.noProtocols': 'Noch keine öffentlichen Protokolle.',
+  'creators.profile.challenges': 'Challenges',
+  'creators.profile.noChallenges': 'Noch keine öffentlichen Challenges.',
+  'creators.profile.recentData': 'Aktuelle Gesundheitsdaten',
+  'creators.profile.noRecentData': 'Keine aktuellen Daten geteilt.',
+  'creators.profile.supplements': 'Nahrungsergänzungsmittel: {names}',
+  'creators.profile.target.sleepScore': 'Schlafwert ≥ {value}',
+  'creators.profile.target.sleepDuration': 'Schlaf {duration}',
+  'creators.profile.target.workouts': '{value} Workouts/Woche',
+  'creators.profile.target.activeCalories': '{value} aktive kcal/Tag',
+  'creators.profile.duration.hoursMinutes': '{hours} Std. {minutes} Min.',
+  'creators.profile.duration.minutes': '{minutes} Min.',
+  'creators.profile.table.date': 'Datum',
+  'creators.profile.table.sleep': 'Schlaf',
+  'creators.profile.table.steps': 'Schritte',
+  'creators.profile.table.restingHr': 'Ruhepuls',
+  'creators.profile.table.hrv': 'HRV',
+  'creators.profile.table.activeKcal': 'Aktive kcal',
+
+  'creators.status.DRAFT': 'Entwurf',
+  'creators.status.ACTIVE': 'Aktiv',
+  'creators.status.COMPLETED': 'Abgeschlossen',
+  'creators.status.FAILED': 'Fehlgeschlagen',
+  'creators.terms.SLEEP_SCORE':
+    'Schlafwert über {threshold} Punkten, an {requiredCount} Nächten, innerhalb von {windowDays} Tagen nach der Aktivierung',
+  'creators.terms.DAILY_STEPS':
+    'Mehr als {threshold} Schritte, an {requiredCount} Tagen, innerhalb von {windowDays} Tagen nach der Aktivierung',
+  'creators.terms.WEEKLY_WORKOUTS':
+    'Mehr als {threshold} Workouts pro Woche, über {requiredCount} Wochen, innerhalb von {windowDays} Tagen nach der Aktivierung',
+  'creators.progress.SLEEP_SCORE': '{current}/{required} Nächte',
+  'creators.progress.DAILY_STEPS': '{current}/{required} Tage',
+  'creators.progress.WEEKLY_WORKOUTS': '{current}/{required} Wochen',
+
+  'creators.following.since': 'Du folgst seit {date}',
+  'creators.following.unfollowing': 'Wird entfolgt…',
+  'creators.following.browseAll': 'Alle Creator durchstöbern',
+  'creators.following.loadFailed': 'Die Liste der Creator, denen du folgst, konnte nicht geladen werden.',
+  'creators.following.empty':
+    'Du folgst noch niemandem. Stöbere oben im Creator-Verzeichnis, um jemanden zum Folgen zu finden.',
+
+  'invite.title': 'Einladung',
+  'invite.wrongAccount.title': 'Falsches Konto',
+  'invite.wrongAccount.message':
+    'Diese Einladung gilt für {invitedEmail}, du bist aber als {currentEmail} angemeldet. Melde dich ab und melde dich mit der eingeladenen Adresse an (oder registriere dich damit).',
+  'invite.join.title': 'Der Gruppe beitreten',
+  'invite.header.invited': 'hat {email} eingeladen, der Wellbeing-Gruppe beizutreten.',
+  'invite.login.body': 'Für diese Adresse gibt es bereits ein Konto. Melde dich an, um die Einladung anzunehmen.',
+  'invite.goToLogin': 'Zur Anmeldung',
+  'invite.openApp': 'App öffnen',
+  'invite.consentText':
+    'Ich bin damit einverstanden, dass die Administratoren dieser Gruppe meine Gesundheitsdaten (Schlaf, Aktivität, Workouts und Status der Geräte-Synchronisierung) einsehen können, solange ich Mitglied bin. Ich kann die Gruppe jederzeit verlassen, wodurch ihr Zugriff sofort endet.',
+  'invite.consentRequired': 'Bitte bestätige die Einwilligung, um fortzufahren.',
+  'invite.accept.submit': 'Einladung annehmen',
+  'invite.accept.submitting': 'Beitritt läuft…',
+  'invite.accept.failed': 'Die Einladung konnte nicht angenommen werden.',
+  'invite.register.submit': 'Konto erstellen und beitreten',
+  'invite.register.invalid': 'Die Einladung konnte nicht verwendet werden.',
+  'invite.register.accountCreatedLogin': 'Dein Konto wurde erstellt. Bitte melde dich an, um fortzufahren.',
+  'invite.unavailable.loadFailed':
+    'Die Einladung konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.',
+  'invite.unavailable.invalid': 'Dieser Einladungslink ist ungültig.',
+  'invite.unavailable.expired': 'Diese Einladung ist abgelaufen. Bitte den Gruppenadministrator, eine neue zu senden.',
+  'invite.unavailable.revoked': 'Diese Einladung wurde vom Gruppenadministrator zurückgezogen.',
+  'invite.unavailable.accepted': 'Diese Einladung wurde bereits angenommen.',
+};

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { LanguageSchema } from '@/lib/i18n/languages';
+
 // Password policy per ARCHITECTURE.md §4.1 / spec item 3: min 10 chars, at
 // least one lowercase, one uppercase, one digit. Enforced here (server-side
 // source of truth) and reused for the client-side form for a matching UX.
@@ -28,6 +30,9 @@ export const RegisterSchema = z
     // the group's administrators seeing their health data.
     inviteToken: z.string().min(1).max(200).optional(),
     groupConsent: z.boolean().optional(),
+    // Preferred interface language, picked on the registration form. Optional
+    // so older app versions keep working (the account then starts in English).
+    language: LanguageSchema.optional(),
   })
   .refine((data) => data.password === data.passwordConfirmation, {
     message: 'Passwords do not match',
@@ -87,6 +92,11 @@ export const ChangePasswordSchema = z
   });
 
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+
+/** Me > Account > Language. */
+export const UpdateLanguageSchema = z.object({
+  language: LanguageSchema,
+});
 
 /** Deleting one's own account re-confirms the password — a stolen session alone cannot erase an account. */
 export const DeleteAccountSchema = z.object({

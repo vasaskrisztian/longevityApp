@@ -143,6 +143,18 @@ describe('POST /api/auth/register', () => {
       expect(registerUserMock).not.toHaveBeenCalled();
     });
 
+    it('sends the verification email in the language chosen at registration', async () => {
+      sendEmailMock.mockClear();
+      registerUserMock.mockResolvedValue({ userId: 'u1', verificationToken: 'verify-tok' });
+
+      await POST(postRequest({ ...VALID_REGISTRATION, language: 'de' }));
+
+      expect(registerUserMock).toHaveBeenCalledWith(expect.objectContaining({ language: 'de' }));
+      const mail = sendEmailMock.mock.calls[0]![0];
+      expect(mail.subject).toBe('Bestätige deine E-Mail-Adresse — Longevity Klub');
+      expect(mail.text).toContain('verify-tok');
+    });
+
     it('creates an already-verified account: 201, no verification email', async () => {
       sendEmailMock.mockClear();
       registerUserMock.mockResolvedValue({ userId: 'u1', verificationToken: null });

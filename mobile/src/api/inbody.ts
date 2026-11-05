@@ -4,6 +4,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { apiFetch, apiFetchJson, ApiError } from '@/src/api/client';
 import { getValidAccessToken } from '@/src/auth/sessionStore';
 import { API_BASE_URL } from '@/src/config/env';
+import { t } from '@/src/i18n';
 
 /**
  * Phase 21 — mirrors src/app/api/inbody/dto.ts's InBodyMeasurementDTO on the
@@ -47,18 +48,26 @@ export type NumericField =
  * field order either. Ranges are enforced server-side
  * (src/lib/validation/inbody.schemas.ts); this is display metadata only.
  */
-export const FIELD_DEFS: { key: NumericField; label: string; unit?: string; step: string; integer?: boolean }[] = [
-  { key: 'weightKg', label: 'Weight', unit: 'kg', step: '0.1' },
-  { key: 'bodyFatPercentage', label: 'Body Fat', unit: '%', step: '0.1' },
-  { key: 'skeletalMuscleMassKg', label: 'Skeletal Muscle Mass', unit: 'kg', step: '0.1' },
-  { key: 'fatFreeMassKg', label: 'Fat-Free Mass', unit: 'kg', step: '0.1' },
-  { key: 'bmi', label: 'BMI', step: '0.1' },
-  { key: 'inBodyScore', label: 'InBody Score', step: '1', integer: true },
-  { key: 'visceralFatLevel', label: 'Visceral Fat Level', step: '1', integer: true },
-  { key: 'basalMetabolicRateKcal', label: 'BMR', unit: 'kcal', step: '1', integer: true },
-  { key: 'totalBodyWaterL', label: 'Total Body Water', unit: 'L', step: '0.1' },
-  { key: 'ecwRatio', label: 'ECW Ratio', step: '0.001' },
+export const FIELD_DEFS: { key: NumericField; unit?: string; step: string; integer?: boolean }[] = [
+  { key: 'weightKg', unit: 'kg', step: '0.1' },
+  { key: 'bodyFatPercentage', unit: '%', step: '0.1' },
+  { key: 'skeletalMuscleMassKg', unit: 'kg', step: '0.1' },
+  { key: 'fatFreeMassKg', unit: 'kg', step: '0.1' },
+  { key: 'bmi', step: '0.1' },
+  { key: 'inBodyScore', step: '1', integer: true },
+  { key: 'visceralFatLevel', step: '1', integer: true },
+  { key: 'basalMetabolicRateKcal', unit: 'kcal', step: '1', integer: true },
+  { key: 'totalBodyWaterL', unit: 'L', step: '0.1' },
+  { key: 'ecwRatio', step: '0.001' },
 ];
+
+/**
+ * The display name of a field in the current language. Resolved at call time
+ * (never stored in FIELD_DEFS) so it follows the language setting.
+ */
+export function fieldLabel(key: NumericField): string {
+  return t(`body.field.${key}`);
+}
 
 export function listInBodyMeasurements(): Promise<InBodyMeasurement[]> {
   return apiFetchJson<InBodyMeasurement[]>('/api/inbody');

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   deleteInBodyMeasurement,
   FIELD_DEFS,
+  fieldLabel,
   getInBodyImageSource,
   listInBodyMeasurements,
   updateInBodyMeasurement,
@@ -19,6 +20,7 @@ import { Card } from '@/src/components/ui/Card';
 import { InfoLabel } from '@/src/components/ui/InfoLabel';
 import { TextField } from '@/src/components/ui/TextField';
 import { LineChart } from '@/src/components/charts/LineChart';
+import { locale, useT } from '@/src/i18n';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens';
 
@@ -41,29 +43,34 @@ import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens'
 const METRIC_COLOR = colors.primary.default;
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString(locale());
 }
 
 function formatDateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(locale(), { month: 'short', day: 'numeric' });
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString(locale(), { maximumFractionDigits: 3, useGrouping: false });
 }
 
 function formatValue(value: number | null, unit?: string): string {
   if (value === null) return '—';
-  return unit ? `${value}${unit}` : `${value}`;
+  return unit ? `${formatNumber(value)}${unit}` : formatNumber(value);
 }
 
 function CurrentValueCard({ label, term, value, unit }: { label: string; term: NumericField; value: number | null; unit?: string }) {
+  const { t } = useT();
   return (
     <Card style={styles.valueCard}>
       <InfoLabel term={term} textStyle={styles.valueLabel}>
         {label}
       </InfoLabel>
       <Text style={styles.valueNumber}>
-        {value === null ? '—' : value}
+        {value === null ? '—' : formatNumber(value)}
         {value !== null && unit ? <Text style={styles.valueUnit}> {unit}</Text> : null}
       </Text>
-      <Text style={styles.valueStatus}>{value === null ? 'Not recorded' : ' '}</Text>
+      <Text style={styles.valueStatus}>{value === null ? t('body.notRecorded') : ' '}</Text>
     </Card>
   );
 }
@@ -77,6 +84,7 @@ function TrendChartCard({
   measurements: InBodyMeasurement[];
   dataKey: NumericField;
 }) {
+  const { t } = useT();
   const sorted = [...measurements].sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
   const labels = sorted.map((m) => formatDateLabel(m.measuredAt));
   const values = sorted.map((m) => m[dataKey]);
@@ -93,7 +101,7 @@ function TrendChartCard({
         </View>
       ) : (
         <View style={styles.emptyChart}>
-          <Text style={styles.emptyChartText}>Not enough data yet.</Text>
+          <Text style={styles.emptyChartText}>{t('body.notEnoughData')}</Text>
         </View>
       )}
     </Card>
@@ -109,6 +117,7 @@ function EditForm({
   onCancel: () => void;
   onSaved: (updated: InBodyMeasurement) => void;
 }) {
+  const { t } = useT();
   const [values, setValues] = useState<Record<NumericField, string>>(() => {
     const initial = {} as Record<NumericField, string>;
     for (const field of FIELD_DEFS) {
@@ -142,7 +151,7 @@ function EditForm({
       const updated = await updateInBodyMeasurement(measurement.id, patch);
       onSaved(updated);
     } catch {
-      setError('Could not save. Please check the values and try again.');
+      setError(t('body.edit.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -152,7 +161,7 @@ function EditForm({
     <Card style={styles.formCard}>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       <TextField
-        label="Measured at (yyyy-mm-ddThh:mm)"
+        label={t('body.edit.measuredAt')}
         value={measuredAt}
         onChangeText={setMeasuredAt}
         autoCapitalize="none"
@@ -162,7 +171,7 @@ function EditForm({
         {FIELD_DEFS.map((field) => (
           <TextField
             key={field.key}
-            label={field.unit ? `${field.label} (${field.unit})` : field.label}
+            label={field.unit ? `${fieldLabel(field.key)} (${field.unit})` : fieldLabel(field.key)}
             keyboardType="numeric"
             placeholder="—"
             value={values[field.key]}
@@ -172,8 +181,8 @@ function EditForm({
         ))}
       </View>
       <View style={styles.row}>
-        <Button title={submitting ? 'Saving…' : 'Save'} size="sm" onPress={handleSave} loading={submitting} style={styles.flex1} />
-        <Button title="Cancel" size="sm" variant="outline" onPress={onCancel} style={styles.flex1} />
+        <Button title={submitting ? t('common.saving') : t('common.save')} size="sm" onPress={handleSave} loading={submitting} style={styles.flex1} />
+        <Button title={t('common.cancel')} size="sm" variant="outline" onPress={onCancel} style={styles.flex1} />
       </View>
     </Card>
   );
@@ -188,6 +197,7 @@ function MeasurementRow({
   onUpdated: (m: InBodyMeasurement) => void;
   onDeleted: () => void;
 }) {
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showRawText, setShowRawText] = useState(false);
@@ -222,7 +232,7 @@ function MeasurementRow({
   }, [showingPhoto, measurement.id]);
 
   async function handleDelete() {
-    if (!(await confirmDestructive('Delete this InBody measurement?', 'The measurement and its photo will be permanently deleted. This cannot be undone.'))) return;
+    if (!(await confirmDestructive(t('body.delete.title'), t('body.delete.message')))) return;
     setDeleting(true);
     try {
       await deleteInBodyMeasurement(measurement.id);
@@ -252,19 +262,19 @@ function MeasurementRow({
       <Text style={styles.rowTitle}>{formatDateTime(measurement.measuredAt)}</Text>
       <Text style={styles.rowSubtitle}>
         {FIELD_DEFS.slice(0, 5)
-          .map((f) => `${f.label}: ${formatValue(measurement[f.key], f.unit)}`)
+          .map((f) => `${fieldLabel(f.key)}: ${formatValue(measurement[f.key], f.unit)}`)
           .join(' · ')}
       </Text>
 
       {missingFields.length > 0 ? (
-        <Text style={styles.rowNotice}>Not recorded: {missingFields.map((f) => f.label).join(', ')}</Text>
+        <Text style={styles.rowNotice}>{t('body.row.notRecorded', { fields: missingFields.map((f) => fieldLabel(f.key)).join(', ') })}</Text>
       ) : null}
 
       {missingFields.length > 0 && measurement.rawOcrText ? (
         <View style={styles.rawTextSection}>
           <Pressable onPress={() => setShowRawText((v) => !v)}>
             <Text style={styles.linkText}>
-              {showRawText ? 'Hide raw scanned text' : 'Show raw scanned text (to fill in the missing fields by hand)'}
+              {showRawText ? t('body.row.hideRawText') : t('body.row.showRawText')}
             </Text>
           </Pressable>
           {showRawText ? (
@@ -280,9 +290,9 @@ function MeasurementRow({
           {photoLoading ? (
             <ActivityIndicator color={colors.primary.default} />
           ) : photoError ? (
-            <Text style={styles.rowNotice}>Could not load the photo.</Text>
+            <Text style={styles.rowNotice}>{t('body.row.photoLoadFailed')}</Text>
           ) : photoSource ? (
-            <Image source={photoSource} style={styles.photo} resizeMode="contain" alt="InBody scan photo" />
+            <Image source={photoSource} style={styles.photo} resizeMode="contain" alt={t('body.row.photoAlt')} />
           ) : null}
         </View>
       ) : null}
@@ -290,21 +300,22 @@ function MeasurementRow({
       <View style={styles.actionsStack}>
         <View style={styles.row}>
           <Button
-            title={showingPhoto ? 'Hide photo' : 'View photo'}
+            title={showingPhoto ? t('body.row.hidePhoto') : t('body.row.viewPhoto')}
             size="sm"
             variant="outline"
             onPress={() => setShowingPhoto((v) => !v)}
             style={styles.flex1}
           />
-          <Button title="Edit" size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
+          <Button title={t('common.edit')} size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
         </View>
-        <Button title={deleting ? 'Deleting…' : 'Delete'} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} />
+        <Button title={deleting ? t('body.row.deleting') : t('common.delete')} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} />
       </View>
     </Card>
   );
 }
 
 function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => void }) {
+  const { t } = useT();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -320,14 +331,14 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
       const missing = FIELD_DEFS.filter((f) => created[f.key] === null);
       setNotice(
         missing.length === 0
-          ? 'Scan uploaded — all fields were read successfully.'
-          : `Scan uploaded. Could not reliably read: ${missing.map((f) => f.label).join(', ')}. Use Edit on the new entry to fill those in.`,
+          ? t('body.upload.successAll')
+          : t('body.upload.successPartial', { fields: missing.map((f) => fieldLabel(f.key)).join(', ') }),
       );
     } catch (err) {
       setError(
         err instanceof Error && err.name === 'AbortError'
-          ? 'This is taking far longer than expected and was stopped. Please try again — if it keeps happening, try a smaller or clearer photo.'
-          : 'Could not process that image. Please try a clearer photo of the report.',
+          ? t('body.upload.timeout')
+          : t('body.upload.failed'),
       );
     } finally {
       setUploading(false);
@@ -337,7 +348,7 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
   async function handleTakePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      setError('Camera access is needed to take a photo of the report.');
+      setError(t('body.upload.cameraNeeded'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -347,7 +358,7 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
   async function handleChooseFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError('Photo library access is needed to choose a photo of the report.');
+      setError(t('body.upload.libraryNeeded'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -356,17 +367,14 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Upload a scan</Text>
-      <Text style={styles.cardDescription}>
-        A photo of a printed InBody report. Text and values are read automatically and saved right
-        away — anything that couldn&apos;t be read reliably is left blank for you to fill in.
-      </Text>
+      <Text style={styles.cardTitle}>{t('body.upload.title')}</Text>
+      <Text style={styles.cardDescription}>{t('body.upload.description')}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {notice ? <Alert variant="success">{notice}</Alert> : null}
       <View style={styles.row}>
-        <Button title="Take photo" size="sm" onPress={handleTakePhoto} disabled={uploading} style={styles.flex1} />
+        <Button title={t('body.upload.takePhoto')} size="sm" onPress={handleTakePhoto} disabled={uploading} style={styles.flex1} />
         <Button
-          title="Choose from library"
+          title={t('body.upload.chooseLibrary')}
           size="sm"
           variant="outline"
           onPress={handleChooseFromLibrary}
@@ -377,9 +385,7 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
       {uploading ? (
         <View style={styles.uploadingRow}>
           <ActivityIndicator color={colors.primary.default} />
-          <Text style={styles.uploadingText}>
-            Reading the report… this usually takes 15-20 seconds, but can take up to a minute.
-          </Text>
+          <Text style={styles.uploadingText}>{t('body.upload.reading')}</Text>
         </View>
       ) : null}
     </Card>
@@ -387,13 +393,14 @@ function UploadSection({ onUploaded }: { onUploaded: (m: InBodyMeasurement) => v
 }
 
 export default function InBodyScreen() {
+  const { t } = useT();
   const [measurements, setMeasurements] = useState<InBodyMeasurement[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     listInBodyMeasurements()
       .then((list) => setMeasurements([...list].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))))
-      .catch(() => setError('Could not load your InBody scans.'));
+      .catch(() => setLoadFailed(true));
   }, []);
 
   function handleUploaded(created: InBodyMeasurement) {
@@ -403,7 +410,7 @@ export default function InBodyScreen() {
   if (!measurements) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {loadFailed ? <Alert variant="destructive">{t('body.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -415,37 +422,37 @@ export default function InBodyScreen() {
       <UploadSection onUploaded={handleUploaded} />
 
       <View>
-        <Text style={styles.sectionTitle}>Current values</Text>
+        <Text style={styles.sectionTitle}>{t('body.currentValues')}</Text>
         {latest ? (
           <>
-            <Text style={styles.sectionSubtitle}>From the scan on {formatDateTime(latest.measuredAt)}.</Text>
+            <Text style={styles.sectionSubtitle}>{t('body.fromScan', { date: formatDateTime(latest.measuredAt) })}</Text>
             <View style={styles.valuesGrid}>
               {FIELD_DEFS.map((field) => (
-                <CurrentValueCard key={field.key} label={field.label} term={field.key} value={latest[field.key]} unit={field.unit} />
+                <CurrentValueCard key={field.key} label={fieldLabel(field.key)} term={field.key} value={latest[field.key]} unit={field.unit} />
               ))}
             </View>
           </>
         ) : (
-          <Text style={styles.empty}>No scans uploaded yet.</Text>
+          <Text style={styles.empty}>{t('body.noScansUploaded')}</Text>
         )}
       </View>
 
       {measurements.length > 1 ? (
         <View>
-          <Text style={styles.sectionTitle}>Trends</Text>
+          <Text style={styles.sectionTitle}>{t('body.trends')}</Text>
           <View style={styles.chartsStack}>
-            <TrendChartCard title="Weight" measurements={measurements} dataKey="weightKg" />
-            <TrendChartCard title="Body Fat %" measurements={measurements} dataKey="bodyFatPercentage" />
-            <TrendChartCard title="Skeletal Muscle Mass" measurements={measurements} dataKey="skeletalMuscleMassKg" />
-            <TrendChartCard title="InBody Score" measurements={measurements} dataKey="inBodyScore" />
+            <TrendChartCard title={t('body.trend.weight')} measurements={measurements} dataKey="weightKg" />
+            <TrendChartCard title={t('body.trend.bodyFat')} measurements={measurements} dataKey="bodyFatPercentage" />
+            <TrendChartCard title={t('body.trend.skeletalMuscle')} measurements={measurements} dataKey="skeletalMuscleMassKg" />
+            <TrendChartCard title={t('body.trend.score')} measurements={measurements} dataKey="inBodyScore" />
           </View>
         </View>
       ) : null}
 
       <View>
-        <Text style={styles.sectionTitle}>History</Text>
+        <Text style={styles.sectionTitle}>{t('body.history')}</Text>
         {measurements.length === 0 ? (
-          <Text style={styles.empty}>No scans yet.</Text>
+          <Text style={styles.empty}>{t('body.noScans')}</Text>
         ) : (
           <View style={styles.historyStack}>
             {measurements.map((m) => (

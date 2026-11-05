@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import { generateRawToken, hashToken } from '@/lib/auth/tokens';
+import { normalizeLanguage } from '@/lib/i18n/languages';
+import { st } from '@/lib/i18n/messages';
 import { sendGroupInvitationEmail } from '@/lib/email/group-invitation-email';
 import { createNotification } from '@/modules/notifications/notifications.service';
 import { groupLogoUrl } from './groups.service';
@@ -47,15 +49,16 @@ export async function inviteMembers(params: {
 
   const inviter: any = await prisma.user.findUnique({
     where: { id: params.adminId },
-    select: { profile: { select: { fullName: true } } },
+    select: { language: true, profile: { select: { fullName: true } } },
   });
   const inviterName: string | null = inviter?.profile?.fullName ?? null;
+  const inviterLanguage = normalizeLanguage(inviter?.language);
 
   const emails = Array.from(new Set(params.emails.map((email) => email.trim().toLowerCase())));
   const results: InviteResult[] = [];
 
   for (const email of emails) {
-    const existingUser: any = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const existingUser: any = await prisma.user.findUnique({ where: { email }, select: { id: true, language: true } });
     if (existingUser) {
       const membership = await prisma.groupMembership.findUnique({
         where: { groupId_userId: { groupId: group.id, userId: existingUser.id } },
@@ -92,11 +95,13 @@ export async function inviteMembers(params: {
       },
     });
 
+    // A registered person gets text in their own language; a stranger in the administrator's.
+    const recipientLanguage = existingUser ? normalizeLanguage(existingUser.language) : inviterLanguage;
     if (existingUser) {
       await createNotification(existingUser.id, {
         type: 'GROUP_INVITATION',
-        title: `Invitation to ${group.name}`,
-        body: `You have been invited to join ${group.name}. Accepting lets the group's administrators see your health data; you can leave at any time.`,
+        title: st(recipientLanguage, 'notif.invitation.title', { group: group.name }),
+        body: st(recipientLanguage, 'notif.invitation.body', { group: group.name }),
         data: { invitationId: invitation.id, groupId: group.id },
       });
     }
@@ -109,6 +114,7 @@ export async function inviteMembers(params: {
       rawToken,
       inviterName,
       expiresAt,
+      language: recipientLanguage,
     });
     results.push({ email, outcome: 'invited' });
   }

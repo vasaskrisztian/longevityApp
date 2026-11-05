@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -15,6 +15,7 @@ import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
 import { describeSupplement } from '@/src/screens/supplementText';
+import { tDynamic, useT } from '@/src/i18n';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import {
@@ -28,14 +29,8 @@ import {
 /** Mirrors the web app's profile/supplements/supplements-manager.tsx: list +
  * inline add/edit form + delete, same structure as goals.tsx (phase 18). */
 
-const FREQUENCY_OPTIONS: ChipOption[] = SupplementFrequencyEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
-const TIMING_OPTIONS: ChipOption[] = SupplementTimingEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
+// Built at render time (not module scope) so the labels follow the language.
+const enumOptions = (values: readonly string[]): ChipOption[] => values.map((v) => ({ value: v, label: enumLabel(v) }));
 
 interface SupplementFormState {
   name: string;
@@ -70,6 +65,7 @@ function supplementToFormState(supplement: Supplement): SupplementFormState {
 }
 
 function ActiveToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  useT();
   return (
     <Pressable style={styles.activeRow} onPress={() => onChange(!value)}>
       <Ionicons
@@ -77,7 +73,7 @@ function ActiveToggle({ value, onChange }: { value: boolean; onChange: (v: boole
         size={20}
         color={value ? colors.primary.default : colors.muted.foreground}
       />
-      <Text style={styles.activeLabel}>Active</Text>
+      <Text style={styles.activeLabel}>{enumLabel('ACTIVE')}</Text>
     </Pressable>
   );
 }
@@ -91,16 +87,21 @@ function SupplementForm({
   onCancel?: () => void;
   onSaved: (data: CreateSupplementInput) => Promise<void>;
 }) {
+  const { t, language } = useT();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const frequencyOptions = useMemo(() => enumOptions(SupplementFrequencyEnum.options), [language]);
+  const timingOptions = useMemo(() => enumOptions(SupplementTimingEnum.options), [language]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function submit() {
     const parsed = CreateSupplementSchema.safeParse(form);
     if (!parsed.success) {
       setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
+        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, tDynamic(v?.[0] ?? '')]),
       ));
       return;
     }
@@ -110,7 +111,7 @@ function SupplementForm({
     try {
       await onSaved(parsed.data);
     } catch {
-      setServerError('Could not save. Please try again.');
+      setServerError(t('plan.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -119,10 +120,10 @@ function SupplementForm({
   return (
     <Card style={styles.formCard}>
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
-      <TextField label="Name" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} error={errors.name} />
+      <TextField label={t('plan.field.name')} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} error={errors.name} />
       <View style={styles.row}>
         <TextField
-          label="Dosage"
+          label={t('plan.supplements.dosage')}
           keyboardType="numeric"
           style={styles.flex1}
           value={form.dosage}
@@ -130,7 +131,7 @@ function SupplementForm({
           error={errors.dosage}
         />
         <TextField
-          label="Unit"
+          label={t('plan.supplements.unit')}
           style={styles.flex1}
           value={form.unit}
           onChangeText={(v) => setForm({ ...form, unit: v })}
@@ -138,26 +139,26 @@ function SupplementForm({
         />
       </View>
       <ChipSingleSelect
-        label="Frequency"
-        options={FREQUENCY_OPTIONS}
+        label={t('plan.supplements.frequency')}
+        options={frequencyOptions}
         value={form.frequency}
         onChange={(v) => setForm({ ...form, frequency: v })}
       />
       <ChipSingleSelect
-        label="Timing (optional)"
-        options={TIMING_OPTIONS}
+        label={t('plan.supplements.timingOptional')}
+        options={timingOptions}
         value={form.timing}
         onChange={(v) => setForm({ ...form, timing: v })}
       />
       <TextField
-        label="Notes (optional)"
+        label={t('plan.supplements.notesOptional')}
         value={form.notes}
         onChangeText={(v) => setForm({ ...form, notes: v })}
       />
       <ActiveToggle value={form.active} onChange={(v) => setForm({ ...form, active: v })} />
       <View style={styles.row}>
-        <Button title={submitting ? 'Saving…' : 'Save'} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
-        {onCancel ? <Button title="Cancel" size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
+        <Button title={submitting ? t('common.saving') : t('common.save')} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
+        {onCancel ? <Button title={t('common.cancel')} size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
       </View>
     </Card>
   );
@@ -172,6 +173,7 @@ function SupplementRow({
   onUpdated: (s: Supplement) => void;
   onDeleted: () => void;
 }) {
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -182,7 +184,7 @@ function SupplementRow({
   }
 
   async function handleDelete() {
-    if (!(await confirmDestructive(`Delete "${supplement.name}"?`, 'This supplement will be permanently deleted. This cannot be undone.'))) return;
+    if (!(await confirmDestructive(t('plan.deleteTitle', { name: supplement.name }), t('plan.supplements.deleteMessage')))) return;
     setDeleting(true);
     try {
       await deleteSupplement(supplement.id);
@@ -205,16 +207,15 @@ function SupplementRow({
   return (
     <Card>
       <Text style={styles.rowTitle}>
-        {supplement.name}
-        {!supplement.active ? ' (inactive)' : ''}
+        {supplement.active ? supplement.name : t('plan.supplements.inactive', { name: supplement.name })}
       </Text>
       <Text style={styles.rowSubtitle}>
-        {describeSupplement(supplement) || 'No dose set'}
+        {describeSupplement(supplement) || t('plan.supplements.noDose')}
       </Text>
       <View style={styles.row}>
-        <Button title="Edit" size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
+        <Button title={t('common.edit')} size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
         <Button
-          title={deleting ? 'Deleting…' : 'Delete'}
+          title={deleting ? t('plan.deleting') : t('common.delete')}
           size="sm"
           variant="destructive"
           onPress={handleDelete}
@@ -227,14 +228,15 @@ function SupplementRow({
 }
 
 export default function SupplementsScreen() {
+  const { t } = useT();
   const [supplements, setSupplements] = useState<Supplement[] | null>(null);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     listSupplements()
       .then(setSupplements)
-      .catch(() => setError('Could not load your supplements.'));
+      .catch(() => setLoadFailed(true));
   }, []);
 
   async function handleCreate(data: CreateSupplementInput) {
@@ -246,7 +248,7 @@ export default function SupplementsScreen() {
   if (!supplements) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {loadFailed ? <Alert variant="destructive">{t('plan.supplements.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -256,10 +258,10 @@ export default function SupplementsScreen() {
       {adding ? (
         <SupplementForm initial={EMPTY_FORM} onCancel={() => setAdding(false)} onSaved={handleCreate} />
       ) : (
-        <Button title="Add supplement" size="sm" onPress={() => setAdding(true)} />
+        <Button title={t('plan.supplements.add')} size="sm" onPress={() => setAdding(true)} />
       )}
 
-      {supplements.length === 0 && !adding ? <Text style={styles.empty}>No supplements yet.</Text> : null}
+      {supplements.length === 0 && !adding ? <Text style={styles.empty}>{t('plan.supplements.empty')}</Text> : null}
 
       {supplements.map((supplement) => (
         <SupplementRow

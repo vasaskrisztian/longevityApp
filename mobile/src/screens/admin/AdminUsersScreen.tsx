@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
+  connectionStatusLabel,
   getAdminStats,
   getAdminUsers,
   type AdminOuraStatusFilter,
@@ -16,6 +17,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { t, useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
@@ -39,14 +41,10 @@ const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const OURA_STATUS_OPTIONS: AdminOuraStatusFilter[] = ['ALL', 'CONNECTED', 'AUTH_REQUIRED', 'ERROR', 'DISCONNECTED'];
-const OURA_STATUS_LABEL: Record<AdminOuraStatusFilter, string> = {
-  ALL: 'All Oura statuses',
-  CONNECTED: 'Connected',
-  AUTH_REQUIRED: 'Reconnect required',
-  ERROR: 'Connection error',
-  DISCONNECTED: 'Not connected',
-};
-const FILTER_CHIP_OPTIONS: ChipOption[] = OURA_STATUS_OPTIONS.map((v) => ({ value: v, label: OURA_STATUS_LABEL[v] }));
+const ouraStatusLabel = (status: string): string =>
+  status === 'ALL' ? t('admin.connection.all') : connectionStatusLabel(status);
+/** Built at render time so the labels follow the language. */
+const filterChipOptions = (): ChipOption[] => OURA_STATUS_OPTIONS.map((v) => ({ value: v, label: ouraStatusLabel(v) }));
 
 function KpiTile({ label, value }: { label: string; value: number }) {
   return (
@@ -58,6 +56,7 @@ function KpiTile({ label, value }: { label: string; value: number }) {
 }
 
 function UserRow({ user }: { user: AdminUserListItem }) {
+  const { t, locale } = useT();
   return (
     <Pressable onPress={() => router.push(`/admin/users/${user.id}`)}>
       <Card style={styles.row}>
@@ -65,8 +64,10 @@ function UserRow({ user }: { user: AdminUserListItem }) {
           <Text style={styles.rowTitle}>{user.fullName ?? user.email}</Text>
           <Text style={styles.rowSubtitle}>{user.email}</Text>
           <Text style={styles.rowSubtitle}>
-            {user.role} · {OURA_STATUS_LABEL[user.ouraStatus as AdminOuraStatusFilter] ?? user.ouraStatus} ·{' '}
-            {user.lastSyncAt ? `Last sync ${new Date(user.lastSyncAt).toLocaleDateString()}` : 'Never synced'}
+            {user.role} · {ouraStatusLabel(user.ouraStatus)} ·{' '}
+            {user.lastSyncAt
+              ? t('admin.users.lastSync', { date: new Date(user.lastSyncAt).toLocaleDateString(locale) })
+              : t('admin.users.neverSynced')}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
@@ -76,6 +77,7 @@ function UserRow({ user }: { user: AdminUserListItem }) {
 }
 
 export default function AdminUsersScreen() {
+  const { t } = useT();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -93,8 +95,8 @@ export default function AdminUsersScreen() {
   useEffect(() => {
     getAdminStats()
       .then(setStats)
-      .catch(() => setStatsError('Could not load the admin stats.'));
-  }, []);
+      .catch(() => setStatsError(t('admin.users.statsLoadFailed')));
+  }, [t]);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -112,9 +114,9 @@ export default function AdminUsersScreen() {
     setListError(null);
     getAdminUsers({ q: query || undefined, ouraStatus, page, pageSize: PAGE_SIZE })
       .then(setResult)
-      .catch(() => setListError('Could not load the user list.'))
+      .catch(() => setListError(t('admin.users.listLoadFailed')))
       .finally(() => setLoading(false));
-  }, [query, ouraStatus, page]);
+  }, [query, ouraStatus, page, t]);
 
   useEffect(loadUsers, [loadUsers]);
 
@@ -130,10 +132,10 @@ export default function AdminUsersScreen() {
       {statsError ? <Alert variant="destructive">{statsError}</Alert> : null}
       {stats ? (
         <View style={styles.kpiGrid}>
-          <KpiTile label="Total users" value={stats.totalUsers} />
-          <KpiTile label="Oura connected" value={stats.ouraConnected} />
-          <KpiTile label="Reconnect required" value={stats.authRequired} />
-          <KpiTile label="Failed syncs today" value={stats.failedSyncsToday} />
+          <KpiTile label={t('admin.users.kpi.total')} value={stats.totalUsers} />
+          <KpiTile label={t('admin.users.kpi.ouraConnected')} value={stats.ouraConnected} />
+          <KpiTile label={t('admin.connection.authRequired')} value={stats.authRequired} />
+          <KpiTile label={t('admin.users.kpi.failedSyncs')} value={stats.failedSyncsToday} />
         </View>
       ) : !statsError ? (
         <View style={styles.statsLoading}>
@@ -143,16 +145,16 @@ export default function AdminUsersScreen() {
 
       <Card style={styles.filtersCard}>
         <TextField
-          label="Search"
-          placeholder="Name or email"
+          label={t('common.search')}
+          placeholder={t('admin.users.searchPlaceholder')}
           value={searchInput}
           onChangeText={setSearchInput}
           autoCapitalize="none"
           autoCorrect={false}
         />
         <ChipSingleSelect
-          label="Oura status"
-          options={FILTER_CHIP_OPTIONS}
+          label={t('admin.users.ouraStatus')}
+          options={filterChipOptions()}
           value={ouraStatus}
           onChange={handleFilterChange}
         />
@@ -165,7 +167,7 @@ export default function AdminUsersScreen() {
           <ActivityIndicator color={colors.primary.default} />
         </View>
       ) : result && result.users.length === 0 ? (
-        <Text style={styles.empty}>No users match these filters.</Text>
+        <Text style={styles.empty}>{t('admin.users.empty')}</Text>
       ) : result ? (
         <View style={styles.listStack}>
           {result.users.map((u) => (
@@ -177,7 +179,7 @@ export default function AdminUsersScreen() {
       {result && result.total > 0 ? (
         <View style={styles.pagination}>
           <Button
-            title="Previous"
+            title={t('admin.users.previous')}
             size="sm"
             variant="outline"
             disabled={page <= 1 || loading}
@@ -185,10 +187,10 @@ export default function AdminUsersScreen() {
             style={styles.flex1}
           />
           <Text style={styles.pageLabel}>
-            Page {page} of {totalPages} ({result.total} users)
+            {t('admin.users.page', { page, totalPages, total: result.total, count: result.total })}
           </Text>
           <Button
-            title="Next"
+            title={t('common.next')}
             size="sm"
             variant="outline"
             disabled={page >= totalPages || loading}

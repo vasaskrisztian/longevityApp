@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchJson } from '@/src/api/client';
 import type { DashboardSnapshot } from '@/src/api/dashboard';
+import { t } from '@/src/i18n';
 
 /**
  * Phase 22 (mobile admin). Every type/function here mirrors a web admin
@@ -172,4 +173,20 @@ export async function triggerSync(id: string): Promise<TriggerSyncResult> {
   if (response.status === 429) return { status: 'rate_limited' };
   if (response.status === 409) return { status: 'not_connected' };
   return { status: 'error' };
+}
+
+/** Label of a wearable connection state ("CONNECTED" → "Connected"); an unknown value is shown as it is. */
+export function connectionStatusLabel(status: string): string {
+  switch (status) {
+    case 'CONNECTED':
+      return t('admin.connection.connected');
+    case 'DISCONNECTED':
+      return t('admin.connection.disconnected');
+    case 'AUTH_REQUIRED':
+      return t('admin.connection.authRequired');
+    case 'ERROR':
+      return t('admin.connection.error');
+    default:
+      return status;
+  }
 }

@@ -1,11 +1,15 @@
+import { t, tDynamic } from '@/src/i18n';
 import { PasswordSchema } from '@/src/validation/schemas';
 
-/** First problem with a password-change form, or null. Mirrors the server rules so the form answers instantly. */
+/** First problem with a password-change form (already in the current language), or null. Mirrors the server rules so the form answers instantly. */
 export function newPasswordProblem(current: string, next: string, confirmation: string): string | null {
-  if (!current) return 'Enter your current password.';
+  if (!current) return t('passwordChange.currentRequired');
   const parsed = PasswordSchema.safeParse(next);
-  if (!parsed.success) return parsed.error.issues[0]?.message ?? 'The new password is not valid.';
-  if (next === current) return 'Choose a password different from the current one.';
-  if (next !== confirmation) return 'The two new passwords do not match.';
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message;
+    return message ? tDynamic(message) : t('passwordChange.newInvalid');
+  }
+  if (next === current) return t('passwordChange.sameAsCurrent');
+  if (next !== confirmation) return t('passwordChange.mismatch');
   return null;
 }

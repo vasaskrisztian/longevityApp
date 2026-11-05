@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { tDynamic } from '@/src/i18n';
+
 /**
  * Mirrors lib/validation/onboarding.schemas.ts, goal.schemas.ts and
  * supplement.schemas.ts on the root app — mobile/ is its own independent
@@ -11,6 +13,10 @@ import { z } from 'zod';
  * round trip, not the security boundary), so drift here is a UX nit, never
  * a security issue.
  */
+
+// Validation messages below are i18n KEYS (validation.* in the common
+// namespace), not English text: a screen shows them with tDynamic(message) /
+// fieldError(message), which also lets plain English text pass through.
 
 export const GenderEnum = z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']);
 export const ActivityLevelEnum = z.enum([
@@ -81,15 +87,15 @@ export const SupplementTimingEnum = z.enum([
 // claude/phase-15-mobile-migration-plan.md's phase 18 notes for why), kept
 // loose here and left for the server's z.coerce.date() to actually
 // validate; this only catches an empty birth date before a round trip.
-const dateString = z.string().trim().min(1, 'Required (yyyy-mm-dd)');
+const dateString = z.string().trim().min(1, 'validation.dateRequired');
 
 export const PersonalInfoSchema = z.object({
-  fullName: z.string().trim().min(1, 'Full name is required').max(200),
+  fullName: z.string().trim().min(1, 'validation.fullNameRequired').max(200),
   birthDate: dateString,
   gender: GenderEnum.optional(),
-  heightCm: z.coerce.number().min(50, 'Must be at least 50cm').max(272, 'Must be at most 272cm'),
-  weightKg: z.coerce.number().min(20, 'Must be at least 20kg').max(400, 'Must be at most 400kg'),
-  timezone: z.string().trim().min(1, 'Timezone is required').max(100),
+  heightCm: z.coerce.number().min(50, 'validation.heightMin').max(272, 'validation.heightMax'),
+  weightKg: z.coerce.number().min(20, 'validation.weightMin').max(400, 'validation.weightMax'),
+  timezone: z.string().trim().min(1, 'validation.timezoneRequired').max(100),
 });
 export type PersonalInfoInput = z.infer<typeof PersonalInfoSchema>;
 
@@ -122,7 +128,7 @@ export type NutritionProfileInput = z.infer<typeof NutritionProfileSchema>;
 
 export const CreateGoalSchema = z.object({
   type: GoalTypeEnum,
-  name: z.string().trim().min(1, 'Name is required').max(200),
+  name: z.string().trim().min(1, 'validation.nameRequired').max(200),
   description: z.string().trim().max(1000).optional(),
   targetValue: z.coerce.number().max(1_000_000_000).optional(),
   targetUnit: z.string().trim().max(20).optional(),
@@ -134,9 +140,9 @@ export const CreateGoalSchema = z.object({
 export type CreateGoalInput = z.infer<typeof CreateGoalSchema>;
 
 export const CreateSupplementSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(200),
-  dosage: z.coerce.number().positive('Must be greater than 0').max(1_000_000),
-  unit: z.string().trim().min(1, 'Unit is required').max(20),
+  name: z.string().trim().min(1, 'validation.nameRequired').max(200),
+  dosage: z.coerce.number().positive('validation.greaterThanZero').max(1_000_000),
+  unit: z.string().trim().min(1, 'validation.unitRequired').max(20),
   frequency: SupplementFrequencyEnum,
   timing: SupplementTimingEnum.optional(),
   notes: z.string().trim().max(1000).optional(),
@@ -159,10 +165,10 @@ export const VisibilityEnum = z.enum(['PRIVATE', 'PUBLIC']);
 const blankToUndefined = (val: unknown) => (val === '' || val === null || val === undefined ? undefined : val);
 
 const optionalCoercedPositiveNumber = (max: number) =>
-  z.preprocess(blankToUndefined, z.coerce.number().positive('Dosage must be greater than 0').max(max).optional());
+  z.preprocess(blankToUndefined, z.coerce.number().positive('validation.dosageGreaterThanZero').max(max).optional());
 
 export const ProtocolSupplementSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(200),
+  name: z.string().trim().min(1, 'validation.nameRequired').max(200),
   dosage: optionalCoercedPositiveNumber(1_000_000),
   unit: z.string().trim().max(20).optional(),
   frequency: SupplementFrequencyEnum.optional(),
@@ -171,7 +177,7 @@ export const ProtocolSupplementSchema = z.object({
 export type ProtocolSupplementInput = z.infer<typeof ProtocolSupplementSchema>;
 
 export const CreateProtocolSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(200),
+  name: z.string().trim().min(1, 'validation.nameRequired').max(200),
   description: z.string().trim().max(1000).optional(),
   // 0-100 Oura-style score.
   targetSleepScore: optionalCoercedInt(0, 100),
@@ -194,14 +200,21 @@ export const ChallengeTypeEnum = z.enum(['SLEEP_SCORE', 'DAILY_STEPS', 'WEEKLY_W
 export const CreateChallengeSchema = z.object({
   type: ChallengeTypeEnum,
   name: z.string().trim().max(200).optional(),
-  requiredCount: z.coerce.number().int().min(1, 'Must be at least 1').max(1000),
-  threshold: z.coerce.number().int().min(1, 'Must be at least 1').max(100_000),
-  windowDays: z.coerce.number().int().min(1, 'Must be at least 1 day').max(365),
+  requiredCount: z.coerce.number().int().min(1, 'validation.atLeastOne').max(1000),
+  threshold: z.coerce.number().int().min(1, 'validation.atLeastOne').max(100_000),
+  windowDays: z.coerce.number().int().min(1, 'validation.atLeastOneDay').max(365),
 });
 export type CreateChallengeInput = z.infer<typeof CreateChallengeSchema>;
 
-/** "STRENGTH_TRAINING" -> "Strength training" — every enum above renders this way. */
+/**
+ * "STRENGTH_TRAINING" -> "Strength training" (or "Erőedzés") — every enum above
+ * renders this way. The text comes from the `enum.<VALUE>` keys of the current
+ * language; a value without a key falls back to the humanised English name.
+ */
 export function enumLabel(value: string): string {
+  const key = `enum.${value}`;
+  const translated = tDynamic(key);
+  if (translated !== key) return translated;
   const lower = value.replaceAll('_', ' ').toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
@@ -214,33 +227,33 @@ export function enumLabel(value: string): string {
 
 export const PasswordSchema = z
   .string()
-  .min(10, 'Password must be at least 10 characters long')
-  .regex(/[a-z]/, 'Password must contain a lowercase letter')
-  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-  .regex(/[0-9]/, 'Password must contain a digit');
+  .min(10, 'validation.passwordMin')
+  .regex(/[a-z]/, 'validation.passwordLower')
+  .regex(/[A-Z]/, 'validation.passwordUpper')
+  .regex(/[0-9]/, 'validation.passwordDigit');
 
 export const RegisterFormSchema = z
   .object({
-    fullName: z.string().trim().min(1, 'Full name is required').max(200),
-    email: z.string().trim().email('Enter a valid email address').toLowerCase(),
+    fullName: z.string().trim().min(1, 'validation.fullNameRequired').max(200),
+    email: z.string().trim().email('validation.emailInvalid').toLowerCase(),
     password: PasswordSchema,
     passwordConfirmation: z.string(),
     termsAccepted: z.literal(true, {
-      errorMap: () => ({ message: 'You must accept the Terms of Service' }),
+      errorMap: () => ({ message: 'validation.termsRequired' }),
     }),
     privacyAccepted: z.literal(true, {
-      errorMap: () => ({ message: 'You must accept the Privacy Policy' }),
+      errorMap: () => ({ message: 'validation.privacyRequired' }),
     }),
   })
   .refine((data) => data.password === data.passwordConfirmation, {
-    message: 'Passwords do not match',
+    message: 'validation.passwordsMismatch',
     path: ['passwordConfirmation'],
   });
 
 export type RegisterFormInput = z.infer<typeof RegisterFormSchema>;
 
 export const RequestPasswordResetFormSchema = z.object({
-  email: z.string().trim().email('Enter a valid email address').toLowerCase(),
+  email: z.string().trim().email('validation.emailInvalid').toLowerCase(),
 });
 
 export const ResetPasswordFormSchema = z
@@ -249,6 +262,6 @@ export const ResetPasswordFormSchema = z
     passwordConfirmation: z.string(),
   })
   .refine((data) => data.password === data.passwordConfirmation, {
-    message: 'Passwords do not match',
+    message: 'validation.passwordsMismatch',
     path: ['passwordConfirmation'],
   });

@@ -7,6 +7,7 @@ import { useSession } from '@/src/auth/useSession';
 import { JoinCard, PublicLayout } from '@/src/components/PublicLayout';
 import { Alert } from '@/src/components/ui/Alert';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
@@ -17,30 +18,28 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  */
 
 function Stat({ value, label }: { value: number; label: string }) {
+  const { locale } = useT();
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value.toLocaleString()}</Text>
+      <Text style={styles.statValue}>{value.toLocaleString(locale)}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-function plural(n: number, singular: string, pluralForm = `${singular}s`) {
-  return n === 1 ? singular : pluralForm;
-}
-
 export default function PublicCreatorScreen() {
+  const { t, locale } = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { status } = useSession();
   const [teaser, setTeaser] = useState<CreatorTeaser | null | undefined>(undefined); // undefined = loading
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'rateLimited' | 'loadFailed' | null>(null);
 
   useEffect(() => {
     if (status === 'signedIn' || !id) return;
     getCreatorTeaser(id)
       .then(setTeaser)
       .catch((e) =>
-        setError(e instanceof RateLimitedError ? 'Too many requests — try again in a minute.' : 'Could not load this creator.'),
+        setError(e instanceof RateLimitedError ? 'rateLimited' : 'loadFailed'),
       );
   }, [id, status]);
 
@@ -49,35 +48,45 @@ export default function PublicCreatorScreen() {
   return (
     <PublicLayout>
       <Pressable onPress={() => router.navigate('/creators')} accessibilityRole="link">
-        <Text style={styles.back}>‹ All creators</Text>
+        <Text style={styles.back}>{t('creators.teaser.back')}</Text>
       </Pressable>
 
-      {error ? <Alert variant="destructive">{error}</Alert> : null}
+      {error ? (
+        <Alert variant="destructive">
+          {error === 'rateLimited' ? t('creators.teaser.rateLimited') : t('creators.loadFailed')}
+        </Alert>
+      ) : null}
       {teaser === undefined && !error ? <ActivityIndicator color={colors.primary.default} /> : null}
 
       {teaser === null ? (
         <Card style={styles.notFound}>
-          <Text style={styles.name}>Creator not found</Text>
-          <Text style={styles.muted}>This profile doesn’t exist or isn’t public.</Text>
+          <Text style={styles.name}>{t('creators.teaser.notFoundTitle')}</Text>
+          <Text style={styles.muted}>{t('creators.teaser.notFoundBody')}</Text>
         </Card>
       ) : null}
 
       {teaser ? (
         <>
           <Card style={styles.profile}>
-            <Text style={styles.name}>{teaser.fullName ?? 'Creator'}</Text>
-            <Text style={styles.muted}>Member since {new Date(teaser.memberSince).toLocaleDateString()}</Text>
+            <Text style={styles.name}>{teaser.fullName ?? t('creators.fallbackName')}</Text>
+            <Text style={styles.muted}>
+              {t('creators.memberSince', { date: new Date(teaser.memberSince).toLocaleDateString(locale) })}
+            </Text>
             <View style={styles.stats}>
-              <Stat value={teaser.followerCount} label={plural(teaser.followerCount, 'follower')} />
-              <Stat value={teaser.publicProtocolCount} label={plural(teaser.publicProtocolCount, 'protocol')} />
-              <Stat value={teaser.publicChallengeCount} label={plural(teaser.publicChallengeCount, 'challenge')} />
-              <Stat value={teaser.trackedDays} label={`${plural(teaser.trackedDays, 'day')} tracked`} />
+              <Stat value={teaser.followerCount} label={t('creators.stat.followers', { count: teaser.followerCount })} />
+              <Stat value={teaser.publicProtocolCount} label={t('creators.stat.protocols', { count: teaser.publicProtocolCount })} />
+              <Stat value={teaser.publicChallengeCount} label={t('creators.stat.challenges', { count: teaser.publicChallengeCount })} />
+              <Stat value={teaser.trackedDays} label={t('creators.stat.trackedDays', { count: teaser.trackedDays })} />
             </View>
           </Card>
 
           <JoinCard
-            headline={`Unlock ${teaser.fullName ?? 'this creator'}’s full profile`}
-            body="Create a free account to read their protocols, follow their challenges and see their recent sleep, activity and recovery."
+            headline={
+              teaser.fullName
+                ? t('creators.teaser.unlockHeadline', { name: teaser.fullName })
+                : t('creators.teaser.unlockHeadlineAnon')
+            }
+            body={t('creators.teaser.joinBody')}
           />
         </>
       ) : null}

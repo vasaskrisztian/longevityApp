@@ -1,25 +1,55 @@
+import { t } from '@/src/i18n';
 import type { CreateGroupChallengeInput, GroupChallengeMode, GroupChallengeType } from '@/src/api/groups';
 
 /** Metrics whose results can be added up across people (sleep scores cannot). */
 export const COLLECTIVE_TYPES: GroupChallengeType[] = ['DAILY_STEPS', 'WEEKLY_WORKOUTS', 'VIDEO_SESSIONS'];
 
-export const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, { typeLabel: string; label: string; hint: string; default: string }>> = {
+export interface CollectiveField {
+  typeLabel: string;
+  label: string;
+  hint: string;
+  default: string;
+}
+
+/**
+ * Texts of the team-total form fields. The texts are getters, so they are
+ * translated when a screen reads them (never frozen at import time).
+ */
+export const COLLECTIVE_FIELDS: Partial<Record<GroupChallengeType, CollectiveField>> = {
   DAILY_STEPS: {
-    typeLabel: 'Steps',
-    label: 'Team total of steps',
-    hint: 'All steps of everyone who joins are added up between the first and the last day — there is no daily target, only the total counts.',
+    get typeLabel() {
+      return t('wellbeing.form.steps.typeLabel');
+    },
+    get label() {
+      return t('wellbeing.form.steps.label');
+    },
+    get hint() {
+      return t('wellbeing.form.steps.hint');
+    },
     default: '100000',
   },
   WEEKLY_WORKOUTS: {
-    typeLabel: 'Workouts',
-    label: 'Team total of workouts',
-    hint: 'All workouts of everyone who joins are added up between the first and the last day — there is no weekly target, only the total counts.',
+    get typeLabel() {
+      return t('wellbeing.form.workouts.typeLabel');
+    },
+    get label() {
+      return t('wellbeing.form.workouts.label');
+    },
+    get hint() {
+      return t('wellbeing.form.workouts.hint');
+    },
     default: '40',
   },
   VIDEO_SESSIONS: {
-    typeLabel: 'Video',
-    label: 'Team total of video sessions',
-    hint: 'Everyone who joins watches the video to the end; each person can add one session per day. The sessions of the whole team are added up.',
+    get typeLabel() {
+      return t('wellbeing.form.video.typeLabel');
+    },
+    get label() {
+      return t('wellbeing.form.video.label');
+    },
+    get hint() {
+      return t('wellbeing.form.video.hint');
+    },
     default: '100',
   },
 };
@@ -102,13 +132,13 @@ const isPositiveInt = (value: number) => Number.isInteger(value) && value >= 1;
 /** Field errors for the goal part of the form (the dates and name are checked by the screen). */
 export function validateGoal(values: ChallengeFormValues): Record<string, string> {
   const errors: Record<string, string> = {};
-  const message = 'Enter a whole number, at least 1.';
+  const message = t('wellbeing.form.wholeNumber');
   if (values.type === 'VIDEO_SESSIONS') {
-    if (!values.videoUrl?.trim()) errors.videoUrl = 'Paste the YouTube link of the video.';
-    else if (!looksLikeYouTubeUrl(values.videoUrl)) errors.videoUrl = 'This is not a YouTube video link.';
+    if (!values.videoUrl?.trim()) errors.videoUrl = t('wellbeing.form.videoUrlRequired');
+    else if (!looksLikeYouTubeUrl(values.videoUrl)) errors.videoUrl = t('wellbeing.form.videoUrlInvalid');
     // Optional: left empty, the server reads the length from YouTube.
     if (values.videoDuration?.trim() && parseVideoDuration(values.videoDuration) === null) {
-      errors.videoDuration = 'Enter the length as m:ss, for example 5:00 — or leave it empty.';
+      errors.videoDuration = t('wellbeing.form.videoDurationInvalid');
     }
   }
   if (values.mode === 'COLLECTIVE') {

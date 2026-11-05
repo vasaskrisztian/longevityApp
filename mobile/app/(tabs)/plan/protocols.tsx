@@ -13,9 +13,10 @@ import { ChipMultiSelect } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
 import { GoalsPanel } from '@/src/screens/GoalsPanel';
 import { describeSupplement } from '@/src/screens/supplementText';
+import { tDynamic, useT, type TFunction } from '@/src/i18n';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
-import { CreateProtocolSchema, type CreateProtocolInput } from '@/src/validation/schemas';
+import { CreateProtocolSchema, enumLabel, type CreateProtocolInput } from '@/src/validation/schemas';
 
 /**
  * Plan > Protocols and goals: list + inline add/edit form (name, description,
@@ -58,11 +59,11 @@ function protocolToFormState(protocol: Protocol): ProtocolFormState {
   };
 }
 
-function formatMinutes(totalMinutes: number | null): string | null {
+function formatMinutes(totalMinutes: number | null, t: TFunction): string | null {
   if (totalMinutes === null) return null;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return hours > 0 ? t('plan.duration.hoursMinutes', { hours, minutes }) : t('plan.duration.minutes', { minutes });
 }
 
 function ProtocolForm({
@@ -77,6 +78,7 @@ function ProtocolForm({
   onCancel?: () => void;
   onSaved: (data: CreateProtocolInput) => Promise<void>;
 }) {
+  const { t } = useT();
   const [form, setForm] = useState(initial);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -87,7 +89,7 @@ function ProtocolForm({
     if (!parsed.success) {
       setFieldErrors(
         Object.fromEntries(
-          Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
+          Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, tDynamic(v?.[0] ?? '')]),
         ),
       );
       return;
@@ -98,7 +100,7 @@ function ProtocolForm({
     try {
       await onSaved(parsed.data);
     } catch {
-      setServerError('Could not save. Please try again.');
+      setServerError(t('plan.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -108,17 +110,17 @@ function ProtocolForm({
     <Card style={styles.formCard}>
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
 
-      <TextField label="Protocol name" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />
+      <TextField label={t('plan.protocols.name')} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />
       <TextField
-        label="Description (optional)"
+        label={t('plan.field.descriptionOptional')}
         value={form.description}
         onChangeText={(v) => setForm({ ...form, description: v })}
       />
 
-      <Text style={styles.sectionLabel}>Targets</Text>
+      <Text style={styles.sectionLabel}>{t('plan.protocols.targets')}</Text>
       <View style={styles.row}>
         <TextField
-          label="Sleep score (0–100)"
+          label={t('plan.protocols.targetSleepScore')}
           keyboardType="numeric"
           style={styles.flex1}
           value={form.targetSleepScore}
@@ -126,7 +128,7 @@ function ProtocolForm({
           error={fieldErrors.targetSleepScore}
         />
         <TextField
-          label="Sleep duration (min)"
+          label={t('plan.protocols.targetSleepMinutes')}
           keyboardType="numeric"
           style={styles.flex1}
           value={form.targetSleepMinutes}
@@ -136,7 +138,7 @@ function ProtocolForm({
       </View>
       <View style={styles.row}>
         <TextField
-          label="Workouts / week"
+          label={t('plan.protocols.targetWeeklyWorkouts')}
           keyboardType="numeric"
           style={styles.flex1}
           value={form.targetWeeklyWorkouts}
@@ -144,7 +146,7 @@ function ProtocolForm({
           error={fieldErrors.targetWeeklyWorkouts}
         />
         <TextField
-          label="Active kcal / day"
+          label={t('plan.protocols.targetDailyCalories')}
           keyboardType="numeric"
           style={styles.flex1}
           value={form.targetDailyActiveCalories}
@@ -153,22 +155,22 @@ function ProtocolForm({
         />
       </View>
 
-      <Text style={styles.sectionLabel}>Supplements</Text>
+      <Text style={styles.sectionLabel}>{t('plan.protocols.supplements')}</Text>
       {supplements.length === 0 ? (
-        <Text style={styles.empty}>Your supplement list is empty. Add what you take there, then pick it here.</Text>
+        <Text style={styles.empty}>{t('plan.protocols.noSupplements')}</Text>
       ) : (
         <ChipMultiSelect
-          label="Part of this protocol"
+          label={t('plan.protocols.partOf')}
           options={supplements.map((s) => ({ value: s.id, label: s.name }))}
           values={form.supplementIds}
           onChange={(supplementIds) => setForm({ ...form, supplementIds })}
         />
       )}
-      <Button title="Manage my supplements" size="sm" variant="outline" onPress={() => router.push('/plan/supplements')} />
+      <Button title={t('plan.protocols.manageSupplements')} size="sm" variant="outline" onPress={() => router.push('/plan/supplements')} />
 
       <View style={styles.row}>
-        <Button title={submitting ? 'Saving…' : 'Save'} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
-        {onCancel ? <Button title="Cancel" size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
+        <Button title={submitting ? t('common.saving') : t('common.save')} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
+        {onCancel ? <Button title={t('common.cancel')} size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
       </View>
     </Card>
   );
@@ -197,6 +199,7 @@ function ProtocolRow({
   onGoalUpdated: (goal: Goal) => void;
   onGoalDeleted: (goalId: string) => void;
 }) {
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -209,7 +212,7 @@ function ProtocolRow({
   }
 
   async function handleDelete() {
-    if (!(await confirmDestructive(`Delete "${protocol.name}"?`, 'This protocol will be permanently deleted. This cannot be undone.'))) return;
+    if (!(await confirmDestructive(t('plan.deleteTitle', { name: protocol.name }), t('plan.protocols.deleteMessage')))) return;
     setDeleting(true);
     try {
       await deleteProtocol(protocol.id);
@@ -253,11 +256,12 @@ function ProtocolRow({
     );
   }
 
+  const sleepDuration = formatMinutes(protocol.targetSleepMinutes, t);
   const targets = [
-    protocol.targetSleepScore != null ? `Sleep score ≥ ${protocol.targetSleepScore}` : null,
-    formatMinutes(protocol.targetSleepMinutes) ? `Sleep ${formatMinutes(protocol.targetSleepMinutes)}` : null,
-    protocol.targetWeeklyWorkouts != null ? `${protocol.targetWeeklyWorkouts} workouts/week` : null,
-    protocol.targetDailyActiveCalories != null ? `${protocol.targetDailyActiveCalories} active kcal/day` : null,
+    protocol.targetSleepScore != null ? t('plan.protocols.summary.sleepScore', { value: protocol.targetSleepScore }) : null,
+    sleepDuration ? t('plan.protocols.summary.sleepDuration', { duration: sleepDuration }) : null,
+    protocol.targetWeeklyWorkouts != null ? t('plan.protocols.summary.workouts', { count: protocol.targetWeeklyWorkouts }) : null,
+    protocol.targetDailyActiveCalories != null ? t('plan.protocols.summary.calories', { count: protocol.targetDailyActiveCalories }) : null,
   ].filter(Boolean);
 
   return (
@@ -266,12 +270,12 @@ function ProtocolRow({
         <Text style={styles.rowTitle}>{protocol.name}</Text>
         {protocol.isActive ? (
           <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>Active</Text>
+            <Text style={styles.activeBadgeText}>{enumLabel('ACTIVE')}</Text>
           </View>
         ) : null}
         {protocol.visibility === 'PUBLIC' ? (
           <View style={styles.publicBadge}>
-            <Text style={styles.publicBadgeText}>Public</Text>
+            <Text style={styles.publicBadgeText}>{enumLabel('PUBLIC')}</Text>
           </View>
         ) : null}
       </View>
@@ -279,7 +283,7 @@ function ProtocolRow({
       {targets.length > 0 ? <Text style={styles.rowSubtitle}>{targets.join(' · ')}</Text> : null}
       {protocol.supplements.length > 0 ? (
         <View style={styles.supplementList}>
-          <Text style={styles.rowSubtitle}>Supplements</Text>
+          <Text style={styles.rowSubtitle}>{t('plan.protocols.supplements')}</Text>
           {protocol.supplements.map((s, i) => (
             <Text key={`${s.supplementId ?? s.name}-${i}`} style={styles.rowSubtitle}>
               • {s.name}
@@ -292,11 +296,11 @@ function ProtocolRow({
 
       <View style={styles.actionsStack}>
         {!protocol.isActive ? (
-          <Button title={activating ? 'Setting…' : 'Set as active'} size="sm" onPress={handleActivate} loading={activating} />
+          <Button title={activating ? t('plan.protocols.settingActive') : t('plan.protocols.setActive')} size="sm" onPress={handleActivate} loading={activating} />
         ) : null}
         {canPublish ? (
           <Button
-            title={togglingVisibility ? 'Updating…' : protocol.visibility === 'PUBLIC' ? 'Make private' : 'Publish publicly'}
+            title={togglingVisibility ? t('account.creator.updating') : protocol.visibility === 'PUBLIC' ? t('plan.makePrivate') : t('plan.publishPublicly')}
             size="sm"
             variant="outline"
             onPress={handleToggleVisibility}
@@ -304,14 +308,14 @@ function ProtocolRow({
           />
         ) : null}
         <View style={styles.row}>
-          <Button title="Edit" size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
-          <Button title={deleting ? 'Deleting…' : 'Delete'} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} style={styles.flex1} />
+          <Button title={t('common.edit')} size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} />
+          <Button title={deleting ? t('plan.deleting') : t('common.delete')} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} style={styles.flex1} />
         </View>
       </View>
 
       <View style={styles.goalsBlock}>
         <GoalsPanel
-          title="Goals of this protocol"
+          title={t('plan.protocols.goalsOfProtocol')}
           goals={goals}
           protocolId={protocol.id}
           onCreated={onGoalCreated}
@@ -324,12 +328,13 @@ function ProtocolRow({
 }
 
 export default function ProtocolsScreen() {
+  const { t } = useT();
   const [protocols, setProtocols] = useState<Protocol[] | null>(null);
   const [supplements, setSupplements] = useState<Supplement[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [canPublish, setCanPublish] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -344,7 +349,7 @@ export default function ProtocolsScreen() {
         setGoals(ownGoals);
         setCanPublish(status.canPublish);
       })
-      .catch(() => setError('Could not load your protocols.'));
+      .catch(() => setLoadFailed(true));
   }, []);
 
   async function handleCreate(data: CreateProtocolInput) {
@@ -361,7 +366,7 @@ export default function ProtocolsScreen() {
   if (!protocols) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {loadFailed ? <Alert variant="destructive">{t('plan.protocols.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -371,10 +376,10 @@ export default function ProtocolsScreen() {
       {adding ? (
         <ProtocolForm initial={EMPTY_FORM} supplements={supplements} onCancel={() => setAdding(false)} onSaved={handleCreate} />
       ) : (
-        <Button title="Add protocol" size="sm" onPress={() => setAdding(true)} />
+        <Button title={t('plan.protocols.add')} size="sm" onPress={() => setAdding(true)} />
       )}
 
-      {protocols.length === 0 && !adding ? <Text style={styles.empty}>No protocols yet.</Text> : null}
+      {protocols.length === 0 && !adding ? <Text style={styles.empty}>{t('plan.protocols.empty')}</Text> : null}
 
       {protocols.map((protocol) => (
         <ProtocolRow
@@ -401,7 +406,7 @@ export default function ProtocolsScreen() {
       {goalsWithoutProtocol.length > 0 || protocols.length === 0 ? (
         <Card>
           <GoalsPanel
-            title="Goals without a protocol"
+            title={t('plan.protocols.goalsWithout')}
             goals={goalsWithoutProtocol}
             protocolId={null}
             onCreated={addGoal}

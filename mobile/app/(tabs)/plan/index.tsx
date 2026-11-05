@@ -6,11 +6,13 @@ import { getProtocolOverlay, type ProtocolOverlay } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
 import { HubList } from '@/src/components/ui/HubRow';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { useT } from '@/src/i18n';
 import { protocolTargetLines } from '@/src/screens/protocolTargets';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { ScreenBackdrop } from '@/src/components/AppBackdrop';
 
 function FollowingCard() {
+  const { t } = useT();
   const [overlay, setOverlay] = useState<ProtocolOverlay | null | undefined>(undefined);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ function FollowingCard() {
 
   return (
     <Card style={styles.followingCard}>
-      <Text style={styles.followingLabel}>Currently following</Text>
+      <Text style={styles.followingLabel}>{t('nav.plan.following')}</Text>
       {protocol ? (
         <>
           <Text style={styles.followingTitle}>{protocol.name}</Text>
@@ -36,20 +38,21 @@ function FollowingCard() {
           ))}
         </>
       ) : (
-        <Text style={styles.followingText}>No active protocol yet. Open Protocols to pick or create one.</Text>
+        <Text style={styles.followingText}>{t('nav.plan.noActiveProtocol')}</Text>
       )}
     </Card>
   );
 }
 
 export default function PlanScreen() {
+  const { t } = useT();
   const isDesktop = useIsDesktop();
   const hub = (
     <HubList
       items={[
-        { label: 'Protocols and goals', description: 'The routine you follow, its daily targets and the goals behind it', icon: 'clipboard-outline', onPress: () => router.push('/plan/protocols') },
-        { label: 'Supplements', description: 'Everything you take; protocols pick from this list', icon: 'medkit-outline', onPress: () => router.push('/plan/supplements') },
-        { label: 'My challenges', description: 'Challenges you set for yourself', icon: 'trophy-outline', onPress: () => router.push('/plan/challenges') },
+        { label: t('nav.plan.protocols'), description: t('nav.plan.protocolsDescription'), icon: 'clipboard-outline', onPress: () => router.push('/plan/protocols') },
+        { label: t('nav.plan.supplements'), description: t('nav.plan.supplementsDescription'), icon: 'medkit-outline', onPress: () => router.push('/plan/supplements') },
+        { label: t('nav.plan.challenges'), description: t('nav.plan.challengesDescription'), icon: 'trophy-outline', onPress: () => router.push('/plan/challenges') },
       ]}
     />
   );
@@ -58,7 +61,7 @@ export default function PlanScreen() {
     <View style={styles.container}>
       <ScreenBackdrop />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.intro}>What you follow and what you aim for.</Text>
+      <Text style={styles.intro}>{t('nav.plan.intro')}</Text>
       {isDesktop ? (
         <View style={styles.columns}>
           <View style={styles.main}>{hub}</View>

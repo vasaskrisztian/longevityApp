@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
+  connectionStatusLabel,
   getAdminUserDetail,
   setAccountType,
   triggerSync,
@@ -15,8 +16,10 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { locale, t, useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
-import { displayName, formatDay, minutesToHoursLabel, providerLabel, timeAgo } from '@/src/wellbeing/format';
+import { enumLabel } from '@/src/validation/schemas';
+import { chartDayLabel, displayName, formatDay, minutesToHoursLabel, providerLabel, timeAgo } from '@/src/wellbeing/format';
 
 /**
  * Admin: ONE view of ONE person, whichever way the admin got here.
@@ -35,15 +38,8 @@ import { displayName, formatDay, minutesToHoursLabel, providerLabel, timeAgo } f
  */
 
 function formatDateTime(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : '—';
+  return iso ? new Date(iso).toLocaleString(locale()) : '—';
 }
-
-const CONNECTION_STATUS_LABEL: Record<string, string> = {
-  CONNECTED: 'Connected',
-  DISCONNECTED: 'Not connected',
-  AUTH_REQUIRED: 'Reconnect required',
-  ERROR: 'Connection error',
-};
 
 const CONNECTION_STATUS_COLOR: Record<string, string> = {
   CONNECTED: colors.success,
@@ -62,12 +58,20 @@ const SYNC_JOB_STATUS_COLOR: Record<string, string> = {
 
 type TriggerSyncState = 'idle' | 'submitting' | 'success' | 'rate_limited' | 'not_connected' | 'error';
 
-const TRIGGER_SYNC_MESSAGE: Partial<Record<TriggerSyncState, string>> = {
-  success: 'Sync queued. It will run in the background shortly.',
-  rate_limited: 'A sync was already triggered for this user in the last 5 minutes. Please wait before retrying.',
-  not_connected: 'This user has no connected Oura account to sync.',
-  error: 'Could not trigger a sync. Please try again.',
-};
+function triggerSyncMessage(state: TriggerSyncState): string {
+  switch (state) {
+    case 'success':
+      return t('admin.person.oura.queued');
+    case 'rate_limited':
+      return t('admin.person.oura.rateLimited');
+    case 'not_connected':
+      return t('admin.person.oura.notConnected');
+    case 'error':
+      return t('admin.person.oura.triggerFailed');
+    default:
+      return '';
+  }
+}
 
 function MetricStat({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
   return (
@@ -82,15 +86,20 @@ function MetricStat({ label, value, unit }: { label: string; value: number | nul
 }
 
 function AccountCard({ user }: { user: AdminUserDetail['user'] }) {
+  const { t } = useT();
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Account</Text>
-      <Text style={styles.fieldRow}>Email: {user.email}</Text>
-      <Text style={styles.fieldRow}>Role: {user.role}</Text>
-      <Text style={styles.fieldRow}>Status: {user.status}</Text>
-      <Text style={styles.fieldRow}>Email verified: {user.emailVerifiedAt ? formatDateTime(user.emailVerifiedAt) : 'No'}</Text>
-      <Text style={styles.fieldRow}>Last login: {formatDateTime(user.lastLoginAt)}</Text>
-      <Text style={styles.fieldRow}>Joined: {formatDateTime(user.createdAt)}</Text>
+      <Text style={styles.cardTitle}>{t('admin.person.account.title')}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.account.email', { value: user.email })}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.account.role', { value: user.role })}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.account.status', { value: user.status })}</Text>
+      <Text style={styles.fieldRow}>
+        {t('admin.person.account.emailVerified', {
+          value: user.emailVerifiedAt ? formatDateTime(user.emailVerifiedAt) : t('common.no'),
+        })}
+      </Text>
+      <Text style={styles.fieldRow}>{t('admin.person.account.lastLogin', { value: formatDateTime(user.lastLoginAt) })}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.account.joined', { value: formatDateTime(user.createdAt) })}</Text>
     </Card>
   );
 }
@@ -104,6 +113,7 @@ function CreatorStatusCard({
   accountType: string;
   onChanged: (next: AdminAccountType) => void;
 }) {
+  const { t } = useT();
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isCreator = accountType === 'CREATOR';
@@ -117,7 +127,7 @@ function CreatorStatusCard({
       const updated = await setAccountType(id, nextType);
       onChanged(updated);
     } catch {
-      setError('Could not update this account type. Please try again.');
+      setError(t('admin.person.creator.updateFailed'));
     } finally {
       setUpdating(false);
     }
@@ -125,17 +135,16 @@ function CreatorStatusCard({
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Creator status</Text>
-      <Text style={styles.fieldRow}>Account type: {accountType}</Text>
+      <Text style={styles.cardTitle}>{t('admin.person.creator.title')}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.creator.accountType', { value: accountType })}</Text>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {isCreator ? (
-        <Text style={styles.warningText}>
-          Revoking also disables their public profile and sets all their protocols/challenges back to Private
-          immediately.
-        </Text>
+        <Text style={styles.warningText}>{t('admin.person.creator.revokeWarning')}</Text>
       ) : null}
       <Button
-        title={updating ? 'Updating…' : isCreator ? 'Revoke creator status' : 'Grant creator status'}
+        title={
+          updating ? t('admin.person.creator.updating') : isCreator ? t('admin.person.creator.revoke') : t('admin.person.creator.grant')
+        }
         size="sm"
         variant={isCreator ? 'destructive' : 'primary'}
         onPress={handlePress}
@@ -146,6 +155,7 @@ function CreatorStatusCard({
 }
 
 function OuraConnectionCard({ id, detail }: { id: string; detail: AdminUserDetail }) {
+  const { t } = useT();
   const [state, setState] = useState<TriggerSyncState>('idle');
   const { connection, todaySnapshot } = detail;
 
@@ -158,16 +168,16 @@ function OuraConnectionCard({ id, detail }: { id: string; detail: AdminUserDetai
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Oura connection</Text>
+      <Text style={styles.cardTitle}>{t('admin.person.oura.title')}</Text>
       <Text style={[styles.statusBadge, { color: CONNECTION_STATUS_COLOR[connection.status] ?? colors.foreground }]}>
-        {CONNECTION_STATUS_LABEL[connection.status] ?? connection.status}
+        {connectionStatusLabel(connection.status)}
       </Text>
-      <Text style={styles.fieldRow}>Last sync: {formatDateTime(connection.lastSyncAt)}</Text>
+      <Text style={styles.fieldRow}>{t('admin.person.oura.lastSync', { value: formatDateTime(connection.lastSyncAt) })}</Text>
 
       {connection.status === 'CONNECTED' ? (
         <>
           <Button
-            title={state === 'submitting' ? 'Triggering…' : 'Trigger sync now'}
+            title={state === 'submitting' ? t('admin.person.oura.triggering') : t('admin.person.oura.trigger')}
             size="sm"
             variant="outline"
             onPress={handleTriggerSync}
@@ -175,43 +185,52 @@ function OuraConnectionCard({ id, detail }: { id: string; detail: AdminUserDetai
           />
           {state !== 'idle' && state !== 'submitting' ? (
             <Alert variant={state === 'success' ? 'success' : 'destructive'}>
-              {TRIGGER_SYNC_MESSAGE[state] ?? ''}
+              {triggerSyncMessage(state)}
             </Alert>
           ) : null}
         </>
       ) : (
-        <Text style={styles.mutedText}>This user has no connected Oura account to sync.</Text>
+        <Text style={styles.mutedText}>{t('admin.person.oura.notConnected')}</Text>
       )}
 
-      <Text style={styles.sectionSubtitle}>Today&apos;s / most recent snapshot</Text>
+      <Text style={styles.sectionSubtitle}>{t('admin.person.oura.snapshotTitle')}</Text>
       {todaySnapshot ? (
         <View style={styles.metricsGrid}>
-          <MetricStat label="Sleep score" value={todaySnapshot.sleepScore} />
-          <MetricStat label="Readiness score" value={todaySnapshot.readinessScore} />
-          <MetricStat label="Activity score" value={todaySnapshot.activityScore} />
-          <MetricStat label="Total sleep" value={todaySnapshot.totalSleepMinutes} unit="min" />
-          <MetricStat label="Resting HR" value={todaySnapshot.restingHeartRate} unit="bpm" />
-          <MetricStat label="Average HRV" value={todaySnapshot.averageHrv} unit="ms" />
-          <MetricStat label="Steps" value={todaySnapshot.steps} />
+          <MetricStat label={t('admin.person.metric.sleepScore')} value={todaySnapshot.sleepScore} />
+          <MetricStat label={t('admin.person.metric.readinessScore')} value={todaySnapshot.readinessScore} />
+          <MetricStat label={t('admin.person.metric.activityScore')} value={todaySnapshot.activityScore} />
+          <MetricStat label={t('admin.person.metric.totalSleep')} value={todaySnapshot.totalSleepMinutes} unit="min" />
+          <MetricStat label={t('admin.person.metric.restingHr')} value={todaySnapshot.restingHeartRate} unit="bpm" />
+          <MetricStat label={t('admin.person.metric.averageHrv')} value={todaySnapshot.averageHrv} unit="ms" />
+          <MetricStat label={t('admin.person.metric.steps')} value={todaySnapshot.steps} />
         </View>
       ) : (
-        <Text style={styles.mutedText}>No health metrics recorded for this user yet.</Text>
+        <Text style={styles.mutedText}>{t('admin.person.oura.noMetrics')}</Text>
       )}
     </Card>
   );
 }
 
 function SyncJobsCard({ jobs }: { jobs: AdminUserDetail['recentSyncJobs'] }) {
+  const { t } = useT();
+  const headers = [
+    t('admin.person.syncJobs.type'),
+    t('admin.person.syncJobs.status'),
+    t('admin.person.syncJobs.started'),
+    t('admin.person.syncJobs.finished'),
+    t('admin.person.syncJobs.records'),
+    t('admin.person.syncJobs.error'),
+  ];
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Recent sync jobs</Text>
+      <Text style={styles.cardTitle}>{t('admin.person.syncJobs.title')}</Text>
       {jobs.length === 0 ? (
-        <Text style={styles.mutedText}>No sync jobs recorded for this user yet.</Text>
+        <Text style={styles.mutedText}>{t('admin.person.syncJobs.empty')}</Text>
       ) : (
         <ScrollView horizontal style={styles.tableScroll}>
           <View>
             <View style={[styles.tableRow, styles.tableHeaderRow]}>
-              {['Type', 'Status', 'Started', 'Finished', 'Records', 'Error'].map((h) => (
+              {headers.map((h) => (
                 <Text key={h} style={styles.tableHeaderCell}>
                   {h}
                 </Text>
@@ -255,42 +274,41 @@ function Stat({ label, value, unit }: { label: string; value: number | string | 
   );
 }
 
-const CONNECTION_LABEL: Record<string, string> = {
-  CONNECTED: 'Connected',
-  DISCONNECTED: 'Not connected',
-  AUTH_REQUIRED: 'Reconnect required',
-  ERROR: 'Connection error',
-};
-
 
 type Segment = 'health' | 'devices' | 'account';
 
 /** Group-consented health: devices summary, today, 30-day charts, workouts. */
 function MemberHealthSection({ data }: { data: MemberHealth }) {
+  const { t, locale } = useT();
   const { snapshot, trend } = data;
-  const labels = trend.map((p) => formatDay(p.date).replace(/ \d{4}$/, ''));
+  const labels = trend.map((p) => chartDayLabel(p.date));
   const scoreSeries: LineChartSeries[] = [
-    { key: 'sleep', name: 'Sleep', color: SLEEP_COLOR, values: trend.map((p) => p.sleepScore) },
-    { key: 'readiness', name: 'Readiness', color: READINESS_COLOR, values: trend.map((p) => p.readinessScore) },
-    { key: 'activity', name: 'Activity', color: ACTIVITY_COLOR, values: trend.map((p) => p.activityScore) },
+    { key: 'sleep', name: t('admin.person.metric.sleep'), color: SLEEP_COLOR, values: trend.map((p) => p.sleepScore) },
+    { key: 'readiness', name: t('admin.person.metric.readiness'), color: READINESS_COLOR, values: trend.map((p) => p.readinessScore) },
+    { key: 'activity', name: t('admin.person.metric.activity'), color: ACTIVITY_COLOR, values: trend.map((p) => p.activityScore) },
   ];
   const hasTrend = trend.some((p) => p.sleepScore !== null || p.steps !== null || p.readinessScore !== null || p.activityScore !== null);
 
   return (
     <>
       <Card style={h.card}>
-        <Text style={h.cardTitle}>Devices</Text>
-        {data.connections.length === 0 ? <Text style={h.muted}>No device connected.</Text> : null}
+        <Text style={h.cardTitle}>{t('admin.person.health.devices')}</Text>
+        {data.connections.length === 0 ? <Text style={h.muted}>{t('admin.person.health.noDevice')}</Text> : null}
         {data.connections.map((connection) => (
           <Text key={connection.provider} style={h.body}>
-            {providerLabel(connection.provider)} · {CONNECTION_LABEL[connection.status] ?? connection.status} ·{' '}
-            {connection.lastSyncAt ? `last sync ${timeAgo(connection.lastSyncAt)}` : 'never synced'}
+            {t('admin.person.health.deviceLine', {
+              provider: providerLabel(connection.provider),
+              status: connectionStatusLabel(connection.status),
+              sync: connection.lastSyncAt
+                ? t('admin.person.health.lastSync', { when: timeAgo(connection.lastSyncAt) })
+                : t('admin.person.health.neverSynced'),
+            })}
           </Text>
         ))}
       </Card>
 
       <Card style={h.card}>
-        <Text style={h.cardTitle}>{snapshot?.isToday ? 'Today' : 'Most recent day'}</Text>
+        <Text style={h.cardTitle}>{snapshot?.isToday ? t('admin.person.health.today') : t('admin.person.health.mostRecentDay')}</Text>
         {snapshot ? (
           <>
             <Text style={h.muted}>
@@ -298,25 +316,28 @@ function MemberHealthSection({ data }: { data: MemberHealth }) {
               {snapshot.sourceProviders.length ? ` · ${snapshot.sourceProviders.map(providerLabel).join(', ')}` : ''}
             </Text>
             <View style={h.grid}>
-              <Stat label="Sleep score" value={snapshot.sleepScore} />
-              <Stat label="Readiness" value={snapshot.readinessScore} />
-              <Stat label="Activity" value={snapshot.activityScore} />
-              <Stat label="Sleep" value={snapshot.totalSleepMinutes === null ? null : minutesToHoursLabel(snapshot.totalSleepMinutes)} />
-              <Stat label="Resting HR" value={snapshot.restingHeartRate} unit="bpm" />
-              <Stat label="HRV" value={snapshot.averageHrv} unit="ms" />
-              <Stat label="Steps" value={snapshot.steps} />
-              <Stat label="Active kcal" value={snapshot.activeCalories} />
+              <Stat label={t('admin.person.metric.sleepScore')} value={snapshot.sleepScore} />
+              <Stat label={t('admin.person.metric.readiness')} value={snapshot.readinessScore} />
+              <Stat label={t('admin.person.metric.activity')} value={snapshot.activityScore} />
+              <Stat
+                label={t('admin.person.metric.sleep')}
+                value={snapshot.totalSleepMinutes === null ? null : minutesToHoursLabel(snapshot.totalSleepMinutes)}
+              />
+              <Stat label={t('admin.person.metric.restingHr')} value={snapshot.restingHeartRate} unit="bpm" />
+              <Stat label={t('admin.person.metric.hrv')} value={snapshot.averageHrv} unit="ms" />
+              <Stat label={t('admin.person.metric.steps')} value={snapshot.steps} />
+              <Stat label={t('admin.person.metric.activeKcal')} value={snapshot.activeCalories} />
             </View>
           </>
         ) : (
-          <Text style={h.muted}>No health data recorded yet.</Text>
+          <Text style={h.muted}>{t('admin.person.health.noData')}</Text>
         )}
       </Card>
 
       {hasTrend ? (
         <>
           <Card style={h.card}>
-            <Text style={h.cardTitle}>Scores — last 30 days</Text>
+            <Text style={h.cardTitle}>{t('admin.person.health.scores30')}</Text>
             <LineChart labels={labels} series={scoreSeries} yMin={0} yMax={100} />
             <View style={h.legend}>
               {scoreSeries.map((s) => (
@@ -328,10 +349,10 @@ function MemberHealthSection({ data }: { data: MemberHealth }) {
             </View>
           </Card>
           <Card style={h.card}>
-            <Text style={h.cardTitle}>Steps — last 30 days</Text>
+            <Text style={h.cardTitle}>{t('admin.person.health.steps30')}</Text>
             <LineChart
               labels={labels}
-              series={[{ key: 'steps', name: 'Steps', color: SLEEP_COLOR, values: trend.map((p) => p.steps) }]}
+              series={[{ key: 'steps', name: t('admin.person.metric.steps'), color: SLEEP_COLOR, values: trend.map((p) => p.steps) }]}
               yMin={0}
             />
           </Card>
@@ -339,19 +360,19 @@ function MemberHealthSection({ data }: { data: MemberHealth }) {
       ) : null}
 
       <Card style={h.card}>
-        <Text style={h.cardTitle}>Workouts</Text>
+        <Text style={h.cardTitle}>{t('admin.person.health.workouts')}</Text>
         <Text style={h.body}>
-          {data.weeklyWorkouts} in the last 7 days{' '}
-          <Text style={h.muted}>(sessions of at least 10 minutes; auto-detected walks are not counted)</Text>
+          {t('admin.person.health.workoutsWeek', { count: data.weeklyWorkouts })}{' '}
+          <Text style={h.muted}>{t('admin.person.health.workoutsNote')}</Text>
         </Text>
-        {data.recentWorkouts.length === 0 ? <Text style={h.muted}>No workouts in the last 14 days.</Text> : null}
+        {data.recentWorkouts.length === 0 ? <Text style={h.muted}>{t('admin.person.health.noWorkouts')}</Text> : null}
         {data.recentWorkouts.map((workout, index) => (
           <View key={`${workout.startedAt}-${index}`} style={h.workoutRow}>
             <Text style={[h.body, h.flex]}>
-              {workout.activityType.replace(/_/g, ' ')} · {workout.durationMin} min
+              {t('admin.person.health.workoutLine', { activity: enumLabel(workout.activityType), minutes: workout.durationMin })}
             </Text>
             <Text style={h.muted}>
-              {new Date(workout.startedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ·{' '}
+              {new Date(workout.startedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ·{' '}
               {providerLabel(workout.provider)}
               {workout.source ? ` (${workout.source})` : ''}
             </Text>
@@ -363,32 +384,32 @@ function MemberHealthSection({ data }: { data: MemberHealth }) {
 }
 
 /** What the account detail alone can say about health: the latest snapshot. */
-function SnapshotSection({ detail }: { detail: AdminUserDetail } ) {
+function SnapshotSection({ detail }: { detail: AdminUserDetail }) {
+  const { t } = useT();
   const snapshot = detail.todaySnapshot;
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>{snapshot?.isToday ? 'Today' : 'Most recent day'}</Text>
+      <Text style={styles.cardTitle}>{snapshot?.isToday ? t('admin.person.health.today') : t('admin.person.health.mostRecentDay')}</Text>
       {snapshot ? (
         <View style={styles.metricsGrid}>
-          <MetricStat label="Sleep score" value={snapshot.sleepScore} />
-          <MetricStat label="Readiness score" value={snapshot.readinessScore} />
-          <MetricStat label="Activity score" value={snapshot.activityScore} />
-          <MetricStat label="Total sleep" value={snapshot.totalSleepMinutes} unit="min" />
-          <MetricStat label="Resting HR" value={snapshot.restingHeartRate} unit="bpm" />
-          <MetricStat label="Average HRV" value={snapshot.averageHrv} unit="ms" />
-          <MetricStat label="Steps" value={snapshot.steps} />
+          <MetricStat label={t('admin.person.metric.sleepScore')} value={snapshot.sleepScore} />
+          <MetricStat label={t('admin.person.metric.readinessScore')} value={snapshot.readinessScore} />
+          <MetricStat label={t('admin.person.metric.activityScore')} value={snapshot.activityScore} />
+          <MetricStat label={t('admin.person.metric.totalSleep')} value={snapshot.totalSleepMinutes} unit="min" />
+          <MetricStat label={t('admin.person.metric.restingHr')} value={snapshot.restingHeartRate} unit="bpm" />
+          <MetricStat label={t('admin.person.metric.averageHrv')} value={snapshot.averageHrv} unit="ms" />
+          <MetricStat label={t('admin.person.metric.steps')} value={snapshot.steps} />
         </View>
       ) : (
-        <Text style={styles.mutedText}>No health metrics recorded for this person yet.</Text>
+        <Text style={styles.mutedText}>{t('admin.person.health.snapshotNoMetrics')}</Text>
       )}
-      <Text style={styles.mutedText}>
-        Trends and workouts are visible only through a group the person has joined and consented to share with.
-      </Text>
+      <Text style={styles.mutedText}>{t('admin.person.health.snapshotNote')}</Text>
     </Card>
   );
 }
 
 export default function PersonScreen({ userId, groupId }: { userId: string; groupId?: string }) {
+  const { t } = useT();
   const inGroup = Boolean(groupId);
   const [segment, setSegment] = useState<Segment>('health');
   const [member, setMember] = useState<MemberHealth | null>(null);
@@ -401,14 +422,14 @@ export default function PersonScreen({ userId, groupId }: { userId: string; grou
     if (!groupId) return;
     getGroupMemberHealth(groupId, userId)
       .then(setMember)
-      .catch(() => setMemberError('Could not load this member’s data. They may have left the group.'));
-  }, [groupId, userId]);
+      .catch(() => setMemberError(t('admin.person.memberLoadFailed')));
+  }, [groupId, userId, t]);
 
   const loadDetail = useCallback(() => {
     getAdminUserDetail(userId)
       .then(setDetail)
-      .catch(() => setDetailError('Could not load this person’s account.'));
-  }, [userId]);
+      .catch(() => setDetailError(t('admin.person.accountLoadFailed')));
+  }, [userId, t]);
 
   useEffect(() => {
     if (detailRequested) loadDetail();
@@ -439,7 +460,7 @@ export default function PersonScreen({ userId, groupId }: { userId: string; grou
       ) : detail ? (
         <SnapshotSection detail={detail} />
       ) : detail === null ? (
-        <Alert variant="destructive">This person could not be found.</Alert>
+        <Alert variant="destructive">{t('admin.person.notFound')}</Alert>
       ) : (
         <ActivityIndicator color={colors.primary.default} />
       );
@@ -449,7 +470,7 @@ export default function PersonScreen({ userId, groupId }: { userId: string; grou
   } else if (detailPending) {
     body = <ActivityIndicator color={colors.primary.default} />;
   } else if (detail === null) {
-    body = <Alert variant="destructive">This person could not be found.</Alert>;
+    body = <Alert variant="destructive">{t('admin.person.notFound')}</Alert>;
   } else if (detail) {
     body =
       segment === 'devices' ? (
@@ -476,15 +497,15 @@ export default function PersonScreen({ userId, groupId }: { userId: string; grou
       <ScreenBackdrop />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <View>
-          <Text style={h.title}>{name || 'Person'}</Text>
+          <Text style={h.title}>{name || t('admin.person.fallbackName')}</Text>
           {email ? <Text style={h.muted}>{email}</Text> : null}
-          {member ? <Text style={h.muted}>In the group since {formatDay(member.member.joinedAt.slice(0, 10))}</Text> : null}
+          {member ? <Text style={h.muted}>{t('admin.person.groupSince', { date: formatDay(member.member.joinedAt.slice(0, 10)) })}</Text> : null}
         </View>
         <SegmentedControl
           options={[
-            { value: 'health', label: 'Health' },
-            { value: 'devices', label: 'Devices' },
-            { value: 'account', label: 'Account' },
+            { value: 'health', label: t('admin.person.segment.health') },
+            { value: 'devices', label: t('admin.person.segment.devices') },
+            { value: 'account', label: t('admin.person.segment.account') },
           ]}
           value={segment}
           onChange={select}

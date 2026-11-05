@@ -4,13 +4,14 @@ import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { useSession } from '@/src/auth/useSession';
 import { InfoTipHost } from '@/src/components/ui/InfoTipHost';
+import { loadStoredLanguage, useT } from '@/src/i18n';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -41,7 +42,17 @@ export default function RootLayout() {
     Fraunces_600SemiBold,
   });
   const { status } = useSession();
-  const ready = fontsLoaded && status !== 'loading';
+  const { t, language } = useT();
+  // The language chosen on this device earlier is restored before the first screen is drawn
+  // (once signed in, the account's own language replaces it — see auth/sessionStore.ts).
+  const [languageLoaded, setLanguageLoaded] = useState(false);
+  useEffect(() => {
+    loadStoredLanguage().finally(() => setLanguageLoaded(true));
+  }, []);
+  useEffect(() => {
+    if (Platform.OS === 'web') globalThis.document?.documentElement?.setAttribute('lang', language);
+  }, [language]);
+  const ready = fontsLoaded && languageLoaded && status !== 'loading';
 
   useEffect(() => {
     if (ready) {
@@ -75,7 +86,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="onboarding"
             options={{
-              title: 'Set up your profile',
+              title: t('onboarding.screenTitle'),
               headerStyle: { backgroundColor: colors.card.default },
               headerTitleStyle: { fontFamily: fontFamily.sansSemibold },
               headerShadowVisible: false,

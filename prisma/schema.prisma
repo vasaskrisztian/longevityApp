@@ -249,6 +249,11 @@ model User {
   role             UserRole   @default(USER)
   status           UserStatus @default(ACTIVE)
 
+  // Preferred interface language ('en' | 'hu' | 'de'): chosen at registration,
+  // changeable under Me > Account. Drives the app's language and the language
+  // of emails and notifications sent to this person (src/lib/i18n).
+  language         String     @default("en")
+
   // Phase 13: see the AccountType/Visibility doc comments above. A MEMBER
   // can follow CREATORs and upload their own data like anyone else — this
   // field only governs whether THIS account's own content can ever be made

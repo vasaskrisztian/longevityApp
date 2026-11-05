@@ -17,6 +17,7 @@ import { getProfileBundle } from '@/src/api/profile';
 import { AppBackdrop } from '@/src/components/AppBackdrop';
 import { DesktopShell } from '@/src/components/DesktopShell';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { useT } from '@/src/i18n';
 
 // On the web the decorative backdrop sits behind the whole content area, so
 // the navigators in this subtree must not paint their own opaque scene
@@ -50,6 +51,7 @@ export default function TabLayout() {
   // Root _layout.tsx's `ready` gate already waits out `status === 'loading'`
   // before anything in this tree mounts, so by the time this runs status is
   // settled one way or the other.
+  const { t } = useT();
   const { status, user } = useSession();
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
@@ -134,21 +136,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
+          title: t('nav.tab.today'),
           tabBarIcon: ({ color, size }) => <Ionicons name="sunny-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="plan"
         options={{
-          title: 'Plan',
+          title: t('nav.tab.plan'),
           tabBarIcon: ({ color, size }) => <Ionicons name="clipboard-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="community"
         options={{
-          title: 'Community',
+          title: t('nav.tab.community'),
           tabBarBadge: pendingInvitations > 0 ? pendingInvitations : undefined,
           tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
         }}
@@ -156,16 +158,16 @@ export default function TabLayout() {
       <Tabs.Screen
         name="me"
         options={{
-          title: 'Me',
+          title: t('nav.tab.me'),
           tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" size={size} color={color} />,
         }}
       />
       {/* Notifications is reached from the bell in every header, not from the tab bar. */}
-      <Tabs.Screen name="notifications" options={{ title: 'Notifications', href: null }} />
+      <Tabs.Screen name="notifications" options={{ title: t('nav.tab.notifications'), href: null }} />
       <Tabs.Screen
         name="admin"
         options={{
-          title: 'Admin',
+          title: t('nav.tab.admin'),
           href: user?.role === 'ADMIN' ? undefined : null,
           tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark-outline" size={size} color={color} />,
         }}

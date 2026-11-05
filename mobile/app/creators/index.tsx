@@ -9,6 +9,7 @@ import { useSession } from '@/src/auth/useSession';
 import { JoinCard, PublicLayout } from '@/src/components/PublicLayout';
 import { Alert } from '@/src/components/ui/Alert';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
@@ -18,18 +19,19 @@ import { colors, fontFamily } from '@/src/theme/tokens';
  */
 
 function Row({ creator }: { creator: CreatorDirectoryItem }) {
+  const { t, locale } = useT();
   return (
     <Pressable onPress={() => router.push(`/creators/${creator.id}`)} accessibilityRole="link">
       <Card style={styles.row}>
         <View style={styles.rowText}>
-          <Text style={styles.rowTitle}>{creator.fullName ?? 'Creator'}</Text>
+          <Text style={styles.rowTitle}>{creator.fullName ?? t('creators.fallbackName')}</Text>
           <Text style={styles.rowSubtitle}>
-            Member since {new Date(creator.memberSince).toLocaleDateString()} · {creator.followerCount} follower
-            {creator.followerCount === 1 ? '' : 's'}
+            {t('creators.memberSince', { date: new Date(creator.memberSince).toLocaleDateString(locale) })} ·{' '}
+            {t('creators.followers', { count: creator.followerCount })}
           </Text>
           <Text style={styles.rowSubtitle}>
-            {creator.publicProtocolCount} protocol{creator.publicProtocolCount === 1 ? '' : 's'} ·{' '}
-            {creator.publicChallengeCount} challenge{creator.publicChallengeCount === 1 ? '' : 's'}
+            {t('creators.protocols', { count: creator.publicProtocolCount })} ·{' '}
+            {t('creators.challenges', { count: creator.publicChallengeCount })}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.muted.foreground} />
@@ -39,15 +41,16 @@ function Row({ creator }: { creator: CreatorDirectoryItem }) {
 }
 
 export default function PublicCreatorsScreen() {
+  const { t } = useT();
   const { status } = useSession();
   const [creators, setCreators] = useState<CreatorDirectoryItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (status === 'signedIn') return;
     getPublicCreatorDirectory()
       .then(setCreators)
-      .catch(() => setError('Could not load the creators directory.'));
+      .catch(() => setError(true));
   }, [status]);
 
   if (status === 'signedIn') return <Redirect href="/community/browse" />;
@@ -55,18 +58,18 @@ export default function PublicCreatorsScreen() {
   return (
     <PublicLayout>
       <View style={styles.intro}>
-        <Text style={styles.heading}>Creators</Text>
-        <Text style={styles.lede}>Meet the people sharing how they train, sleep and recover.</Text>
+        <Text style={styles.heading}>{t('creators.public.heading')}</Text>
+        <Text style={styles.lede}>{t('creators.public.lede')}</Text>
       </View>
 
-      {error ? <Alert variant="destructive">{error}</Alert> : null}
+      {error ? <Alert variant="destructive">{t('creators.directory.loadFailed')}</Alert> : null}
       {!creators && !error ? <ActivityIndicator color={colors.primary.default} /> : null}
-      {creators?.length === 0 ? <Text style={styles.empty}>No creators are publishing publicly yet.</Text> : null}
+      {creators?.length === 0 ? <Text style={styles.empty}>{t('creators.directory.empty')}</Text> : null}
       {creators?.map((creator) => <Row key={creator.id} creator={creator} />)}
 
       <JoinCard
-        headline="See what they actually do"
-        body="Create a free account to read their protocols, follow their challenges and track your own progress alongside them."
+        headline={t('creators.public.joinHeadline')}
+        body={t('creators.public.joinBody')}
       />
     </PublicLayout>
   );

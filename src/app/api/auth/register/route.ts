@@ -1,3 +1,5 @@
+import { normalizeLanguage, type Language } from '@/lib/i18n/languages';
+import { verificationEmail } from '@/lib/email/templates';
 import { RegisterSchema } from '@/lib/validation/auth.schemas';
 import { registerUser, EmailAlreadyRegisteredError } from '@/modules/auth/auth.service';
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
@@ -9,15 +11,10 @@ import { InvitationError } from '@/modules/groups/invitations.service';
 // console-log fallback when RESEND_API_KEY isn't configured) — this
 // function only owns the email's actual copy. The verification link must
 // never be returned in the HTTP response body, only delivered by email.
-async function sendVerificationEmail(email: string, token: string) {
+async function sendVerificationEmail(email: string, token: string, language: Language) {
   const verifyUrl = `${process.env.APP_URL ?? ''}/api/auth/verify-email?token=${token}`;
   logger.info('verification_email_dispatched', { emailDomain: email.split('@')[1] ?? '' });
-  await sendEmail({
-    to: email,
-    subject: 'Confirm your email — Longevity Klub',
-    html: `<p>Welcome to Longevity Klub! Confirm your email address to finish creating your account:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>`,
-    text: `Welcome to Longevity Klub! Confirm your email address to finish creating your account:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create this account, you can ignore this email.`,
-  });
+  await sendEmail({ to: email, ...verificationEmail(language, verifyUrl) });
 }
 
 function invitationErrorMessage(error: InvitationError): string {
@@ -55,7 +52,7 @@ export async function POST(request: Request) {
     // Resend actually completes. No token = registered from a group
     // invitation, which already proved the address (account is verified).
     if (verificationToken) {
-      await sendVerificationEmail(parsed.data.email, verificationToken);
+      await sendVerificationEmail(parsed.data.email, verificationToken, normalizeLanguage(parsed.data.language));
     } else {
       return Response.json({ message: 'Account created.', verified: true }, { status: 201 });
     }

@@ -5,6 +5,9 @@
  * end-of-challenge notifications show is derived here, so they cannot disagree.
  */
 
+import { DEFAULT_LANGUAGE, type Language } from '@/lib/i18n/languages';
+import { lowerFirst, st } from '@/lib/i18n/messages';
+
 export type GroupChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS' | 'VIDEO_SESSIONS';
 export type GroupChallengeMode = 'INDIVIDUAL' | 'COLLECTIVE';
 export type GroupChallengeStatus = 'UPCOMING' | 'ACTIVE' | 'ENDED';
@@ -161,56 +164,58 @@ export function goalReachedNotification(params: {
   daysRemaining: number;
   /** The admin who set the challenge gets a slightly different line than the participants. */
   audience: 'participant' | 'creator';
+  language?: Language;
 }): { title: string; body: string } {
+  const language = params.language ?? DEFAULT_LANGUAGE;
   const { collective } = params;
-  const total = describeCollectiveAmount(params.type, collective.total);
-  const target = formatNumber(collective.targetTotal);
+  const total = describeCollectiveAmount(params.type, collective.total, language);
+  const target = formatNumber(collective.targetTotal, language);
   const left =
     params.daysRemaining <= 1
-      ? 'on the last day'
-      : `with ${params.daysRemaining} days still to go`;
+      ? st(language, 'notif.goal.lastDay')
+      : st(language, 'notif.goal.daysToGo', { days: params.daysRemaining });
+  const common = { group: params.groupName, name: params.name, total, target, left };
   return {
-    title: `Team goal reached: ${params.name}`,
-    body:
-      params.audience === 'participant'
-        ? `${params.groupName} — together you have added up ${total} (target ${target}) ${left}. Thank you for taking part — keep going if you like, everything you add still counts towards the final result.`
-        : `${params.groupName} — the team has reached the target of "${params.name}": ${total} of ${target} ${left}.`,
+    title: st(language, 'notif.goal.title', { name: params.name }),
+    body: st(language, params.audience === 'participant' ? 'notif.goal.participant' : 'notif.goal.creator', common),
   };
 }
 
-const formatNumber = (value: number) => value.toLocaleString('en-US').replace(/,/g, ' ');
+/** 100000 → "100 000" (English / Hungarian: plain space, German: dot). */
+const formatNumber = (value: number, language: Language = DEFAULT_LANGUAGE) =>
+  value.toLocaleString('en-US').replace(/,/g, language === 'de' ? '.' : ' ');
 
 /** "100 000 steps" / "40 workouts" — the unit of a team total. */
-export function describeCollectiveAmount(type: GroupChallengeType, amount: number): string {
-  const word =
-    type === 'DAILY_STEPS'
-      ? 'steps'
-      : type === 'VIDEO_SESSIONS'
-        ? amount === 1
-          ? 'video session'
-          : 'video sessions'
-        : amount === 1
-          ? 'workout'
-          : 'workouts';
-  return `${formatNumber(amount)} ${word}`;
+export function describeCollectiveAmount(type: GroupChallengeType, amount: number, language: Language = DEFAULT_LANGUAGE): string {
+  const key = type === 'DAILY_STEPS' ? 'challenge.unit.steps' : type === 'VIDEO_SESSIONS' ? 'challenge.unit.videoSession' : 'challenge.unit.workout';
+  return st(language, key, { amount: formatNumber(amount, language), count: amount });
 }
 
 /** "Together reach 100 000 steps" — what a COLLECTIVE challenge asks for. */
-export function describeCollectiveTarget(type: GroupChallengeType, targetTotal: number): string {
-  return `Together reach ${describeCollectiveAmount(type, targetTotal)}`;
+export function describeCollectiveTarget(type: GroupChallengeType, targetTotal: number, language: Language = DEFAULT_LANGUAGE): string {
+  return st(language, 'challenge.target.collective', { amount: describeCollectiveAmount(type, targetTotal, language) });
 }
 
 /** "5 nights with a sleep score above 80" — what the challenge asks for. */
-export function describeChallengeTarget(type: GroupChallengeType, threshold: number, requiredCount: number): string {
+export function describeChallengeTarget(
+  type: GroupChallengeType,
+  threshold: number,
+  requiredCount: number,
+  language: Language = DEFAULT_LANGUAGE,
+): string {
   switch (type) {
     case 'SLEEP_SCORE':
-      return `${requiredCount} ${requiredCount === 1 ? 'night' : 'nights'} with a sleep score above ${threshold}`;
+      return st(language, 'challenge.target.sleep', { count: requiredCount, threshold });
     case 'DAILY_STEPS':
-      return `${requiredCount} ${requiredCount === 1 ? 'day' : 'days'} with more than ${threshold} steps`;
+      return st(language, 'challenge.target.steps', { count: requiredCount, threshold });
     case 'WEEKLY_WORKOUTS':
-      return `${requiredCount} ${requiredCount === 1 ? 'week' : 'weeks'} with more than ${threshold} ${threshold === 1 ? 'workout' : 'workouts'}`;
+      return st(language, 'challenge.target.workouts', {
+        count: requiredCount,
+        threshold,
+        workouts: st(language, 'challenge.word.workout', { count: threshold }),
+      });
     case 'VIDEO_SESSIONS':
-      return `Watch the video to the end on ${requiredCount} ${requiredCount === 1 ? 'day' : 'days'}`;
+      return st(language, 'challenge.target.video', { count: requiredCount });
   }
 }
 
@@ -227,30 +232,21 @@ export function newChallengeNotification(params: {
   targetTotal?: number | null;
   startsAt: Date;
   endsAt: Date;
+  language?: Language;
 }): { title: string; body: string } {
-  const range = `from ${formatDay(params.startsAt)} to ${formatDay(params.endsAt)}`;
-  if (params.mode === 'COLLECTIVE' && params.targetTotal) {
-    if (params.type === 'VIDEO_SESSIONS') {
-      return {
-        title: `New team video challenge: ${params.name}`,
-        body: `${params.groupName} started a team video challenge — ${describeCollectiveTarget(params.type, params.targetTotal).toLowerCase()}, ${range}. Watch the video to the end (once a day counts) to add to the shared total. Join it from the Wellbeing page if you want to take part.`,
-      };
-    }
-    return {
-      title: `New team challenge: ${params.name}`,
-      body: `${params.groupName} started a team challenge — ${describeCollectiveTarget(params.type, params.targetTotal).toLowerCase()}, ${range}. Everyone who joins adds to the shared total. Join it from the Wellbeing page if you want to take part.`,
-    };
-  }
-  if (params.type === 'VIDEO_SESSIONS') {
-    return {
-      title: `New video challenge: ${params.name}`,
-      body: `${params.groupName} started a video challenge — ${describeChallengeTarget(params.type, params.threshold, params.requiredCount).toLowerCase()}, ${range}. Join it from the Wellbeing page if you want to take part.`,
-    };
-  }
-  return {
-    title: `New group challenge: ${params.name}`,
-    body: `${params.groupName} started a challenge — ${describeChallengeTarget(params.type, params.threshold, params.requiredCount)}, ${range}. Join it from the Wellbeing page if you want to take part.`,
-  };
+  const language = params.language ?? DEFAULT_LANGUAGE;
+  const range = st(language, 'challenge.range', { from: formatDay(params.startsAt), to: formatDay(params.endsAt) });
+  const common = { group: params.groupName, name: params.name, range };
+  const collective = params.mode === 'COLLECTIVE' && params.targetTotal;
+  const kind = collective ? (params.type === 'VIDEO_SESSIONS' ? 'teamVideo' : 'team') : params.type === 'VIDEO_SESSIONS' ? 'video' : 'group';
+  const target = lowerFirst(
+    collective
+      ? describeCollectiveTarget(params.type, params.targetTotal as number, language)
+      : describeChallengeTarget(params.type, params.threshold, params.requiredCount, language),
+  );
+  const title = `notif.new.${kind}.title` as const;
+  const body = `notif.new.${kind}.body` as const;
+  return { title: st(language, title, common), body: st(language, body, { ...common, target }) };
 }
 
 export function collectiveParticipantSummaryNotification(params: {
@@ -260,14 +256,24 @@ export function collectiveParticipantSummaryNotification(params: {
   collective: CollectiveProgress;
   myContribution: number;
   participants: number;
+  language?: Language;
 }): { title: string; body: string } {
+  const language = params.language ?? DEFAULT_LANGUAGE;
   const { collective } = params;
-  const result = collective.reached
-    ? `Goal reached: the team added up ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)}.`
-    : `The team added up ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)} (${collective.percent}%).`;
+  const amounts = {
+    total: describeCollectiveAmount(params.type, collective.total, language),
+    target: formatNumber(collective.targetTotal, language),
+    percent: collective.percent,
+  };
+  const result = st(language, collective.reached ? 'notif.teamDone.reached' : 'notif.teamDone.notReached', amounts);
   return {
-    title: `Team challenge finished: ${params.name}`,
-    body: `${params.groupName} — ${result} Your share: ${formatNumber(params.myContribution)}. ${params.participants} ${params.participants === 1 ? 'person' : 'people'} took part.`,
+    title: st(language, 'notif.teamDone.title', { name: params.name }),
+    body: st(language, 'notif.teamDone.participant', {
+      group: params.groupName,
+      result,
+      share: formatNumber(params.myContribution, language),
+      people: st(language, 'notif.teamDone.people', { count: params.participants }),
+    }),
   };
 }
 
@@ -278,11 +284,21 @@ export function collectiveCreatorSummaryNotification(params: {
   collective: CollectiveProgress;
   participants: number;
   members: number;
+  language?: Language;
 }): { title: string; body: string } {
+  const language = params.language ?? DEFAULT_LANGUAGE;
   const { collective } = params;
   return {
-    title: `Team challenge finished: ${params.name}`,
-    body: `${params.groupName} — ${collective.reached ? 'goal reached' : 'goal missed'}: ${describeCollectiveAmount(params.type, collective.total)} of ${formatNumber(collective.targetTotal)} (${collective.percent}%), ${params.participants} of ${params.members} members took part.`,
+    title: st(language, 'notif.teamDone.title', { name: params.name }),
+    body: st(language, 'notif.teamDone.creator', {
+      group: params.groupName,
+      state: st(language, collective.reached ? 'notif.teamDone.stateReached' : 'notif.teamDone.stateMissed'),
+      total: describeCollectiveAmount(params.type, collective.total, language),
+      target: formatNumber(collective.targetTotal, language),
+      percent: collective.percent,
+      participants: params.participants,
+      members: params.members,
+    }),
   };
 }
 
@@ -291,15 +307,21 @@ export function participantSummaryNotification(params: {
   name: string;
   me: MemberProgress;
   team: TeamSummary;
+  language?: Language;
 }): { title: string; body: string } {
+  const language = params.language ?? DEFAULT_LANGUAGE;
   const { me, team } = params;
   const mine = me.completed
-    ? `You reached the goal (${me.currentCount} of ${me.requiredCount}).`
-    : `You got to ${me.currentCount} of ${me.requiredCount} (${me.percent}%).`;
-  const teamLine = `Team: ${team.completed} of ${team.participants} ${team.participants === 1 ? 'participant' : 'participants'} reached the goal, average progress ${team.averagePercent}%.`;
+    ? st(language, 'notif.done.mineReached', { current: me.currentCount, required: me.requiredCount })
+    : st(language, 'notif.done.mineNot', { current: me.currentCount, required: me.requiredCount, percent: me.percent });
+  const teamLine = st(language, 'notif.done.team', {
+    completed: team.completed,
+    count: team.participants,
+    average: team.averagePercent,
+  });
   return {
-    title: `Challenge finished: ${params.name}`,
-    body: `${params.groupName} — ${mine} ${teamLine}`,
+    title: st(language, 'notif.done.title', { name: params.name }),
+    body: st(language, 'notif.done.participant', { group: params.groupName, mine, teamLine }),
   };
 }
 
@@ -307,11 +329,19 @@ export function creatorSummaryNotification(params: {
   groupName: string;
   name: string;
   team: TeamSummary;
+  language?: Language;
 }): { title: string; body: string } {
+  const language = params.language ?? DEFAULT_LANGUAGE;
   const { team } = params;
   return {
-    title: `Challenge finished: ${params.name}`,
-    body: `${params.groupName} — ${team.participants} of ${team.members} members took part; ${team.completed} reached the goal, average progress ${team.averagePercent}%.`,
+    title: st(language, 'notif.done.title', { name: params.name }),
+    body: st(language, 'notif.done.creator', {
+      group: params.groupName,
+      participants: team.participants,
+      members: team.members,
+      completed: team.completed,
+      average: team.averagePercent,
+    }),
   };
 }
 

@@ -19,7 +19,14 @@ const dailyTotalsFor = vi.fn();
 vi.mock('@/modules/challenges/challenges.service', () => ({ countQualifyingPeriodsFor, sumMetricFor, dailyTotalsFor }));
 const createNotification = vi.fn();
 const createNotificationsForUsers = vi.fn();
-vi.mock('@/modules/notifications/notifications.service', () => ({ createNotification, createNotificationsForUsers }));
+vi.mock('@/modules/notifications/notifications.service', () => ({
+  createNotification,
+  createNotificationsForUsers,
+  // Everybody reads English in these tests; the per-language grouping has its own tests.
+  createLocalizedNotificationsForUsers: (ids: string[], input: object, build: (language: string) => object) =>
+    createNotificationsForUsers(ids, { ...input, ...build('en') }),
+  getUserLanguages: async () => new Map(),
+}));
 const listMemberIds = vi.fn();
 vi.mock('@/modules/groups/groups.service', () => ({ listMemberIds }));
 

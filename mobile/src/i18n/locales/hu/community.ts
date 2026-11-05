@@ -1,0 +1,110 @@
+import type { Catalog } from '@/src/i18n/translate';
+import type { community as en } from '../en/community';
+
+export const community: Catalog<typeof en> = {
+  'creators.fallbackName': 'Alkotó',
+  'creators.memberSince': 'Tag ezóta: {date}',
+  'creators.followers_one': '{count} követő',
+  'creators.followers_other': '{count} követő',
+  'creators.protocols_one': '{count} protokoll',
+  'creators.protocols_other': '{count} protokoll',
+  'creators.challenges_one': '{count} kihívás',
+  'creators.challenges_other': '{count} kihívás',
+  'creators.loadFailed': 'Az alkotó betöltése nem sikerült.',
+  'creators.follow': 'Követés',
+  'creators.unfollow': 'Követés megszüntetése',
+
+  'creators.directory.loadFailed': 'Az alkotók jegyzékének betöltése nem sikerült.',
+  'creators.directory.empty': 'Még egyetlen alkotó sem tesz közzé nyilvános tartalmat.',
+
+  'creators.public.heading': 'Alkotók',
+  'creators.public.lede': 'Ismerd meg azokat, akik megosztják, hogyan edzenek, alszanak és regenerálódnak.',
+  'creators.public.joinHeadline': 'Nézd meg, mit csinálnak valójában',
+  'creators.public.joinBody':
+    'Hozz létre ingyenes fiókot, hogy elolvashasd a protokolljaikat, követhesd a kihívásaikat, és a sajátodat is nyomon követhesd mellettük.',
+
+  'creators.teaser.back': '‹ Minden alkotó',
+  'creators.teaser.rateLimited': 'Túl sok kérés — próbáld újra egy perc múlva.',
+  'creators.teaser.notFoundTitle': 'Az alkotó nem található',
+  'creators.teaser.notFoundBody': 'Ez a profil nem létezik, vagy nem nyilvános.',
+  'creators.teaser.unlockHeadline': '{name} teljes profiljának megnyitása',
+  'creators.teaser.unlockHeadlineAnon': 'Az alkotó teljes profiljának megnyitása',
+  'creators.teaser.joinBody':
+    'Hozz létre ingyenes fiókot, hogy elolvashasd a protokolljaikat, követhesd a kihívásaikat, és láthasd a legutóbbi alvási, aktivitási és regenerációs adataikat.',
+  'creators.stat.followers_one': 'követő',
+  'creators.stat.followers_other': 'követő',
+  'creators.stat.protocols_one': 'protokoll',
+  'creators.stat.protocols_other': 'protokoll',
+  'creators.stat.challenges_one': 'kihívás',
+  'creators.stat.challenges_other': 'kihívás',
+  'creators.stat.trackedDays_one': 'nap követve',
+  'creators.stat.trackedDays_other': 'nap követve',
+
+  'creators.profile.unavailable': 'Ez az alkotói profil nem érhető el.',
+  'creators.profile.updating': 'Frissítés…',
+  'creators.profile.protocols': 'Protokollok',
+  'creators.profile.noProtocols': 'Még nincs nyilvános protokoll.',
+  'creators.profile.challenges': 'Kihívások',
+  'creators.profile.noChallenges': 'Még nincs nyilvános kihívás.',
+  'creators.profile.recentData': 'Legutóbbi egészségügyi adatok',
+  'creators.profile.noRecentData': 'Nincsenek megosztott friss adatok.',
+  'creators.profile.supplements': 'Étrend-kiegészítők: {names}',
+  'creators.profile.target.sleepScore': 'Alvási pontszám ≥ {value}',
+  'creators.profile.target.sleepDuration': 'Alvás: {duration}',
+  'creators.profile.target.workouts': '{value} edzés/hét',
+  'creators.profile.target.activeCalories': '{value} aktív kcal/nap',
+  'creators.profile.duration.hoursMinutes': '{hours} ó {minutes} p',
+  'creators.profile.duration.minutes': '{minutes} p',
+  'creators.profile.table.date': 'Dátum',
+  'creators.profile.table.sleep': 'Alvás',
+  'creators.profile.table.steps': 'Lépés',
+  'creators.profile.table.restingHr': 'Nyugalmi pulzus',
+  'creators.profile.table.hrv': 'HRV',
+  'creators.profile.table.activeKcal': 'Aktív kcal',
+
+  'creators.status.DRAFT': 'Piszkozat',
+  'creators.status.ACTIVE': 'Aktív',
+  'creators.status.COMPLETED': 'Teljesítve',
+  'creators.status.FAILED': 'Sikertelen',
+  'creators.terms.SLEEP_SCORE':
+    'Alvási pontszám {threshold} pont felett, {requiredCount} éjszakán át, az aktiválástól számított {windowDays} napon belül',
+  'creators.terms.DAILY_STEPS':
+    'Napi lépésszám {threshold} lépés felett, {requiredCount} napon át, az aktiválástól számított {windowDays} napon belül',
+  'creators.terms.WEEKLY_WORKOUTS':
+    'Heti edzésszám {threshold} felett, {requiredCount} héten át, az aktiválástól számított {windowDays} napon belül',
+  'creators.progress.SLEEP_SCORE': '{current}/{required} éjszaka',
+  'creators.progress.DAILY_STEPS': '{current}/{required} nap',
+  'creators.progress.WEEKLY_WORKOUTS': '{current}/{required} hét',
+
+  'creators.following.since': 'Követed ezóta: {date}',
+  'creators.following.unfollowing': 'Követés megszüntetése…',
+  'creators.following.browseAll': 'Összes alkotó böngészése',
+  'creators.following.loadFailed': 'A követett alkotók betöltése nem sikerült.',
+  'creators.following.empty':
+    'Még senkit sem követsz. Böngészd fent az alkotókat, és találj valakit, akit érdemes követni.',
+
+  'invite.title': 'Meghívás',
+  'invite.wrongAccount.title': 'Rossz fiók',
+  'invite.wrongAccount.message':
+    'Ez a meghívás a(z) {invitedEmail} címre szól, te viszont a(z) {currentEmail} címmel vagy bejelentkezve. Jelentkezz ki, majd lépj be (vagy regisztrálj) a meghívóban szereplő e-mail-címmel.',
+  'invite.join.title': 'Csatlakozás a csoporthoz',
+  'invite.header.invited': 'meghívta a(z) {email} címet a jóllétcsoportjába.',
+  'invite.login.body': 'Ehhez az e-mail-címhez már tartozik fiók. A meghívás elfogadásához jelentkezz be.',
+  'invite.goToLogin': 'Tovább a bejelentkezéshez',
+  'invite.openApp': 'Az alkalmazás megnyitása',
+  'invite.consentText':
+    'Hozzájárulok ahhoz, hogy e csoport adminisztrátorai lássák az egészségügyi adataimat (alvás, aktivitás, edzések és az eszköz szinkronizálási állapota), amíg a csoport tagja vagyok. A csoportból bármikor kiléphetek, ezzel a hozzáférésük azonnal megszűnik.',
+  'invite.consentRequired': 'A folytatáshoz kérjük, erősítsd meg a hozzájárulást.',
+  'invite.accept.submit': 'Meghívás elfogadása',
+  'invite.accept.submitting': 'Csatlakozás…',
+  'invite.accept.failed': 'A meghívás elfogadása nem sikerült.',
+  'invite.register.submit': 'Fiók létrehozása és csatlakozás',
+  'invite.register.invalid': 'A meghívás nem használható fel.',
+  'invite.register.accountCreatedLogin': 'A fiókod létrejött. A folytatáshoz kérjük, jelentkezz be.',
+  'invite.unavailable.loadFailed':
+    'A meghívás betöltése nem sikerült. Ellenőrizd az internetkapcsolatot, és próbáld újra.',
+  'invite.unavailable.invalid': 'Ez a meghívólink érvénytelen.',
+  'invite.unavailable.expired': 'Ez a meghívás lejárt. Kérd a csoport adminisztrátorát, hogy küldjön újat.',
+  'invite.unavailable.revoked': 'A csoport adminisztrátora visszavonta ezt a meghívást.',
+  'invite.unavailable.accepted': 'Ezt a meghívást már elfogadták.',
+};

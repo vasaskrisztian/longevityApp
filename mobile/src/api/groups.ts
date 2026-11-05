@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchJson } from '@/src/api/client';
 import { API_BASE_URL } from '@/src/config/env';
+import { t, type TextKey } from '@/src/i18n';
 
 /**
  * Corporate wellbeing (groups, invitations, group challenges). Every
@@ -69,11 +70,52 @@ export const getAdminGroup = (id: string) => apiFetchJson<GroupDetail>(`/api/adm
 export const updateAdminGroup = (id: string, input: { name?: string; logo?: LogoUpload | null }) =>
   apiFetchJson<GroupSummary>(`/api/admin/groups/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 
+/**
+ * Refusals the server reports (by code, or — today — by its English sentence)
+ * and the translated text each one gets on screen. Anything not listed is shown
+ * as the server sent it.
+ */
+const KNOWN_REFUSALS: Record<string, TextKey> = {
+  too_early: 'video.refused.tooEarly',
+  'The video has not been played long enough yet': 'video.refused.tooEarly',
+  not_watched: 'video.refused.notWatched',
+  'The video was not watched to the end': 'video.refused.notWatched',
+  expired: 'video.refused.expired',
+  'This viewing has expired — start the video again': 'video.refused.expired',
+  watch_not_found: 'video.refused.watchNotFound',
+  'This viewing was not started or is already used': 'video.refused.watchNotFound',
+  not_active: 'video.refused.notActive',
+  'This challenge is not running right now': 'video.refused.notActive',
+  'This challenge is not running today': 'video.refused.notActive',
+  not_participant: 'video.refused.notParticipant',
+  'Join the challenge first': 'video.refused.notParticipant',
+  not_video: 'video.refused.notVideo',
+  'This challenge has no video': 'video.refused.notVideo',
+  video_unavailable: 'video.refused.unavailable',
+  ended: 'wellbeing.error.ended',
+  'This challenge has already ended': 'wellbeing.error.ended',
+  invalid_dates: 'wellbeing.error.invalidDates',
+  'The challenge cannot end in the past': 'wellbeing.error.invalidDates',
+  not_found: 'wellbeing.error.notFound',
+  'Not found': 'wellbeing.error.notFound',
+  'Challenge not found': 'wellbeing.error.notFound',
+  not_member: 'wellbeing.error.notMember',
+  'You are not a member of this group': 'wellbeing.error.notMember',
+};
+
+/** The text to show for a failed group / challenge / video request: a known server refusal is translated, an unknown server message is kept, an empty one becomes `fallback`. */
+export function groupErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : '';
+  if (!message) return fallback;
+  const key = KNOWN_REFUSALS[message] ?? KNOWN_REFUSALS[message.replace(/\.$/, '')];
+  return key ? t(key) : message;
+}
+
 async function expectNoContent(path: string, init: RequestInit): Promise<void> {
   const response = await apiFetch(path, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error ?? `Request failed (${response.status}).`);
+    throw new Error(body?.error ?? t('wellbeing.error.requestFailed', { status: response.status }));
   }
 }
 

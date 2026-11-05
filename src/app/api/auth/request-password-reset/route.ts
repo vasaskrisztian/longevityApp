@@ -1,5 +1,7 @@
 import { RequestPasswordResetSchema } from '@/lib/validation/auth.schemas';
-import { requestPasswordReset } from '@/modules/auth/auth.service';
+import { getLanguageByEmail, requestPasswordReset } from '@/modules/auth/auth.service';
+import { passwordResetEmail } from '@/lib/email/templates';
+import type { Language } from '@/lib/i18n/languages';
 import { checkRateLimit, getClientIdentifier, AUTH_RATE_LIMIT } from '@/lib/auth/rate-limit';
 import { logger } from '@/lib/logging/logger';
 import { sendEmail } from '@/lib/email/mailer';
@@ -8,14 +10,9 @@ import { resolveWebAppOrigin } from '@/lib/http/app-url';
 // Real sending goes through lib/email/mailer.ts (Resend, with a
 // console-log fallback when RESEND_API_KEY isn't configured) — see
 // api/auth/register/route.ts's sendVerificationEmail for the same pattern.
-async function sendPasswordResetEmail(email: string, token: string) {
+async function sendPasswordResetEmail(email: string, token: string, language: Language) {
   const resetUrl = `${resolveWebAppOrigin()}/reset-password?token=${token}`;
-  await sendEmail({
-    to: email,
-    subject: 'Reset your password — Longevity Klub',
-    html: `<p>We received a request to reset your Longevity Klub password. Click the link below to choose a new one:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't be changed.</p>`,
-    text: `We received a request to reset your Longevity Klub password. Open this link to choose a new one:\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't be changed.`,
-  });
+  await sendEmail({ to: email, ...passwordResetEmail(language, resetUrl) });
 }
 
 const GENERIC_RESPONSE = {
@@ -40,7 +37,7 @@ export async function POST(request: Request) {
     if (rawToken) {
       // Awaited — see register/route.ts's identical comment on why
       // sendEmail() must be awaited rather than fire-and-forget.
-      await sendPasswordResetEmail(parsed.data.email, rawToken);
+      await sendPasswordResetEmail(parsed.data.email, rawToken, await getLanguageByEmail(parsed.data.email));
     }
   } catch (error) {
     logger.error('password_reset_request_failed', { message: (error as Error).message });

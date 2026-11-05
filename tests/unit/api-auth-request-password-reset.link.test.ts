@@ -7,6 +7,7 @@ vi.mock('@/lib/auth/rate-limit', () => ({
 }));
 vi.mock('@/modules/auth/auth.service', () => ({
   requestPasswordReset: vi.fn().mockResolvedValue('tok123'),
+  getLanguageByEmail: vi.fn().mockResolvedValue('en'),
 }));
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

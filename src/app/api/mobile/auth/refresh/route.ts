@@ -31,5 +31,6 @@ export async function POST(request: Request) {
     accessToken: session.accessToken,
     refreshToken: session.refreshToken,
     expiresIn: session.expiresIn,
+    language: session.language,
   });
 }

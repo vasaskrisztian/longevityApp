@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { CollectiveSeries, GroupChallengeType } from '@/src/api/groups';
 import { LineChart } from '@/src/components/charts/LineChart';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { collectiveAmountLabel, compactAmount, formatAmount } from '@/src/wellbeing/format';
 import { teamChartModel } from '@/src/wellbeing/teamChart';
@@ -13,9 +14,10 @@ import { teamChartModel } from '@/src/wellbeing/teamChart';
  * numbers as text.
  */
 export function TeamChart({ type, series }: { type: GroupChallengeType; series: CollectiveSeries }) {
+  const { t } = useT();
   const [showTable, setShowTable] = useState(false);
   if (series.points.length === 0) {
-    return <Text style={styles.muted}>The chart appears once the challenge has started.</Text>;
+    return <Text style={styles.muted}>{t('wellbeing.chart.empty')}</Text>;
   }
   const model = teamChartModel(series);
   const last = series.points[series.points.length - 1]!;
@@ -24,14 +26,17 @@ export function TeamChart({ type, series }: { type: GroupChallengeType; series: 
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <Text style={styles.title}>Team total per day</Text>
+        <Text style={styles.title}>{t('wellbeing.chart.title')}</Text>
         <Pressable accessibilityRole="button" onPress={() => setShowTable((value) => !value)}>
-          <Text style={styles.toggle}>{showTable ? 'Hide table' : 'Show as table'}</Text>
+          <Text style={styles.toggle}>{showTable ? t('wellbeing.chart.hideTable') : t('wellbeing.chart.showTable')}</Text>
         </Pressable>
       </View>
       <View
         accessibilityRole="image"
-        accessibilityLabel={`Running team total of ${collectiveAmountLabel(type, last.cumulative)} against the target of ${collectiveAmountLabel(type, series.targetTotal)}`}
+        accessibilityLabel={t('wellbeing.chart.a11y', {
+          total: collectiveAmountLabel(type, last.cumulative),
+          target: collectiveAmountLabel(type, series.targetTotal),
+        })}
       >
         <LineChart
           labels={model.labels}
@@ -39,27 +44,27 @@ export function TeamChart({ type, series }: { type: GroupChallengeType; series: 
           yMax={model.yMax}
           formatY={compactAmount}
           series={[
-            { key: 'target', name: 'Target', color: colors.muted.foreground, values: model.targets, dashed: true, markers: false },
-            { key: 'total', name: 'Team total', color: colors.primary.default, values: model.totals, markers: !manyPoints },
+            { key: 'target', name: t('wellbeing.chart.target'), color: colors.muted.foreground, values: model.targets, dashed: true, markers: false },
+            { key: 'total', name: t('wellbeing.chart.teamTotal'), color: colors.primary.default, values: model.totals, markers: !manyPoints },
           ]}
         />
       </View>
       <View style={styles.legend}>
         <View style={styles.legendItem}>
           <View style={[styles.swatch, { backgroundColor: colors.primary.default }]} />
-          <Text style={styles.legendText}>Team total</Text>
+          <Text style={styles.legendText}>{t('wellbeing.chart.teamTotal')}</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.swatch, styles.swatchDashed, { borderColor: colors.muted.foreground }]} />
-          <Text style={styles.legendText}>Target {formatAmount(series.targetTotal)}</Text>
+          <Text style={styles.legendText}>{t('wellbeing.chart.targetAmount', { amount: formatAmount(series.targetTotal) })}</Text>
         </View>
       </View>
       {showTable ? (
         <View style={styles.table}>
           <View style={styles.row}>
-            <Text style={[styles.cell, styles.head]}>Day</Text>
-            <Text style={[styles.cell, styles.head, styles.num]}>That day</Text>
-            <Text style={[styles.cell, styles.head, styles.num]}>Team total</Text>
+            <Text style={[styles.cell, styles.head]}>{t('wellbeing.chart.day')}</Text>
+            <Text style={[styles.cell, styles.head, styles.num]}>{t('wellbeing.chart.thatDay')}</Text>
+            <Text style={[styles.cell, styles.head, styles.num]}>{t('wellbeing.chart.teamTotal')}</Text>
           </View>
           {series.points.map((point) => (
             <View key={point.date} style={styles.row}>

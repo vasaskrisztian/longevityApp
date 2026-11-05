@@ -6,6 +6,7 @@ import { getMyFollowing, unfollowCreator, type FollowedCreatorSummary } from '@/
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 
 /**
@@ -25,6 +26,7 @@ function FollowingRow({
   creator: FollowedCreatorSummary;
   onUnfollowed: () => void;
 }) {
+  const { t, locale } = useT();
   const [unfollowing, setUnfollowing] = useState(false);
 
   async function handleUnfollow() {
@@ -40,15 +42,15 @@ function FollowingRow({
   return (
     <Card style={styles.row}>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{creator.fullName ?? 'Creator'}</Text>
+        <Text style={styles.rowTitle}>{creator.fullName ?? t('creators.fallbackName')}</Text>
         <Text style={styles.rowSubtitle}>
-          Following since {new Date(creator.followedAt).toLocaleDateString()} ·{' '}
-          {creator.publicProtocolCount} protocol{creator.publicProtocolCount === 1 ? '' : 's'} ·{' '}
-          {creator.publicChallengeCount} challenge{creator.publicChallengeCount === 1 ? '' : 's'}
+          {t('creators.following.since', { date: new Date(creator.followedAt).toLocaleDateString(locale) })} ·{' '}
+          {t('creators.protocols', { count: creator.publicProtocolCount })} ·{' '}
+          {t('creators.challenges', { count: creator.publicChallengeCount })}
         </Text>
       </View>
       <Button
-        title={unfollowing ? 'Unfollowing…' : 'Unfollow'}
+        title={unfollowing ? t('creators.following.unfollowing') : t('creators.unfollow')}
         variant="outline"
         size="sm"
         onPress={handleUnfollow}
@@ -59,17 +61,18 @@ function FollowingRow({
 }
 
 export default function FollowedCreatorsScreen() {
+  const { t } = useT();
   const [following, setFollowing] = useState<FollowedCreatorSummary[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
-    setError(null);
+    setError(false);
     try {
       setFollowing(await getMyFollowing());
     } catch {
-      setError('Could not load who you follow.');
+      setError(true);
     } finally {
       if (isRefresh) setRefreshing(false);
     }
@@ -82,7 +85,7 @@ export default function FollowedCreatorsScreen() {
   if (!following) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {error ? <Alert variant="destructive">{t('creators.following.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -94,17 +97,17 @@ export default function FollowedCreatorsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <Button
-        title="Browse all creators"
+        title={t('creators.following.browseAll')}
         variant="outline"
         size="sm"
         onPress={() => router.push('/community/browse')}
       />
 
-      {error ? <Alert variant="destructive">{error}</Alert> : null}
+      {error ? <Alert variant="destructive">{t('creators.following.loadFailed')}</Alert> : null}
 
       {following.length === 0 ? (
         <Text style={styles.empty}>
-          You&apos;re not following anyone yet. Browse creators above to find someone to follow.
+          {t('creators.following.empty')}
         </Text>
       ) : (
         following.map((creator) => (

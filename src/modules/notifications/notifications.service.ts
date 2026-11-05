@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { normalizeLanguage, type Language } from '@/lib/i18n/languages';
 
 export type NotificationKind = 'GROUP_INVITATION' | 'GROUP_CHALLENGE_NEW' | 'GROUP_CHALLENGE_SUMMARY' | 'GROUP_CHALLENGE_GOAL_REACHED';
 
@@ -31,6 +32,44 @@ export async function createNotification(userId: string, input: NotificationInpu
       data: (input.data ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   });
+}
+
+/** Preferred language of each person (English when unknown — also if the lookup itself fails). */
+export async function getUserLanguages(userIds: string[]): Promise<Map<string, Language>> {
+  const languages = new Map<string, Language>();
+  if (userIds.length === 0) return languages;
+  try {
+    const rows: { id: string; language: string | null }[] = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, language: true },
+    });
+    for (const row of rows) languages.set(row.id, normalizeLanguage(row.language));
+  } catch {
+    // keep English for everybody
+  }
+  return languages;
+}
+
+/**
+ * Like createNotificationsForUsers, but the text is written per recipient in
+ * their own language: people are grouped by language and `build` runs once
+ * for each language present.
+ */
+export async function createLocalizedNotificationsForUsers(
+  userIds: string[],
+  input: Omit<NotificationInput, 'title' | 'body'>,
+  build: (language: Language) => { title: string; body: string },
+): Promise<void> {
+  if (userIds.length === 0) return;
+  const languages = await getUserLanguages(userIds);
+  const byLanguage = new Map<Language, string[]>();
+  for (const userId of userIds) {
+    const language = languages.get(userId) ?? 'en';
+    byLanguage.set(language, [...(byLanguage.get(language) ?? []), userId]);
+  }
+  for (const [language, ids] of byLanguage) {
+    await createNotificationsForUsers(ids, { ...input, ...build(language) });
+  }
 }
 
 /** One notification per user id (same content) — e.g. "new challenge" to every member. */

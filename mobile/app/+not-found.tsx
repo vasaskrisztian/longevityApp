@@ -2,17 +2,19 @@ import { Stack, router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/src/components/ui/Button';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /** Unknown route — a branded dead end with one way out (the Expo template screen it replaces was English-only and unstyled). */
 export default function NotFoundScreen() {
+  const { t } = useT();
   return (
     <>
-      <Stack.Screen options={{ title: 'Not found' }} />
+      <Stack.Screen options={{ title: t('nav.notFound.title') }} />
       <View style={styles.container}>
-        <Text style={styles.title}>This page doesn&apos;t exist</Text>
-        <Text style={styles.body}>The link may be old or mistyped. Your data is safe — head back to the start.</Text>
-        <Button title="Go to Dashboard" onPress={() => router.replace('/')} />
+        <Text style={styles.title}>{t('nav.notFound.heading')}</Text>
+        <Text style={styles.body}>{t('nav.notFound.body')}</Text>
+        <Button title={t('nav.notFound.goHome')} onPress={() => router.replace('/')} />
       </View>
     </>
   );

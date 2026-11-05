@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { completeVideoWatch, startVideoWatch, type MyGroupChallenge, type VideoWatchResult } from '@/src/api/groups';
+import { completeVideoWatch, groupErrorMessage, startVideoWatch, type MyGroupChallenge, type VideoWatchResult } from '@/src/api/groups';
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { formatVideoDuration } from '@/src/wellbeing/challengeForm';
 import {
@@ -32,6 +33,7 @@ export function VideoChallengePanel({
   groupId: string;
   onChanged: () => void;
 }) {
+  const { t } = useT();
   const video = challenge.video;
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -54,10 +56,10 @@ export function VideoChallengePanel({
       setPhase('done');
       onChanged();
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : 'Could not count the video.');
+      setError(groupErrorMessage(err, t('video.countFailed')));
       setPhase('idle');
     }
-  }, [challenge.id, groupId, onChanged]);
+  }, [challenge.id, groupId, onChanged, t]);
 
   const handleEvent = useCallback(
     (event: PlayerEvent) => {
@@ -74,14 +76,16 @@ export function VideoChallengePanel({
         if (tracker.current.isComplete(video.durationSec)) void finish();
         else {
           setError(
-            `Only ${formatVideoDuration(tracker.current.watchedSeconds)} of ${formatVideoDuration(video.durationSec)} counted as watched. ` +
-              'Only continuous playing at normal speed counts — skipping ahead, going back and pausing do not. Start the video again to try once more.',
+            t('video.notEnough', {
+              watched: formatVideoDuration(tracker.current.watchedSeconds),
+              total: formatVideoDuration(video.durationSec),
+            }),
           );
           setPhase('idle');
         }
       }
     },
-    [video, finish],
+    [video, finish, t],
   );
 
   async function start() {
@@ -96,14 +100,14 @@ export function VideoChallengePanel({
       setResult(null);
       setPhase('watching');
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : 'Could not start the video.');
+      setError(groupErrorMessage(err, t('video.startFailed')));
       setPhase('idle');
     }
   }
 
   if (!video || challenge.status !== 'ACTIVE') return null;
   if (!challenge.joined) {
-    return <Text style={styles.muted}>Join the challenge to watch the video and collect sessions.</Text>;
+    return <Text style={styles.muted}>{t('video.joinToWatch')}</Text>;
   }
 
   const percent = Math.min(100, Math.round((watchedSeconds / Math.max(1, video.durationSec)) * 100));
@@ -117,15 +121,17 @@ export function VideoChallengePanel({
         <>
           {phase === 'done' && result ? (
             <Alert variant="success">
-              {result.counted
-                ? `Counted — you have ${result.sessions} ${result.sessions === 1 ? 'session' : 'sessions'} so far. Well done!`
-                : 'You had already finished the video today, so this one is not added again.'}
+              {result.counted ? t('video.counted', { count: result.sessions }) : t('video.alreadyCounted')}
             </Alert>
           ) : challenge.videoDoneToday ? (
-            <Text style={styles.muted}>You finished today’s video. Come back tomorrow for the next session.</Text>
+            <Text style={styles.muted}>{t('video.doneToday')}</Text>
           ) : null}
           <Button
-            title={challenge.videoDoneToday || phase === 'done' ? 'Watch it again (not counted)' : `Watch today’s video (${formatVideoDuration(video.durationSec)})`}
+            title={
+              challenge.videoDoneToday || phase === 'done'
+                ? t('video.watchAgain')
+                : t('video.watchToday', { duration: formatVideoDuration(video.durationSec) })
+            }
             variant={challenge.videoDoneToday || phase === 'done' ? 'outline' : 'primary'}
             size="sm"
             onPress={() => setPhase('disclaimer')}
@@ -135,33 +141,30 @@ export function VideoChallengePanel({
 
       {phase === 'disclaimer' ? (
         <>
-          <Text style={styles.body}>
-            This is a light movement video for general wellbeing, not medical advice. Do only what feels comfortable, and stop if you feel
-            pain or dizziness. Watching is voluntary. The video counts once it has played to the end — skipping ahead does not count.
-          </Text>
+          <Text style={styles.body}>{t('video.disclaimer')}</Text>
           <View style={styles.row}>
-            <Button title="Cancel" variant="outline" size="sm" style={styles.flex} onPress={() => setPhase('idle')} />
-            <Button title="Start the video" size="sm" style={styles.flex} onPress={start} />
+            <Button title={t('common.cancel')} variant="outline" size="sm" style={styles.flex} onPress={() => setPhase('idle')} />
+            <Button title={t('video.start')} size="sm" style={styles.flex} onPress={start} />
           </View>
         </>
       ) : null}
 
-      {phase === 'starting' ? <Text style={styles.muted}>Starting…</Text> : null}
+      {phase === 'starting' ? <Text style={styles.muted}>{t('video.starting')}</Text> : null}
 
       {phase === 'watching' || phase === 'submitting' ? (
         <>
           <YouTubePlayer videoId={video.videoId} onEvent={handleEvent} />
           <View style={styles.progress}>
             <View style={styles.progressText}>
-              <Text style={styles.label}>Watched</Text>
+              <Text style={styles.label}>{t('video.watched')}</Text>
               <Text style={styles.value}>{watchedLabel(watchedSeconds, video.durationSec, formatVideoDuration)}</Text>
             </View>
             <ProgressBar percent={percent} />
           </View>
           <Text style={styles.muted}>
-            {phase === 'submitting' ? 'Counting your session…' : 'Watch to the end to add a session. Playback speed stays at normal.'}
+            {phase === 'submitting' ? t('video.counting') : t('video.watchHint')}
           </Text>
-          {phase === 'watching' ? <Button title="Stop" variant="ghost" size="sm" onPress={() => setPhase('idle')} /> : null}
+          {phase === 'watching' ? <Button title={t('video.stop')} variant="ghost" size="sm" onPress={() => setPhase('idle')} /> : null}
         </>
       ) : null}
     </View>

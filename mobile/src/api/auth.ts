@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/src/config/env';
+import { getLanguage } from '@/src/i18n';
 import type { RegisterFormInput } from '@/src/validation/schemas';
 
 /**
@@ -36,7 +37,8 @@ function toResult(response: Response | null): AuthRequestResult {
 
 /** POST /api/auth/register — sends the verification email; 201 either way. */
 export async function registerAccount(input: RegisterFormInput): Promise<AuthRequestResult> {
-  return toResult(await postJson('/api/auth/register', input));
+  // The language the person has on screen becomes the account's language.
+  return toResult(await postJson('/api/auth/register', { ...input, language: getLanguage() }));
 }
 
 /** POST /api/auth/request-password-reset — always 200 for a valid email shape. */
@@ -74,7 +76,7 @@ export async function registerFromInvitation(input: {
   inviteToken: string;
   groupConsent: true;
 }): Promise<InviteRegistrationResult> {
-  const response = await postJson('/api/auth/register', input);
+  const response = await postJson('/api/auth/register', { ...input, language: getLanguage() });
   if (!response) return { ok: false, reason: 'error' };
   if (response.ok) return { ok: true };
   const body = await response.json().catch(() => null);

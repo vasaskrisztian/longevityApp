@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -17,9 +17,10 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { t, tDynamic, useT, type TextKey } from '@/src/i18n';
 import { confirmDestructive } from '@/src/utils/confirm';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
-import { ChallengeTypeEnum, CreateChallengeSchema, type CreateChallengeInput } from '@/src/validation/schemas';
+import { ChallengeTypeEnum, CreateChallengeSchema, enumLabel, type CreateChallengeInput } from '@/src/validation/schemas';
 
 /**
  * Mirrors the web app's profile/challenges/challenges-manager.tsx. Status
@@ -35,31 +36,53 @@ import { ChallengeTypeEnum, CreateChallengeSchema, type CreateChallengeInput } f
 
 type ChallengeType = 'SLEEP_SCORE' | 'DAILY_STEPS' | 'WEEKLY_WORKOUTS';
 
-// TYPE_META must be declared before TYPE_OPTIONS below: TYPE_OPTIONS's
-// initializer runs immediately at module load and calls TYPE_META_LABEL,
-// which reads TYPE_META — if TYPE_META were declared later as a const, that
-// read would hit its temporal dead zone and throw "Cannot access 'TYPE_META'
-// before initialization" (function hoisting makes TYPE_META_LABEL itself
-// callable early, but it can't rescue a const it closes over that hasn't
-// run yet).
-const TYPE_META: Record<ChallengeType, { label: string; periodNoun: string; thresholdLabel: string; thresholdUnit: string }> = {
-  SLEEP_SCORE: { label: 'Sleep score', periodNoun: 'nights', thresholdLabel: 'Sleep score above', thresholdUnit: 'points' },
-  DAILY_STEPS: { label: 'Daily steps', periodNoun: 'days', thresholdLabel: 'Steps above', thresholdUnit: 'steps' },
-  WEEKLY_WORKOUTS: { label: 'Weekly workouts', periodNoun: 'weeks', thresholdLabel: 'Workouts above', thresholdUnit: 'per week' },
+// Text keys per challenge type (keys only — the texts are looked up at render
+// time, never at module scope, so they follow the language).
+const TYPE_KEYS: Record<
+  ChallengeType,
+  {
+    threshold: TextKey;
+    required: TextKey;
+    period: TextKey;
+    condition: TextKey;
+    duration: TextKey;
+  }
+> = {
+  SLEEP_SCORE: {
+    threshold: 'plan.challenges.threshold.sleep',
+    required: 'plan.challenges.required.sleep',
+    period: 'plan.challenges.period.sleep',
+    condition: 'plan.challenges.condition.sleep',
+    duration: 'plan.challenges.duration.sleep',
+  },
+  DAILY_STEPS: {
+    threshold: 'plan.challenges.threshold.steps',
+    required: 'plan.challenges.required.steps',
+    period: 'plan.challenges.period.steps',
+    condition: 'plan.challenges.condition.steps',
+    duration: 'plan.challenges.duration.steps',
+  },
+  WEEKLY_WORKOUTS: {
+    threshold: 'plan.challenges.threshold.workouts',
+    required: 'plan.challenges.required.workouts',
+    period: 'plan.challenges.period.workouts',
+    condition: 'plan.challenges.condition.workouts',
+    duration: 'plan.challenges.duration.workouts',
+  },
 };
 
-function TYPE_META_LABEL(type: string): string {
-  return TYPE_META[type as ChallengeType]?.label ?? type;
+function statusLabel(status: ChallengeStatus): string {
+  switch (status) {
+    case 'DRAFT':
+      return t('plan.challenges.status.draft');
+    case 'ACTIVE':
+      return enumLabel('ACTIVE');
+    case 'COMPLETED':
+      return t('plan.challenges.status.completed');
+    default:
+      return t('plan.challenges.status.failed');
+  }
 }
-
-const TYPE_OPTIONS: ChipOption[] = ChallengeTypeEnum.options.map((v) => ({ value: v, label: TYPE_META_LABEL(v) }));
-
-const STATUS_LABEL: Record<ChallengeStatus, string> = {
-  DRAFT: 'Draft',
-  ACTIVE: 'Active',
-  COMPLETED: 'Completed',
-  FAILED: 'Failed',
-};
 
 const STATUS_BADGE_STYLE: Record<ChallengeStatus, { backgroundColor: string; color: string }> = {
   DRAFT: { backgroundColor: colors.muted.default, color: colors.muted.foreground },
@@ -69,19 +92,25 @@ const STATUS_BADGE_STYLE: Record<ChallengeStatus, { backgroundColor: string; col
 };
 
 function describeTerms(c: Pick<Challenge, 'type' | 'requiredCount' | 'threshold' | 'windowDays'>): string {
-  const meta = TYPE_META[c.type];
-  return `${meta.thresholdLabel} ${c.threshold} ${meta.thresholdUnit}, for ${c.requiredCount} ${meta.periodNoun}, within ${c.windowDays} days of activation`;
+  const keys = TYPE_KEYS[c.type];
+  return t('plan.challenges.terms', {
+    condition: t(keys.condition, { count: c.threshold }),
+    duration: t(keys.duration, { count: c.requiredCount }),
+    window: t('plan.challenges.window', { count: c.windowDays }),
+  });
 }
 
 function progressSummary(c: Challenge): string {
-  const meta = TYPE_META[c.type];
+  const period = t(TYPE_KEYS[c.type].period);
   const { status, currentCount, requiredCount, daysRemaining } = c.progress;
-  if (status === 'DRAFT') return 'Not started yet.';
+  const params = { current: currentCount, required: requiredCount, period };
+  if (status === 'DRAFT') return t('plan.challenges.progress.draft');
   if (status === 'ACTIVE') {
-    return `${currentCount}/${requiredCount} ${meta.periodNoun} so far · ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left`;
+    if (daysRemaining === null) return t('plan.challenges.progress.activeOpen', params);
+    return t('plan.challenges.progress.active', { ...params, left: t('plan.challenges.daysLeft', { count: daysRemaining }) });
   }
-  if (status === 'COMPLETED') return `${currentCount}/${requiredCount} ${meta.periodNoun} reached.`;
-  return `Only ${currentCount}/${requiredCount} ${meta.periodNoun} reached before the deadline.`;
+  if (status === 'COMPLETED') return t('plan.challenges.progress.completed', params);
+  return t('plan.challenges.progress.failed', params);
 }
 
 interface ChallengeFormState {
@@ -122,16 +151,19 @@ function ChallengeForm({
   onCancel?: () => void;
   onSaved: (data: CreateChallengeInput) => Promise<void>;
 }) {
+  const { t, language } = useT();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const meta = TYPE_META[form.type];
+  const keys = TYPE_KEYS[form.type];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const typeOptions: ChipOption[] = useMemo(() => ChallengeTypeEnum.options.map((v) => ({ value: v, label: enumLabel(v) })), [language]);
 
   async function submit() {
     const parsed = CreateChallengeSchema.safeParse(form);
     if (!parsed.success) {
-      setErrors(Object.fromEntries(Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? ''])));
+      setErrors(Object.fromEntries(Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, tDynamic(v?.[0] ?? '')])));
       return;
     }
     setErrors({});
@@ -140,7 +172,7 @@ function ChallengeForm({
     try {
       await onSaved(parsed.data);
     } catch {
-      setServerError('Could not save. Please try again.');
+      setServerError(t('plan.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -151,28 +183,28 @@ function ChallengeForm({
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
 
       <ChipSingleSelect
-        label="Challenge type"
-        options={TYPE_OPTIONS}
+        label={t('plan.challenges.type')}
+        options={typeOptions}
         value={form.type}
         onChange={(v) => setForm({ ...form, type: v as ChallengeType })}
       />
-      <TextField label="Name (optional)" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} />
+      <TextField label={t('plan.challenges.nameOptional')} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} />
       <TextField
-        label={`${meta.thresholdLabel} (${meta.thresholdUnit})`}
+        label={t(keys.threshold)}
         keyboardType="numeric"
         value={form.threshold}
         onChangeText={(v) => setForm({ ...form, threshold: v })}
         error={errors.threshold}
       />
       <TextField
-        label={`Number of ${meta.periodNoun} to hit`}
+        label={t(keys.required)}
         keyboardType="numeric"
         value={form.requiredCount}
         onChangeText={(v) => setForm({ ...form, requiredCount: v })}
         error={errors.requiredCount}
       />
       <TextField
-        label="Challenge length (days)"
+        label={t('plan.challenges.length')}
         keyboardType="numeric"
         value={form.windowDays}
         onChangeText={(v) => setForm({ ...form, windowDays: v })}
@@ -180,8 +212,8 @@ function ChallengeForm({
       />
 
       <View style={styles.row}>
-        <Button title={submitting ? 'Saving…' : 'Save'} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
-        {onCancel ? <Button title="Cancel" size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
+        <Button title={submitting ? t('common.saving') : t('common.save')} size="sm" onPress={submit} loading={submitting} style={styles.flex1} />
+        {onCancel ? <Button title={t('common.cancel')} size="sm" variant="outline" onPress={onCancel} style={styles.flex1} /> : null}
       </View>
     </Card>
   );
@@ -198,6 +230,7 @@ function ChallengeRow({
   onUpdated: (c: Challenge) => void;
   onDeleted: () => void;
 }) {
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -231,7 +264,10 @@ function ChallengeRow({
   }
 
   async function handleDelete() {
-    if (!(await confirmDestructive(`Delete "${challenge.name}"?`, 'This challenge will be permanently deleted. This cannot be undone.'))) return;
+    if (!(await confirmDestructive(
+        t('plan.deleteTitle', { name: challenge.name || enumLabel(challenge.type) }),
+        t('plan.challenges.deleteMessage'),
+      ))) return;
     setDeleting(true);
     try {
       await deleteChallenge(challenge.id);
@@ -250,13 +286,13 @@ function ChallengeRow({
   return (
     <Card>
       <View style={styles.badgeRow}>
-        <Text style={styles.rowTitle}>{challenge.name || TYPE_META[challenge.type].label}</Text>
+        <Text style={styles.rowTitle}>{challenge.name || enumLabel(challenge.type)}</Text>
         <View style={[styles.badge, { backgroundColor: badgeStyle.backgroundColor }]}>
-          <Text style={[styles.badgeText, { color: badgeStyle.color }]}>{STATUS_LABEL[status]}</Text>
+          <Text style={[styles.badgeText, { color: badgeStyle.color }]}>{statusLabel(status)}</Text>
         </View>
         {challenge.visibility === 'PUBLIC' ? (
           <View style={styles.publicBadge}>
-            <Text style={styles.publicBadgeText}>Public</Text>
+            <Text style={styles.publicBadgeText}>{enumLabel('PUBLIC')}</Text>
           </View>
         ) : null}
       </View>
@@ -270,11 +306,11 @@ function ChallengeRow({
 
       <View style={styles.actionsStack}>
         {isDraft ? (
-          <Button title={activating ? 'Starting…' : 'Start challenge'} size="sm" onPress={handleActivate} loading={activating} />
+          <Button title={activating ? t('plan.challenges.starting') : t('plan.challenges.start')} size="sm" onPress={handleActivate} loading={activating} />
         ) : null}
         {canPublish ? (
           <Button
-            title={togglingVisibility ? 'Updating…' : challenge.visibility === 'PUBLIC' ? 'Make private' : 'Publish publicly'}
+            title={togglingVisibility ? t('account.creator.updating') : challenge.visibility === 'PUBLIC' ? t('plan.makePrivate') : t('plan.publishPublicly')}
             size="sm"
             variant="outline"
             onPress={handleToggleVisibility}
@@ -282,8 +318,8 @@ function ChallengeRow({
           />
         ) : null}
         <View style={styles.row}>
-          {isDraft ? <Button title="Edit" size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} /> : null}
-          <Button title={deleting ? 'Deleting…' : 'Delete'} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} style={styles.flex1} />
+          {isDraft ? <Button title={t('common.edit')} size="sm" variant="outline" onPress={() => setEditing(true)} style={styles.flex1} /> : null}
+          <Button title={deleting ? t('plan.deleting') : t('common.delete')} size="sm" variant="destructive" onPress={handleDelete} loading={deleting} style={styles.flex1} />
         </View>
       </View>
     </Card>
@@ -291,10 +327,11 @@ function ChallengeRow({
 }
 
 export default function ChallengesScreen() {
+  const { t } = useT();
   const [challenges, setChallenges] = useState<Challenge[] | null>(null);
   const [canPublish, setCanPublish] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     Promise.all([listChallenges(), getPublicProfileStatus().catch(() => ({ canPublish: false, accountType: 'MEMBER' as const }))])
@@ -302,7 +339,7 @@ export default function ChallengesScreen() {
         setChallenges(list);
         setCanPublish(status.canPublish);
       })
-      .catch(() => setError('Could not load your challenges.'));
+      .catch(() => setLoadFailed(true));
   }, []);
 
   async function handleCreate(data: CreateChallengeInput) {
@@ -314,7 +351,7 @@ export default function ChallengesScreen() {
   if (!challenges) {
     return (
       <View style={styles.centered}>
-        {error ? <Alert variant="destructive">{error}</Alert> : <ActivityIndicator color={colors.primary.default} />}
+        {loadFailed ? <Alert variant="destructive">{t('plan.challenges.loadFailed')}</Alert> : <ActivityIndicator color={colors.primary.default} />}
       </View>
     );
   }
@@ -324,10 +361,10 @@ export default function ChallengesScreen() {
       {adding ? (
         <ChallengeForm initial={EMPTY_FORM} onCancel={() => setAdding(false)} onSaved={handleCreate} />
       ) : (
-        <Button title="Add challenge" size="sm" onPress={() => setAdding(true)} />
+        <Button title={t('plan.challenges.add')} size="sm" onPress={() => setAdding(true)} />
       )}
 
-      {challenges.length === 0 && !adding ? <Text style={styles.empty}>No challenges yet.</Text> : null}
+      {challenges.length === 0 && !adding ? <Text style={styles.empty}>{t('plan.challenges.empty')}</Text> : null}
 
       {challenges.map((challenge) => (
         <ChallengeRow

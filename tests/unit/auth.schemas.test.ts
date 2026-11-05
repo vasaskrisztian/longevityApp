@@ -34,6 +34,11 @@ describe('RegisterSchema', () => {
     privacyAccepted: true as const,
   };
 
+  it('takes an optional supported language', () => {
+    expect(RegisterSchema.safeParse({ ...base, language: 'hu' }).success).toBe(true);
+    expect(RegisterSchema.safeParse({ ...base, language: 'fr' }).success).toBe(false);
+  });
+
   it('accepts a fully valid registration', () => {
     expect(RegisterSchema.safeParse(base).success).toBe(true);
   });

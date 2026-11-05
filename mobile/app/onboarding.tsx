@@ -9,6 +9,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { ChipMultiSelect, ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 import { parseTagList, formatTagList } from '@/src/utils/tagList';
 import {
@@ -36,26 +37,28 @@ import {
  * convention as the web form.
  */
 
-const GENDER_OPTIONS: ChipOption[] = GenderEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
-const ACTIVITY_LEVEL_OPTIONS: ChipOption[] = ActivityLevelEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
-const ACTIVITY_TYPE_OPTIONS: ChipOption[] = ActivityTypeEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
-const DIET_TYPE_OPTIONS: ChipOption[] = DietTypeEnum.options.map((v) => ({ value: v, label: enumLabel(v) }));
+// The labels are translated, so the option lists are built at render time (never at module scope).
+function enumOptions(values: readonly string[]): ChipOption[] {
+  return values.map((v) => ({ value: v, label: enumLabel(v) }));
+}
 
-const STEPS = ['Personal', 'Exercise', 'Nutrition'] as const;
+const STEP_KEYS = ['onboarding.step.personal', 'onboarding.step.exercise', 'onboarding.step.nutrition'] as const;
 
 function StepProgress({ step }: { step: number }) {
+  const { t } = useT();
   return (
     <View style={styles.progressRow}>
-      {STEPS.map((label, index) => (
-        <View key={label} style={styles.progressStep}>
-          <View style={[styles.progressDot, index <= step && styles.progressDotActive]}>
-            <Text style={[styles.progressDotText, index <= step && styles.progressDotTextActive]}>
-              {index + 1}
-            </Text>
+      {STEP_KEYS.map((key, index) => {
+        const label = t(key);
+        return (
+          <View key={key} style={styles.progressStep}>
+            <View style={[styles.progressDot, index <= step && styles.progressDotActive]}>
+              <Text style={[styles.progressDotText, index <= step && styles.progressDotTextActive]}>{index + 1}</Text>
+            </View>
+            <Text style={[styles.progressLabel, index === step && styles.progressLabelActive]}>{label}</Text>
           </View>
-          <Text style={[styles.progressLabel, index === step && styles.progressLabelActive]}>{label}</Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -69,22 +72,19 @@ interface PersonalFormState {
   timezone: string;
 }
 
-function PersonalStep({
-  initial,
-  onNext,
-}: {
-  initial: PersonalFormState;
-  onNext: (data: PersonalInfoInput) => void;
-}) {
+function PersonalStep({ initial, onNext }: { initial: PersonalFormState; onNext: (data: PersonalInfoInput) => void }) {
+  const { t } = useT();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function submit() {
     const parsed = PersonalInfoSchema.safeParse(form);
     if (!parsed.success) {
-      setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
-      ));
+      setErrors(
+        Object.fromEntries(
+          Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
+        ),
+      );
       return;
     }
     setErrors({});
@@ -94,45 +94,45 @@ function PersonalStep({
   return (
     <View style={styles.stepBody}>
       <TextField
-        label="Full name"
+        label={t('profile.field.fullName')}
         value={form.fullName}
         onChangeText={(v) => setForm({ ...form, fullName: v })}
         error={errors.fullName}
       />
       <TextField
-        label="Birth date (yyyy-mm-dd)"
-        placeholder="1990-05-20"
+        label={t('profile.field.birthDate')}
+        placeholder={t('onboarding.birthDatePlaceholder')}
         value={form.birthDate}
         onChangeText={(v) => setForm({ ...form, birthDate: v })}
         error={errors.birthDate}
       />
       <ChipSingleSelect
-        label="Gender (optional)"
-        options={GENDER_OPTIONS}
+        label={t('profile.field.genderOptional')}
+        options={enumOptions(GenderEnum.options)}
         value={form.gender}
         onChange={(v) => setForm({ ...form, gender: v })}
       />
       <TextField
-        label="Height (cm)"
+        label={t('profile.field.height')}
         keyboardType="numeric"
         value={form.heightCm}
         onChangeText={(v) => setForm({ ...form, heightCm: v })}
         error={errors.heightCm}
       />
       <TextField
-        label="Weight (kg)"
+        label={t('profile.field.weight')}
         keyboardType="numeric"
         value={form.weightKg}
         onChangeText={(v) => setForm({ ...form, weightKg: v })}
         error={errors.weightKg}
       />
       <TextField
-        label="Timezone"
+        label={t('profile.field.timezone')}
         value={form.timezone}
         onChangeText={(v) => setForm({ ...form, timezone: v })}
         error={errors.timezone}
       />
-      <Button title="Continue" onPress={submit} />
+      <Button title={t('onboarding.continue')} onPress={submit} />
     </View>
   );
 }
@@ -154,6 +154,7 @@ function ExerciseStep({
   onBack: () => void;
   onNext: (data: ExerciseProfileInput) => void;
 }) {
+  const { t } = useT();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -163,9 +164,11 @@ function ExerciseStep({
       customActivities: parseTagList(form.customActivities),
     });
     if (!parsed.success) {
-      setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
-      ));
+      setErrors(
+        Object.fromEntries(
+          Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
+        ),
+      );
       return;
     }
     setErrors({});
@@ -175,39 +178,39 @@ function ExerciseStep({
   return (
     <View style={styles.stepBody}>
       <ChipSingleSelect
-        label="Activity level"
-        options={ACTIVITY_LEVEL_OPTIONS}
+        label={t('profile.field.activityLevel')}
+        options={enumOptions(ActivityLevelEnum.options)}
         value={form.activityLevel}
         onChange={(v) => setForm({ ...form, activityLevel: v })}
       />
       {errors.activityLevel ? <Text style={styles.fieldError}>{errors.activityLevel}</Text> : null}
       <TextField
-        label="Workouts / week (optional)"
+        label={t('profile.field.workoutsPerWeek')}
         keyboardType="numeric"
         value={form.weeklyWorkoutCount}
         onChangeText={(v) => setForm({ ...form, weeklyWorkoutCount: v })}
       />
       <TextField
-        label="Avg. duration, min (optional)"
+        label={t('profile.field.avgDurationOnboarding')}
         keyboardType="numeric"
         value={form.avgWorkoutDurationMin}
         onChangeText={(v) => setForm({ ...form, avgWorkoutDurationMin: v })}
       />
       <ChipMultiSelect
-        label="Activity types"
-        options={ACTIVITY_TYPE_OPTIONS}
+        label={t('profile.field.activityTypes')}
+        options={enumOptions(ActivityTypeEnum.options)}
         values={form.activityTypes}
         onChange={(v) => setForm({ ...form, activityTypes: v })}
       />
       <TextField
-        label="Other activities (optional, comma-separated)"
-        placeholder="e.g. rock climbing, tennis"
+        label={t('profile.field.otherActivities')}
+        placeholder={t('onboarding.otherActivitiesPlaceholder')}
         value={form.customActivities}
         onChangeText={(v) => setForm({ ...form, customActivities: v })}
       />
       <View style={styles.buttonRow}>
-        <Button title="Back" variant="outline" onPress={onBack} style={styles.flexButton} />
-        <Button title="Continue" onPress={submit} style={styles.flexButton} />
+        <Button title={t('common.back')} variant="outline" onPress={onBack} style={styles.flexButton} />
+        <Button title={t('onboarding.continue')} onPress={submit} style={styles.flexButton} />
       </View>
     </View>
   );
@@ -235,8 +238,9 @@ function NutritionStep({
   onBack: () => void;
   onSubmitFinal: (data: NutritionProfileInput) => void;
   submitting: boolean;
-  serverError: string | null;
+  serverError: boolean;
 }) {
+  const { t } = useT();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -248,9 +252,11 @@ function NutritionStep({
       avoidedFoods: parseTagList(form.avoidedFoods),
     });
     if (!parsed.success) {
-      setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
-      ));
+      setErrors(
+        Object.fromEntries(
+          Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
+        ),
+      );
       return;
     }
     setErrors({});
@@ -259,65 +265,72 @@ function NutritionStep({
 
   return (
     <View style={styles.stepBody}>
-      {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
+      {serverError ? <Alert variant="destructive">{t('onboarding.saveFailed')}</Alert> : null}
       <ChipSingleSelect
-        label="Diet type"
-        options={DIET_TYPE_OPTIONS}
+        label={t('profile.field.dietType')}
+        options={enumOptions(DietTypeEnum.options)}
         value={form.dietType}
         onChange={(v) => setForm({ ...form, dietType: v })}
       />
       {errors.dietType ? <Text style={styles.fieldError}>{errors.dietType}</Text> : null}
       <TextField
-        label="Meals / day (optional)"
+        label={t('profile.field.mealsPerDay')}
         keyboardType="numeric"
         value={form.dailyMealCount}
         onChangeText={(v) => setForm({ ...form, dailyMealCount: v })}
       />
       <TextField
-        label="Calories / day (optional)"
+        label={t('profile.field.caloriesPerDay')}
         keyboardType="numeric"
         value={form.dailyCaloriesKcal}
         onChangeText={(v) => setForm({ ...form, dailyCaloriesKcal: v })}
       />
       <TextField
-        label="Protein, g / day (optional)"
+        label={t('profile.field.proteinOnboarding')}
         keyboardType="numeric"
         value={form.dailyProteinGrams}
         onChangeText={(v) => setForm({ ...form, dailyProteinGrams: v })}
       />
       <TextField
-        label="Allergies (optional, comma-separated)"
-        placeholder="e.g. peanuts, shellfish"
+        label={t('profile.field.allergiesOnboarding')}
+        placeholder={t('onboarding.allergiesPlaceholder')}
         value={form.allergies}
         onChangeText={(v) => setForm({ ...form, allergies: v })}
       />
       <TextField
-        label="Intolerances (optional, comma-separated)"
-        placeholder="e.g. lactose"
+        label={t('profile.field.intolerancesOnboarding')}
+        placeholder={t('onboarding.intolerancesPlaceholder')}
         value={form.intolerances}
         onChangeText={(v) => setForm({ ...form, intolerances: v })}
       />
       <TextField
-        label="Avoided foods (optional, comma-separated)"
-        placeholder="e.g. red meat"
+        label={t('profile.field.avoidedFoodsOnboarding')}
+        placeholder={t('onboarding.avoidedFoodsPlaceholder')}
         value={form.avoidedFoods}
         onChangeText={(v) => setForm({ ...form, avoidedFoods: v })}
       />
       <TextField
-        label="Notes (optional)"
+        label={t('profile.field.notes')}
         multiline
         value={form.notes}
         onChangeText={(v) => setForm({ ...form, notes: v })}
       />
       <View style={styles.buttonRow}>
-        <Button title="Back" variant="outline" onPress={onBack} disabled={submitting} style={styles.flexButton} />
-        <Button title="Finish" onPress={submit} loading={submitting} style={styles.flexButton} />
+        <Button
+          title={t('common.back')}
+          variant="outline"
+          onPress={onBack}
+          disabled={submitting}
+          style={styles.flexButton}
+        />
+        <Button title={t('onboarding.finish')} onPress={submit} loading={submitting} style={styles.flexButton} />
       </View>
     </View>
   );
 }
 
 export default function OnboardingScreen() {
+  const { t } = useT();
   const { status, user } = useSession();
   const [step, setStep] = useState(0);
   const [initialFullName, setInitialFullName] = useState('');
@@ -325,7 +338,7 @@ export default function OnboardingScreen() {
   const [personal, setPersonal] = useState<PersonalInfoInput | null>(null);
   const [exercise, setExercise] = useState<ExerciseProfileInput | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState(false);
 
   useEffect(() => {
     if (status !== 'signedIn') return;
@@ -348,13 +361,13 @@ export default function OnboardingScreen() {
 
   async function finish(nutrition: NutritionProfileInput) {
     if (!personal || !exercise) return; // unreachable — earlier steps always run first
-    setServerError(null);
+    setServerError(false);
     setSubmitting(true);
     try {
       await completeOnboarding({ personal, exercise, nutrition });
       router.replace('/');
     } catch {
-      setServerError('Something went wrong saving your profile. Please try again.');
+      setServerError(true);
     } finally {
       setSubmitting(false);
     }
@@ -362,18 +375,20 @@ export default function OnboardingScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Let&rsquo;s set up your profile</Text>
-      <Text style={styles.subtitle}>
-        Three quick steps — personal info, exercise habits, and nutrition — so your dashboard and
-        insights make sense from day one.
-      </Text>
+      <Text style={styles.title}>{t('onboarding.title')}</Text>
+      <Text style={styles.subtitle}>{t('onboarding.subtitle')}</Text>
       <StepProgress step={step} />
 
       {step === 0 && (
         <PersonalStep
           initial={
             personal
-              ? { ...personal, gender: personal.gender, heightCm: String(personal.heightCm), weightKg: String(personal.weightKg) }
+              ? {
+                  ...personal,
+                  gender: personal.gender,
+                  heightCm: String(personal.heightCm),
+                  weightKg: String(personal.weightKg),
+                }
               : {
                   fullName: initialFullName,
                   birthDate: '',
@@ -393,7 +408,12 @@ export default function OnboardingScreen() {
         <ExerciseStep
           initial={
             exercise
-              ? { ...exercise, weeklyWorkoutCount: String(exercise.weeklyWorkoutCount ?? ''), avgWorkoutDurationMin: String(exercise.avgWorkoutDurationMin ?? ''), customActivities: formatTagList(exercise.customActivities) }
+              ? {
+                  ...exercise,
+                  weeklyWorkoutCount: String(exercise.weeklyWorkoutCount ?? ''),
+                  avgWorkoutDurationMin: String(exercise.avgWorkoutDurationMin ?? ''),
+                  customActivities: formatTagList(exercise.customActivities),
+                }
               : {
                   activityLevel: 'MODERATELY_ACTIVE',
                   weeklyWorkoutCount: '',

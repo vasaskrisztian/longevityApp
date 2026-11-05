@@ -1,4 +1,5 @@
 import { apiFetch } from '@/src/api/client';
+import { t } from '@/src/i18n';
 import type { AppleHealthDailySample } from '@/src/health/aggregate';
 
 export interface AppleHealthIngestResult {
@@ -30,7 +31,8 @@ export async function ingestAppleHealth(samples: AppleHealthDailySample[]): Prom
 
 export class AppleHealthRateLimitedError extends Error {
   constructor() {
-    super('Too many Apple Health sync requests. Please try again in a minute.');
+    // Shown to the person as is, so it is translated when the error is created.
+    super(t('health.apple.rateLimited'));
     this.name = 'AppleHealthRateLimitedError';
   }
 }

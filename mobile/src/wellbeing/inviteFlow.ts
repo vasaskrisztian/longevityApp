@@ -1,4 +1,5 @@
 import type { InvitationPreview } from '@/src/api/groups';
+import { t } from '@/src/i18n';
 
 /**
  * Only in-app invitation paths may be used as a post-login redirect — never
@@ -18,12 +19,19 @@ export type InviteView =
   | { kind: 'login' }
   | { kind: 'register' };
 
-const UNAVAILABLE: Record<string, string> = {
-  invalid: 'This invitation link is not valid.',
-  expired: 'This invitation has expired. Ask the group administrator to send a new one.',
-  revoked: 'This invitation was withdrawn by the group administrator.',
-  accepted: 'This invitation has already been accepted.',
-};
+/** Resolved at call time, so the text follows the current language. */
+function unavailableMessage(status: string): string {
+  switch (status) {
+    case 'expired':
+      return t('invite.unavailable.expired');
+    case 'revoked':
+      return t('invite.unavailable.revoked');
+    case 'accepted':
+      return t('invite.unavailable.accepted');
+    default:
+      return t('invite.unavailable.invalid');
+  }
+}
 
 /** Decides which part of the invitation screen to show. */
 export function inviteView(
@@ -32,9 +40,9 @@ export function inviteView(
   session: { signedIn: boolean; email: string | null },
 ): InviteView {
   if (loading) return { kind: 'loading' };
-  if (!preview) return { kind: 'unavailable', message: 'The invitation could not be loaded. Check your connection and try again.' };
+  if (!preview) return { kind: 'unavailable', message: t('invite.unavailable.loadFailed') };
   if (preview.status !== 'valid') {
-    return { kind: 'unavailable', message: UNAVAILABLE[preview.status] ?? UNAVAILABLE.invalid };
+    return { kind: 'unavailable', message: unavailableMessage(preview.status) };
   }
   if (session.signedIn) {
     const invited = (preview.email ?? '').toLowerCase();

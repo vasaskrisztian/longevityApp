@@ -3,12 +3,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { Insights, InsightSeverity } from '@/src/api/dashboard';
 import { Card } from '@/src/components/ui/Card';
 import { InfoLabel } from '@/src/components/ui/InfoLabel';
+import { useT, type TextKey } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
-const SEVERITY: Record<InsightSeverity, { color: string; label: string }> = {
-  attention: { color: colors.warning, label: 'Watch' },
-  good: { color: colors.success, label: 'Good' },
-  info: { color: colors.muted.foreground, label: 'Note' },
+const SEVERITY: Record<InsightSeverity, { color: string; label: TextKey }> = {
+  attention: { color: colors.warning, label: 'insights.severity.attention' },
+  good: { color: colors.success, label: 'insights.severity.good' },
+  info: { color: colors.muted.foreground, label: 'insights.severity.info' },
 };
 
 /**
@@ -18,10 +19,11 @@ const SEVERITY: Record<InsightSeverity, { color: string; label: string }> = {
  * never relies on color alone.
  */
 export function InsightsCard({ insights }: { insights: Insights }) {
+  const { t } = useT();
   return (
     <Card style={styles.card} testID="insights-card">
       <InfoLabel term="baseline" textStyle={styles.kicker}>
-        Your day at a glance
+        {t('insights.title')}
       </InfoLabel>
       <Text style={styles.headline}>{insights.headline}</Text>
       {insights.items.map((item) => {
@@ -31,7 +33,7 @@ export function InsightsCard({ insights }: { insights: Insights }) {
             <View style={[styles.dot, { backgroundColor: tone.color }]} />
             <View style={styles.itemBody}>
               <Text style={styles.itemTitle}>
-                {item.title} <Text style={styles.itemTag}>· {tone.label}</Text>
+                {item.title} <Text style={styles.itemTag}>· {t(tone.label)}</Text>
               </Text>
               <Text style={styles.itemMessage}>{item.message}</Text>
             </View>

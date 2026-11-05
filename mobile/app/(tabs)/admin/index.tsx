@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { useT } from '@/src/i18n';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import AdminGroupsScreen from '@/src/screens/admin/AdminGroupsScreen';
 import AdminUsersScreen from '@/src/screens/admin/AdminUsersScreen';
@@ -15,6 +16,7 @@ const SEGMENTS = ['groups', 'users'] as const;
  * behind a card above the user table.
  */
 export default function AdminScreen() {
+  const { t } = useT();
   const [segment, setSegment] = useTabParam(SEGMENTS, 'groups');
   return (
     <View style={styles.container}>
@@ -22,8 +24,8 @@ export default function AdminScreen() {
       <View style={styles.segments}>
         <SegmentedControl
           options={[
-            { value: 'groups', label: 'Groups' },
-            { value: 'users', label: 'Users' },
+            { value: 'groups', label: t('nav.segment.groups') },
+            { value: 'users', label: t('nav.segment.users') },
           ]}
           value={segment}
           onChange={setSegment}

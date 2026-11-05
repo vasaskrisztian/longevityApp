@@ -16,6 +16,7 @@ import { Card } from '@/src/components/ui/Card';
 import appleHealthNative from '@/src/health/native';
 import { AppleHealthRateLimitedError } from '@/src/api/appleHealth';
 import { syncAppleHealth } from '@/src/health/sync';
+import { locale, useT, type TextKey } from '@/src/i18n';
 import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens';
 
 /**
@@ -33,11 +34,11 @@ import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens'
  * an iPhone and explains where it works on web/Android.
  */
 
-const STATUS_LABEL: Record<string, string> = {
-  CONNECTED: 'Connected',
-  DISCONNECTED: 'Not connected',
-  AUTH_REQUIRED: 'Reconnect required',
-  ERROR: 'Connection error',
+const STATUS_LABEL_KEY: Record<string, TextKey> = {
+  CONNECTED: 'devices.status.connected',
+  DISCONNECTED: 'devices.status.disconnected',
+  AUTH_REQUIRED: 'devices.status.authRequired',
+  ERROR: 'devices.status.error',
 };
 
 const STATUS_BADGE_STYLE: Record<string, { backgroundColor: string; color: string }> = {
@@ -47,23 +48,26 @@ const STATUS_BADGE_STYLE: Record<string, { backgroundColor: string; color: strin
   ERROR: { backgroundColor: '#FBEAE9', color: colors.danger },
 };
 
-const SYNC_MESSAGE: Record<OuraSyncResult, string> = {
-  queued: 'Sync queued — your latest Oura data will appear here in a few minutes.',
-  rate_limited: 'You already triggered a sync in the last 5 minutes. Please wait before retrying.',
-  not_connected: 'Your Oura account is not connected, so there is nothing to sync.',
-  error: 'Could not trigger a sync. Please try again.',
+const SYNC_MESSAGE_KEY: Record<OuraSyncResult, TextKey> = {
+  queued: 'devices.oura.sync.queued',
+  rate_limited: 'devices.oura.sync.rateLimited',
+  not_connected: 'devices.oura.sync.notConnected',
+  error: 'devices.oura.sync.error',
 };
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useT();
+  const labelKey = STATUS_LABEL_KEY[status];
   const style = STATUS_BADGE_STYLE[status] ?? STATUS_BADGE_STYLE.DISCONNECTED;
   return (
     <View style={[styles.badge, { backgroundColor: style.backgroundColor }]}>
-      <Text style={[styles.badgeText, { color: style.color }]}>{STATUS_LABEL[status] ?? status}</Text>
+      <Text style={[styles.badgeText, { color: style.color }]}>{labelKey ? t(labelKey) : status}</Text>
     </View>
   );
 }
 
 export default function DevicesScreen() {
+  const { t } = useT();
   const [connection, setConnection] = useState<ConnectionSummary | null>(null);
   const [appleConnection, setAppleConnection] = useState<ConnectionSummary | null>(null);
   const [appleSupported, setAppleSupported] = useState<boolean | null>(null);
@@ -71,14 +75,14 @@ export default function DevicesScreen() {
   const [appleMessage, setAppleMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState(false);
   const [syncStatus, setSyncStatus] = useState<OuraSyncResult | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState(false);
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) {
@@ -86,13 +90,13 @@ export default function DevicesScreen() {
     } else {
       setLoading(true);
     }
-    setLoadError(null);
+    setLoadError(false);
     try {
       const connections = await getConnections();
       setConnection(connections.find((c) => c.provider === 'OURA') ?? null);
       setAppleConnection(connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null);
     } catch {
-      setLoadError('Could not load your devices. Pull down to try again.');
+      setLoadError(true);
     } finally {
       if (isRefresh) {
         setRefreshing(false);
@@ -136,14 +140,14 @@ export default function DevicesScreen() {
     try {
       const outcome = await syncAppleHealth(appleConnection?.lastSyncAt);
       if (outcome.status === 'synced') {
-        setAppleMessage({ ok: true, text: `Synced ${outcome.days} day${outcome.days === 1 ? '' : 's'} of Apple Health data.` });
+        setAppleMessage({ ok: true, text: t('health.apple.synced', { count: outcome.days }) });
       } else if (outcome.status === 'no_data') {
         setAppleMessage({
           ok: false,
-          text: 'No Apple Health data was found. Check that Longevity Klub is allowed to read your data in Settings > Health > Data Access & Devices.',
+          text: t('health.apple.noData'),
         });
       } else {
-        setAppleMessage({ ok: false, text: 'Apple Health is not available on this device.' });
+        setAppleMessage({ ok: false, text: t('health.apple.unavailable') });
       }
       await load(true);
     } catch (error) {
@@ -152,7 +156,7 @@ export default function DevicesScreen() {
         text:
           error instanceof AppleHealthRateLimitedError
             ? error.message
-            : 'Could not sync Apple Health. Please try again.',
+            : t('health.apple.syncFailed'),
       });
     } finally {
       setAppleSyncing(false);
@@ -161,7 +165,7 @@ export default function DevicesScreen() {
 
   async function handleConnect() {
     setConnecting(true);
-    setConnectError(null);
+    setConnectError(false);
     try {
       const { authorizationUrl } = await getOuraAuthorizationUrl();
       await WebBrowser.openBrowserAsync(authorizationUrl);
@@ -171,7 +175,7 @@ export default function DevicesScreen() {
       // again whenever the app becomes active (web: the tab is left open).
       await load(true);
     } catch {
-      setConnectError('Could not start the Oura connection. Please try again.');
+      setConnectError(true);
     } finally {
       setConnecting(false);
     }
@@ -195,12 +199,12 @@ export default function DevicesScreen() {
 
   async function handleDisconnect() {
     setDisconnecting(true);
-    setDisconnectError(null);
+    setDisconnectError(false);
     try {
       await disconnectOura();
       await load(true);
     } catch {
-      setDisconnectError('Could not disconnect Oura. Please try again.');
+      setDisconnectError(true);
     } finally {
       setDisconnecting(false);
     }
@@ -224,7 +228,7 @@ export default function DevicesScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
-      {loadError ? <Alert variant="destructive">{loadError}</Alert> : null}
+      {loadError ? <Alert variant="destructive">{t('devices.loadFailed')}</Alert> : null}
 
       <Card style={styles.cardGap}>
         <View style={styles.cardHeaderRow}>
@@ -233,30 +237,34 @@ export default function DevicesScreen() {
         </View>
         <Text style={styles.cardDescription}>
           {isConnected
-            ? 'Your Oura account is connected.'
+            ? t('devices.oura.connected')
             : canReconnect
-              ? 'Your Oura connection needs attention — reconnect to resume syncing.'
-              : 'Connect your Oura account to automatically synchronize sleep, recovery and activity data.'}
+              ? t('devices.oura.needsAttention')
+              : t('devices.oura.connectPrompt')}
         </Text>
 
         {connection?.lastSyncAt ? (
           <Text style={styles.metaText}>
-            Last sync attempt: {new Date(connection.lastSyncAt).toLocaleString()}
-            {connection.lastSyncStatus ? ` (${connection.lastSyncStatus})` : ''}
+            {connection.lastSyncStatus
+              ? t('devices.oura.lastSyncAttemptWithStatus', {
+                  date: new Date(connection.lastSyncAt).toLocaleString(locale()),
+                  status: connection.lastSyncStatus,
+                })
+              : t('devices.oura.lastSyncAttempt', { date: new Date(connection.lastSyncAt).toLocaleString(locale()) })}
           </Text>
         ) : null}
 
-        {connectError ? <Alert variant="destructive">{connectError}</Alert> : null}
-        {disconnectError ? <Alert variant="destructive">{disconnectError}</Alert> : null}
+        {connectError ? <Alert variant="destructive">{t('devices.oura.connectFailed')}</Alert> : null}
+        {disconnectError ? <Alert variant="destructive">{t('devices.oura.disconnectFailed')}</Alert> : null}
         {syncStatus ? (
-          <Alert variant={syncStatus === 'queued' ? 'success' : 'destructive'}>{SYNC_MESSAGE[syncStatus]}</Alert>
+          <Alert variant={syncStatus === 'queued' ? 'success' : 'destructive'}>{t(SYNC_MESSAGE_KEY[syncStatus])}</Alert>
         ) : null}
 
         <View style={styles.row}>
           {isConnected ? (
             <>
               <Button
-                title={syncing ? 'Syncing…' : 'Sync now'}
+                title={syncing ? t('devices.syncing') : t('devices.syncNow')}
                 variant="outline"
                 size="sm"
                 onPress={handleSync}
@@ -264,7 +272,7 @@ export default function DevicesScreen() {
                 style={styles.flex1}
               />
               <Button
-                title={disconnecting ? 'Disconnecting…' : 'Disconnect'}
+                title={disconnecting ? t('devices.oura.disconnecting') : t('devices.oura.disconnect')}
                 variant="destructive"
                 size="sm"
                 onPress={handleDisconnect}
@@ -274,7 +282,7 @@ export default function DevicesScreen() {
             </>
           ) : (
             <Button
-              title={connecting ? 'Opening Oura…' : canReconnect ? 'Reconnect Oura' : 'Connect Oura'}
+              title={connecting ? t('devices.oura.opening') : canReconnect ? t('devices.oura.reconnect') : t('devices.oura.connect')}
               size="sm"
               onPress={handleConnect}
               loading={connecting}
@@ -284,10 +292,7 @@ export default function DevicesScreen() {
         </View>
 
         {isConnected ? (
-          <Text style={styles.hintText}>
-            Daily sync runs automatically in the background; use Sync now to pull the latest data on
-            demand (limited to once every 5 minutes).
-          </Text>
+          <Text style={styles.hintText}>{t('devices.oura.dailySyncHint')}</Text>
         ) : null}
       </Card>
 
@@ -296,7 +301,7 @@ export default function DevicesScreen() {
           <Text style={styles.cardTitle}>Apple Health</Text>
           {appleSupported === false ? (
             <View style={[styles.badge, { backgroundColor: colors.muted.default }]}>
-              <Text style={[styles.badgeText, { color: colors.muted.foreground }]}>iPhone only</Text>
+              <Text style={[styles.badgeText, { color: colors.muted.foreground }]}>{t('devices.apple.iphoneOnly')}</Text>
             </View>
           ) : (
             <StatusBadge status={appleConnection?.status ?? 'DISCONNECTED'} />
@@ -304,21 +309,17 @@ export default function DevicesScreen() {
         </View>
 
         {appleSupported === false ? (
-          <Text style={styles.cardDescription}>
-            Apple Health data lives on your iPhone. Open the Longevity Klub app on your iPhone to
-            connect it — steps, calories, sleep, resting heart rate and HRV are then synced here
-            automatically.
-          </Text>
+          <Text style={styles.cardDescription}>{t('devices.apple.notOnThisDevice')}</Text>
         ) : (
           <>
             <Text style={styles.cardDescription}>
               {appleConnection?.status === 'CONNECTED'
-                ? 'Your Apple Health data syncs automatically whenever you open the app.'
-                : 'Share steps, calories, sleep, resting heart rate and HRV from Apple Health. Read-only — Longevity Klub never writes to Apple Health.'}
+                ? t('devices.apple.connectedDescription')
+                : t('devices.apple.connectDescription')}
             </Text>
             {appleConnection?.lastSyncAt ? (
               <Text style={styles.metaText}>
-                Last sync: {new Date(appleConnection.lastSyncAt).toLocaleString()}
+                {t('devices.apple.lastSync', { date: new Date(appleConnection.lastSyncAt).toLocaleString(locale()) })}
               </Text>
             ) : null}
             {appleMessage ? (
@@ -327,10 +328,10 @@ export default function DevicesScreen() {
             <Button
               title={
                 appleSyncing
-                  ? 'Syncing…'
+                  ? t('devices.syncing')
                   : appleConnection?.status === 'CONNECTED'
-                    ? 'Sync now'
-                    : 'Connect Apple Health'
+                    ? t('devices.syncNow')
+                    : t('devices.apple.connect')
               }
               variant={appleConnection?.status === 'CONNECTED' ? 'outline' : 'primary'}
               size="sm"
@@ -339,19 +340,13 @@ export default function DevicesScreen() {
               disabled={appleSupported !== true}
             />
             {appleConnection?.status === 'CONNECTED' ? (
-              <Text style={styles.hintText}>
-                To stop sharing, turn off access in Settings &gt; Health &gt; Data Access &amp;
-                Devices &gt; Longevity Klub.
-              </Text>
+              <Text style={styles.hintText}>{t('devices.apple.stopHint')}</Text>
             ) : null}
           </>
         )}
       </Card>
 
-      <Text style={styles.disclaimer}>
-        This platform provides wellness information and does not provide medical diagnoses or
-        medical advice.
-      </Text>
+      <Text style={styles.disclaimer}>{t('devices.disclaimer')}</Text>
     </ScrollView>
   );
 }

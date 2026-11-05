@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   acceptInvitationById,
   getMyWellbeing,
+  groupErrorMessage,
   joinGroupChallenge,
   leaveGroup,
   leaveGroupChallenge,
@@ -20,6 +21,7 @@ import { Checkbox } from '@/src/components/ui/Checkbox';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { VideoChallengePanel } from '@/src/components/wellbeing/VideoChallengePanel';
 import { CollectiveBar, ContributionLine, GroupLogo, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
+import { useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { setPendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { confirmDestructive } from '@/src/utils/confirm';
@@ -34,6 +36,7 @@ import { daysLeftLabel, formatDateRange, formatDay, teamStatusLine } from '@/src
  */
 
 function InvitationCard({ invitation, onAccepted, highlight }: { invitation: PendingInvitation; onAccepted: () => void; highlight?: boolean }) {
+  const { t } = useT();
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +48,7 @@ function InvitationCard({ invitation, onAccepted, highlight }: { invitation: Pen
       await acceptInvitationById(invitation.id);
       onAccepted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not accept the invitation.');
+      setError(groupErrorMessage(err, t('groups.invitation.acceptFailed')));
     } finally {
       setBusy(false);
     }
@@ -57,16 +60,16 @@ function InvitationCard({ invitation, onAccepted, highlight }: { invitation: Pen
         <GroupLogo logoUrl={invitation.logoUrl} />
         <View style={styles.flex}>
           <Text style={styles.groupName}>{invitation.groupName}</Text>
-          <Text style={styles.muted}>Invitation · valid until {formatDay(invitation.expiresAt.slice(0, 10))}</Text>
+          <Text style={styles.muted}>{t('groups.invitation.validUntil', { date: formatDay(invitation.expiresAt.slice(0, 10)) })}</Text>
         </View>
       </View>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       <Checkbox
-        label={`I agree that the administrators of ${invitation.groupName} can see my health data (sleep, activity and other measurements). I can leave the group at any time.`}
+        label={t('groups.invitation.consent', { name: invitation.groupName })}
         checked={consent}
         onChange={setConsent}
       />
-      <Button title="Accept and join" onPress={accept} disabled={!consent} loading={busy} />
+      <Button title={t('groups.invitation.accept')} onPress={accept} disabled={!consent} loading={busy} />
     </Card>
   );
 }
@@ -80,6 +83,7 @@ function ChallengeCard({
   groupId: string;
   onChanged: () => void;
 }) {
+  const { t } = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const left = daysLeftLabel(challenge.daysRemaining);
@@ -92,7 +96,7 @@ function ChallengeCard({
       else await joinGroupChallenge(groupId, challenge.id);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(groupErrorMessage(err, t('groups.challenge.failed')));
     } finally {
       setBusy(false);
     }
@@ -116,38 +120,39 @@ function ChallengeCard({
         <>
           <CollectiveBar type={challenge.type} collective={challenge.collective} />
           {challenge.series ? <TeamChart type={challenge.type} series={challenge.series} /> : null}
-          {challenge.joined && challenge.me ? <ContributionLine label="Your share" type={challenge.type} progress={challenge.me} /> : null}
+          {challenge.joined && challenge.me ? <ContributionLine label={t('groups.challenge.yourShare')} type={challenge.type} progress={challenge.me} /> : null}
           <Text style={styles.muted}>
-            {challenge.team.participants} of {challenge.team.members} members are adding to the total
+            {t('groups.challenge.contributors', { participants: challenge.team.participants, members: challenge.team.members })}
           </Text>
         </>
       ) : (
         <>
-          {challenge.joined && challenge.me ? <ProgressLine label="You" progress={challenge.me} /> : null}
-          <Text style={styles.muted}>Team: {teamStatusLine(challenge.team)}</Text>
+          {challenge.joined && challenge.me ? <ProgressLine label={t('groups.challenge.you')} progress={challenge.me} /> : null}
+          <Text style={styles.muted}>{t('groups.challenge.team', { status: teamStatusLine(challenge.team) })}</Text>
         </>
       )}
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {challenge.status !== 'ENDED' && !challenge.joined ? (
-        <Text style={styles.muted}>Only data from the day you join counts — earlier days are not added.</Text>
+        <Text style={styles.muted}>{t('groups.challenge.joinNote')}</Text>
       ) : null}
       {challenge.status !== 'ENDED' ? (
         <Button
-          title={challenge.joined ? 'Leave this challenge' : 'Join this challenge'}
+          title={challenge.joined ? t('groups.challenge.leave') : t('groups.challenge.join')}
           variant={challenge.joined ? 'outline' : 'primary'}
           size="sm"
           loading={busy}
           onPress={toggle}
         />
       ) : !challenge.joined ? (
-        <Text style={styles.muted}>You did not take part in this challenge.</Text>
+        <Text style={styles.muted}>{t('groups.challenge.notTakenPart')}</Text>
       ) : null}
     </View>
   );
 }
 
 function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: () => void; highlight?: boolean }) {
+  const { t } = useT();
   const [challenges, setChallenges] = useState<MyGroupChallenge[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -158,16 +163,16 @@ function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: ()
         setChallenges(list);
         setError(null);
       })
-      .catch(() => setError('Could not load the challenges.'));
-  }, [group.id]);
+      .catch(() => setError(t('groups.group.challengesLoadFailed')));
+  }, [group.id, t]);
 
   useEffect(load, [load]);
 
   async function handleLeave() {
     const confirmed = await confirmDestructive(
-      `Leave ${group.name}?`,
-      'The group’s administrators will no longer be able to see your health data, and you will be removed from its challenges.',
-      'Leave group',
+      t('account.sharing.leaveTitle', { name: group.name }),
+      t('account.sharing.leaveMessage'),
+      t('account.sharing.leaveConfirm'),
     );
     if (!confirmed) return;
     setLeaving(true);
@@ -175,7 +180,7 @@ function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: ()
       await leaveGroup(group.id);
       onLeft();
     } catch {
-      setError('Could not leave the group. Please try again.');
+      setError(t('account.sharing.leaveFailed'));
       setLeaving(false);
     }
   }
@@ -187,7 +192,7 @@ function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: ()
         <View style={styles.flex}>
           <Text style={styles.groupName}>{group.name}</Text>
           <Text style={styles.muted}>
-            {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'} · joined {formatDay(group.joinedAt.slice(0, 10))}
+            {t('groups.group.summary', { count: group.memberCount, date: formatDay(group.joinedAt.slice(0, 10)) })}
           </Text>
         </View>
       </View>
@@ -195,18 +200,19 @@ function GroupSection({ group, onLeft, highlight }: { group: MyGroup; onLeft: ()
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {challenges === null && !error ? <ActivityIndicator color={colors.primary.default} /> : null}
       {challenges && challenges.length === 0 ? (
-        <Text style={styles.muted}>No challenges yet. When an administrator creates one you will get a notification.</Text>
+        <Text style={styles.muted}>{t('groups.group.noChallenges')}</Text>
       ) : null}
       {challenges?.map((challenge) => (
         <ChallengeCard key={challenge.id} challenge={challenge} groupId={group.id} onChanged={load} />
       ))}
 
-      <Button title="Leave this group" variant="ghost" size="sm" loading={leaving} onPress={handleLeave} />
+      <Button title={t('groups.group.leave')} variant="ghost" size="sm" loading={leaving} onPress={handleLeave} />
     </Card>
   );
 }
 
 export default function GroupsScreen() {
+  const { t } = useT();
   // Set when opened from a notification (see notifications/route.ts): that invitation / group is shown first and outlined.
   const { invitation: focusInvitation, group: focusGroup } = useLocalSearchParams<{ invitation?: string; group?: string }>();
   const [groups, setGroups] = useState<MyGroup[] | null>(null);
@@ -221,17 +227,14 @@ export default function GroupsScreen() {
         setPendingInvitations(result.pendingInvitations.length);
         setError(null);
       })
-      .catch(() => setError('Could not load your groups.'));
-  }, []);
+      .catch(() => setError(t('account.sharing.loadFailed')));
+  }, [t]);
 
   useFocusEffect(load);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.intro}>
-        Groups you belong to through your company or team. Joining a group lets its administrators see your health data;
-        challenges are always optional.
-      </Text>
+      <Text style={styles.intro}>{t('groups.intro')}</Text>
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {groups === null && !error ? (
@@ -255,9 +258,7 @@ export default function GroupsScreen() {
 
       {groups && groups.length === 0 && invitations.length === 0 ? (
         <Card>
-          <Text style={styles.body}>
-            You are not in any group yet. When an administrator invites you by email, the invitation shows up here.
-          </Text>
+          <Text style={styles.body}>{t('groups.empty')}</Text>
         </Card>
       ) : null}
     </ScrollView>

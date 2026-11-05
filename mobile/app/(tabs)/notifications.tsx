@@ -7,6 +7,7 @@ import { listNotifications, markNotificationsRead, type AppNotification } from '
 import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
+import { useT } from '@/src/i18n';
 import { notificationHref } from '@/src/notifications/route';
 import { setUnreadCount } from '@/src/notifications/unreadStore';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
@@ -27,6 +28,7 @@ const ICON: Record<AppNotification['type'], React.ComponentProps<typeof Ionicons
  * consent text) and challenges joined.
  */
 export default function NotificationsScreen() {
+  const { t } = useT();
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,8 +40,8 @@ export default function NotificationsScreen() {
         setUnreadCount(result.unreadCount);
         setError(null);
       })
-      .catch(() => setError('Could not load your notifications.'));
-  }, []);
+      .catch(() => setError(t('notif.loadFailed')));
+  }, [t]);
 
   // Refresh whenever the tab gets focus, so a notification that arrived while
   // the person was elsewhere shows up without a manual reload.
@@ -65,7 +67,7 @@ export default function NotificationsScreen() {
       setItems((current) => (current ? current.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })) : current));
       setUnreadCount(0);
     } catch {
-      setError('Could not mark the notifications as read.');
+      setError(t('notif.markFailed'));
     } finally {
       setBusy(false);
     }
@@ -79,11 +81,11 @@ export default function NotificationsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Pressable accessibilityRole="button" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} style={styles.back}>
         <Ionicons name="chevron-back" size={18} color={colors.muted.foreground} />
-        <Text style={styles.backLabel}>Back</Text>
+        <Text style={styles.backLabel}>{t('common.back')}</Text>
       </Pressable>
       <View style={styles.header}>
-        <Text style={styles.title}>Notifications</Text>
-        {unread > 0 ? <Button title="Mark all as read" size="sm" variant="outline" loading={busy} onPress={markAllRead} /> : null}
+        <Text style={styles.title}>{t('notif.title')}</Text>
+        {unread > 0 ? <Button title={t('notif.markAllRead')} size="sm" variant="outline" loading={busy} onPress={markAllRead} /> : null}
       </View>
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
@@ -96,9 +98,7 @@ export default function NotificationsScreen() {
 
       {items && items.length === 0 ? (
         <Card>
-          <Text style={styles.empty}>
-            Nothing here yet. Group invitations, new group challenges and challenge results will show up in this list.
-          </Text>
+          <Text style={styles.empty}>{t('notif.empty')}</Text>
         </Card>
       ) : null}
 
@@ -109,7 +109,7 @@ export default function NotificationsScreen() {
             <View style={styles.itemText}>
               <View style={styles.itemTitleRow}>
                 <Text style={[styles.itemTitle, !notification.readAt && styles.itemTitleUnread]}>{notification.title}</Text>
-                {!notification.readAt ? <View style={styles.dot} accessibilityLabel="Unread" /> : null}
+                {!notification.readAt ? <View style={styles.dot} accessibilityLabel={t('notif.unread')} /> : null}
               </View>
               <Text style={styles.itemBody}>{notification.body}</Text>
               <Text style={styles.itemTime}>{timeAgo(notification.createdAt)}</Text>

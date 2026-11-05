@@ -57,12 +57,13 @@ describe('POST /api/mobile/auth/refresh', () => {
       accessToken: 'new-access',
       refreshToken: 'new-refresh',
       expiresIn: 900,
+      language: 'de',
     });
 
     const response = await POST(postRequest({ refreshToken: 'valid' }));
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toEqual({ accessToken: 'new-access', refreshToken: 'new-refresh', expiresIn: 900 });
+    expect(body).toEqual({ accessToken: 'new-access', refreshToken: 'new-refresh', expiresIn: 900, language: 'de' });
   });
 });

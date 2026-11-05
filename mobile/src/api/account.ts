@@ -1,4 +1,5 @@
 import { apiFetch } from '@/src/api/client';
+import { t } from '@/src/i18n';
 
 /**
  * Own-account functions (backend: src/app/api/account/**). Both re-confirm the
@@ -21,7 +22,7 @@ async function send(path: string, method: 'POST' | 'DELETE', body: unknown): Pro
   const response = await apiFetch(path, { method, body: JSON.stringify(body) });
   if (response.ok) return;
   const payload = await response.json().catch(() => null);
-  const message = typeof payload?.error === 'string' ? payload.error : 'The request was not accepted. Check the values and try again.';
+  const message = typeof payload?.error === 'string' ? payload.error : t('common.error.notAccepted');
   throw new AccountError(response.status, message);
 }
 
@@ -31,3 +32,9 @@ export const changePassword = (input: { currentPassword: string; newPassword: st
 
 /** Permanently deletes the account and all its data. */
 export const deleteAccount = (password: string) => send('/api/account', 'DELETE', { password });
+
+/** Saves the preferred language on the account (emails and notifications follow it). */
+export async function saveAccountLanguage(language: string): Promise<void> {
+  const response = await apiFetch('/api/account/language', { method: 'PUT', body: JSON.stringify({ language }) });
+  if (!response.ok) throw new AccountError(response.status, t('account.language.saveFailed'));
+}

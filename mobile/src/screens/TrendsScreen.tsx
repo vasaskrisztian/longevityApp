@@ -8,6 +8,7 @@ import { LineChart, type LineChartSeries } from '@/src/components/charts/LineCha
 import { durationAxisMax, durationLabel } from '@/src/components/charts/chartFormat';
 import { InfoLabel } from '@/src/components/ui/InfoLabel';
 import type { GlossaryKey } from '@/src/content/glossary';
+import { locale, useT, type TextKey } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { niceAxisMax } from '@/src/wellbeing/format';
 
@@ -31,21 +32,36 @@ const RANGES: TrendRangeDays[] = [7, 30];
 
 function formatDateLabel(iso: string): string {
   const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleDateString(locale(), { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 function formatTooltipDate(iso: string): string {
   const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleDateString(locale(), { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
-/** The three score series, in their fixed order and colors (never reassigned when some are hidden). */
+/**
+ * The three score series, in their fixed order and colors (never reassigned when some are hidden).
+ * The texts are catalogue keys, resolved at render time (this is module scope).
+ */
 const SCORE_SERIES = [
-  { key: 'sleepScore', name: 'Sleep', color: SLEEP_COLOR },
-  { key: 'readinessScore', name: 'Readiness', color: READINESS_COLOR },
-  { key: 'activityScore', name: 'Activity', color: ACTIVITY_COLOR },
-] as const;
+  { key: 'sleepScore', nameKey: 'trends.series.sleep', a11yKey: 'trends.a11y.sleepScore', color: SLEEP_COLOR },
+  { key: 'readinessScore', nameKey: 'trends.series.readiness', a11yKey: 'trends.a11y.readinessScore', color: READINESS_COLOR },
+  { key: 'activityScore', nameKey: 'trends.series.activity', a11yKey: 'trends.a11y.activityScore', color: ACTIVITY_COLOR },
+] as const satisfies ReadonlyArray<{ key: string; nameKey: TextKey; a11yKey: TextKey; color: string }>;
 type ScoreKey = (typeof SCORE_SERIES)[number]['key'];
+
+/** Column headers of the data table (catalogue keys, resolved at render time). */
+const TABLE_HEADERS: TextKey[] = [
+  'trends.table.date',
+  'trends.series.sleep',
+  'trends.series.readiness',
+  'trends.series.activity',
+  'trends.series.hrv',
+  'trends.series.restingHr',
+  'trends.table.sleepTime',
+  'trends.series.steps',
+];
 
 /** A round axis top a little above the data maximum, so the gridlines read cleanly (e.g. 12000, 8000). */
 function niceMax(values: Array<number | null>): number {
@@ -91,8 +107,12 @@ function ChartCard({
   formatY?: (value: number) => string;
   formatValue?: (value: number) => string;
 }) {
-  const labels = useMemo(() => points.map((p) => formatDateLabel(p.date)), [points]);
-  const tooltipLabels = useMemo(() => points.map((p) => formatTooltipDate(p.date)), [points]);
+  const { t, language } = useT();
+  // The date labels depend on the language, so it is a dependency too.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const labels = useMemo(() => points.map((p) => formatDateLabel(p.date)), [points, language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tooltipLabels = useMemo(() => points.map((p) => formatTooltipDate(p.date)), [points, language]);
   return (
     <Card>
       {term ? (
@@ -128,7 +148,7 @@ function ChartCard({
         </View>
       ) : (
         <View style={styles.emptyChart}>
-          <Text style={styles.emptyChartText}>No data for this range yet.</Text>
+          <Text style={styles.emptyChartText}>{t('trends.noData')}</Text>
         </View>
       )}
     </Card>
@@ -137,6 +157,7 @@ function ChartCard({
 
 /** Toggle chips for the score series: any one, two or all three can be on, never none. */
 function ScoreToggles({ selected, onToggle }: { selected: ScoreKey[]; onToggle: (key: ScoreKey) => void }) {
+  const { t } = useT();
   return (
     <View style={styles.toggleRow}>
       {SCORE_SERIES.map((s) => {
@@ -147,11 +168,11 @@ function ScoreToggles({ selected, onToggle }: { selected: ScoreKey[]; onToggle: 
             onPress={() => onToggle(s.key)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: on }}
-            accessibilityLabel={`${s.name} score`}
+            accessibilityLabel={t(s.a11yKey)}
             style={[styles.toggleChip, on && styles.toggleChipOn]}
           >
             <View style={[styles.toggleDot, { backgroundColor: on ? s.color : colors.card.border }]} />
-            <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{s.name}</Text>
+            <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{t(s.nameKey)}</Text>
           </Pressable>
         );
       })}
@@ -160,10 +181,11 @@ function ScoreToggles({ selected, onToggle }: { selected: ScoreKey[]; onToggle: 
 }
 
 export default function TrendsScreen() {
+  const { t } = useT();
   const [range, setRange] = useState<TrendRangeDays>(7);
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [scoreKeys, setScoreKeys] = useState<ScoreKey[]>(SCORE_SERIES.map((s) => s.key));
 
@@ -178,13 +200,13 @@ export default function TrendsScreen() {
     const silent = previous !== null && previous.range === range && previous.version !== deviceDataVersion;
     lastLoad.current = { range, version: deviceDataVersion };
     if (!silent) setLoading(true);
-    setError(null);
+    setError(false);
     getTrends(range)
       .then((data) => {
         if (!cancelled) setPoints(data);
       })
       .catch(() => {
-        if (!cancelled) setError('Could not load this range. Please try again.');
+        if (!cancelled) setError(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -204,7 +226,7 @@ export default function TrendsScreen() {
 
   const scoreSeries: LineChartSeries[] = SCORE_SERIES.filter((s) => scoreKeys.includes(s.key)).map((s) => ({
     key: s.key,
-    name: s.name,
+    name: t(s.nameKey),
     color: s.color,
     values: points.map((p) => p[s.key]),
   }));
@@ -214,8 +236,7 @@ export default function TrendsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View>
         <Text style={styles.subtitle}>
-          Sleep, readiness and activity scores, HRV, resting heart rate, sleep duration and steps
-          over the last 7 or 30 days.
+          {t('trends.subtitle')}
         </Text>
       </View>
 
@@ -228,19 +249,19 @@ export default function TrendsScreen() {
               style={[styles.rangeButton, r === range && styles.rangeButtonActive]}
             >
               <Text style={[styles.rangeButtonText, r === range && styles.rangeButtonTextActive]}>
-                {r}-day
+                {t('trends.range', { days: r })}
               </Text>
             </Pressable>
           ))}
         </View>
         <Pressable style={styles.tableToggle} onPress={() => setShowTable((v) => !v)}>
-          <Text style={styles.tableToggleText}>{showTable ? 'Hide table' : 'Show as table'}</Text>
+          <Text style={styles.tableToggleText}>{showTable ? t('trends.table.hide') : t('trends.table.show')}</Text>
         </Pressable>
       </View>
 
       {error ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{t('trends.loadFailed')}</Text>
         </View>
       ) : null}
 
@@ -251,9 +272,9 @@ export default function TrendsScreen() {
       ) : (
         <View style={styles.chartsStack}>
           <ChartCard
-            title="Scores"
+            title={t('trends.scores.title')}
             term="scores"
-            description="Sleep, readiness and activity — higher is better, 0-100. Tap a name to show or hide it."
+            description={t('trends.scores.description')}
             points={points}
             series={scoreSeries}
             yMin={0}
@@ -262,26 +283,26 @@ export default function TrendsScreen() {
           />
 
           <ChartCard
-            title="HRV"
+            title={t('trends.hrv.title')}
             term="hrv"
-            description="Average heart rate variability (ms)."
+            description={t('trends.hrv.description')}
             points={points}
             yMin={0}
             yMax={niceMax(points.map((p) => p.averageHrv))}
-            series={[{ key: 'averageHrv', name: 'HRV', color: METRIC_COLOR, values: points.map((p) => p.averageHrv) }]}
+            series={[{ key: 'averageHrv', name: t('trends.series.hrv'), color: METRIC_COLOR, values: points.map((p) => p.averageHrv) }]}
           />
 
           <ChartCard
-            title="Resting heart rate"
+            title={t('trends.restingHr.title')}
             term="restingHr"
-            description="Beats per minute."
+            description={t('trends.restingHr.description')}
             points={points}
             yMin={0}
             yMax={niceMax(points.map((p) => p.restingHeartRate))}
             series={[
               {
                 key: 'restingHeartRate',
-                name: 'Resting HR',
+                name: t('trends.series.restingHr'),
                 color: METRIC_COLOR,
                 values: points.map((p) => p.restingHeartRate),
               },
@@ -289,9 +310,9 @@ export default function TrendsScreen() {
           />
 
           <ChartCard
-            title="Sleep duration"
+            title={t('trends.sleepDuration.title')}
             term="sleepDuration"
-            description="Total sleep, in hours and minutes."
+            description={t('trends.sleepDuration.description')}
             points={points}
             yMin={0}
             yMax={durationAxisMax(sleepDurations)}
@@ -300,7 +321,7 @@ export default function TrendsScreen() {
             series={[
               {
                 key: 'totalSleepMinutes',
-                name: 'Sleep duration',
+                name: t('trends.series.sleepDuration'),
                 color: METRIC_COLOR,
                 values: sleepDurations,
               },
@@ -308,33 +329,31 @@ export default function TrendsScreen() {
           />
 
           <ChartCard
-            title="Steps"
+            title={t('trends.steps.title')}
             term="steps"
-            description="Daily step count."
+            description={t('trends.steps.description')}
             points={points}
             yMin={0}
             yMax={niceMax(points.map((p) => p.steps))}
-            series={[{ key: 'steps', name: 'Steps', color: METRIC_COLOR, values: points.map((p) => p.steps) }]}
+            series={[{ key: 'steps', name: t('trends.series.steps'), color: METRIC_COLOR, values: points.map((p) => p.steps) }]}
           />
         </View>
       )}
 
       {showTable && !loading ? (
         <Card>
-          <Text style={styles.chartTitle}>Data table</Text>
+          <Text style={styles.chartTitle}>{t('trends.table.title')}</Text>
           <Text style={styles.chartDescription}>
-            The same values shown in the charts above, for accessibility or export.
+            {t('trends.table.description')}
           </Text>
           <ScrollView horizontal style={styles.tableScroll}>
             <View>
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                {['Date', 'Sleep', 'Readiness', 'Activity', 'HRV', 'Resting HR', 'Sleep time', 'Steps'].map(
-                  (h) => (
-                    <Text key={h} style={styles.tableHeaderCell}>
-                      {h}
-                    </Text>
-                  ),
-                )}
+                {TABLE_HEADERS.map((header) => (
+                  <Text key={header} style={styles.tableHeaderCell}>
+                    {t(header)}
+                  </Text>
+                ))}
               </View>
               {points.map((p) => (
                 <View key={p.date} style={styles.tableRow}>

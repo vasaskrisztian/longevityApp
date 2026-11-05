@@ -1,10 +1,21 @@
 import { prisma } from '@/lib/db/prisma';
 import { recordAuditLog } from '@/lib/audit/audit-log.service';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { normalizeLanguage, type Language } from '@/lib/i18n/languages';
 import { logger } from '@/lib/logging/logger';
 import { revokeProviderAccessForUser } from '@/modules/wearable/services/provider-access.service';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+/** The person's preferred language (English when unknown). */
+export async function getUserLanguage(userId: string): Promise<Language> {
+  const user: any = await prisma.user.findUnique({ where: { id: userId }, select: { language: true } });
+  return normalizeLanguage(user?.language);
+}
+
+export async function setUserLanguage(userId: string, language: Language): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { language } });
+}
 
 export type ChangePasswordResult = 'ok' | 'wrong_password' | 'unavailable';
 

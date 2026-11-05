@@ -57,4 +57,19 @@ describe('group invitation email', () => {
     await sendGroupInvitationEmail({ ...params, hasLogo: false });
     expect(sendEmail.mock.calls[0]![0].html).not.toContain('<img');
   });
+
+  it('writes the invitation in the recipient language (German, Hungarian) and still escapes names', async () => {
+    await sendGroupInvitationEmail({ ...params, language: 'de' });
+    const de = sendEmail.mock.calls[0]![0];
+    expect(de.subject).toContain('Du bist eingeladen');
+    expect(de.html).toContain('Einladung ansehen');
+    expect(de.html).not.toContain('<script>');
+    expect(de.text).toContain('Die Einladung ist bis 2026-10-24 gültig');
+
+    sendEmail.mockClear();
+    await sendGroupInvitationEmail({ ...params, language: 'hu' });
+    const hu = sendEmail.mock.calls[0]![0];
+    expect(hu.subject).toContain('Meghívást kaptál');
+    expect(hu.text).toContain('https://web.example.com/invite/tok123');
+  });
 });

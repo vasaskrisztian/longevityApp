@@ -4,6 +4,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSession } from '@/src/auth/useSession';
+import { useT, type TextKey } from '@/src/i18n';
 import { useUnreadCount } from '@/src/notifications/unreadStore';
 import { usePendingInvitations } from '@/src/wellbeing/pendingInvitationsStore';
 import { AppBackdrop } from '@/src/components/AppBackdrop';
@@ -19,7 +20,7 @@ const SEAL = require('../../assets/images/icon.png');
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface NavItem {
-  label: string;
+  labelKey: TextKey;
   href: Href;
   /** Path prefix used for the active highlight ('/' only matches exactly). */
   match: string;
@@ -27,13 +28,13 @@ interface NavItem {
 }
 
 const BASE_ITEMS: NavItem[] = [
-  { label: 'Today', href: '/', match: '/', icon: 'sunny-outline' },
-  { label: 'Plan', href: '/plan', match: '/plan', icon: 'clipboard-outline' },
-  { label: 'Community', href: '/community', match: '/community', icon: 'people-outline' },
-  { label: 'Me', href: '/me', match: '/me', icon: 'person-circle-outline' },
-  { label: 'Notifications', href: '/notifications', match: '/notifications', icon: 'notifications-outline' },
+  { labelKey: 'nav.tab.today', href: '/', match: '/', icon: 'sunny-outline' },
+  { labelKey: 'nav.tab.plan', href: '/plan', match: '/plan', icon: 'clipboard-outline' },
+  { labelKey: 'nav.tab.community', href: '/community', match: '/community', icon: 'people-outline' },
+  { labelKey: 'nav.tab.me', href: '/me', match: '/me', icon: 'person-circle-outline' },
+  { labelKey: 'nav.tab.notifications', href: '/notifications', match: '/notifications', icon: 'notifications-outline' },
 ];
-const ADMIN_ITEM: NavItem = { label: 'Admin', href: '/admin', match: '/admin', icon: 'shield-checkmark-outline' };
+const ADMIN_ITEM: NavItem = { labelKey: 'nav.tab.admin', href: '/admin', match: '/admin', icon: 'shield-checkmark-outline' };
 
 /** Max width of the content column — keeps forms and cards readable on a
  * wide monitor instead of stretching edge to edge. */
@@ -48,6 +49,7 @@ const SIDEBAR_WIDTH = 232;
  * wide (see useIsDesktop).
  */
 export function DesktopShell({ children }: { children: ReactNode }) {
+  const { t } = useT();
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useSession();
@@ -73,7 +75,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             const active = item.match === '/' ? pathname === '/' : pathname.startsWith(item.match);
             return (
               <Pressable
-                key={item.label}
+                key={item.labelKey}
                 accessibilityRole="link"
                 accessibilityState={{ selected: active }}
                 onPress={() => router.navigate(item.href)}
@@ -90,14 +92,14 @@ export function DesktopShell({ children }: { children: ReactNode }) {
                   </View>
                 ) : null}
                 <Ionicons name={item.icon} size={20} color={active ? colors.accent.light : colors.muted.foreground} />
-                <Text style={[styles.itemLabel, active && styles.itemLabelActive]}>{item.label}</Text>
+                <Text style={[styles.itemLabel, active && styles.itemLabelActive]}>{t(item.labelKey)}</Text>
                 {item.match === '/notifications' && unread > 0 ? (
-                  <View style={styles.badge} accessibilityLabel={`${unread} unread`}>
+                  <View style={styles.badge} accessibilityLabel={t('nav.badge.unread', { count: unread })}>
                     <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
                   </View>
                 ) : null}
                 {item.match === '/community' && pendingInvitations > 0 ? (
-                  <View style={styles.badge} accessibilityLabel={`${pendingInvitations} pending invitations`}>
+                  <View style={styles.badge} accessibilityLabel={t('nav.badge.pendingInvitations', { count: pendingInvitations })}>
                     <Text style={styles.badgeText}>{pendingInvitations}</Text>
                   </View>
                 ) : null}
@@ -113,7 +115,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
           ) : null}
           <Pressable accessibilityRole="button" onPress={() => logout()} style={styles.logout}>
             <Ionicons name="log-out-outline" size={18} color={colors.muted.foreground} />
-            <Text style={styles.logoutLabel}>Log out</Text>
+            <Text style={styles.logoutLabel}>{t('common.logOut')}</Text>
           </Pressable>
         </View>
       </View>

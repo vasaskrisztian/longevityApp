@@ -42,6 +42,6 @@ export async function POST(request: Request) {
     accessToken: session.accessToken,
     refreshToken: session.refreshToken,
     expiresIn: session.expiresIn,
-    user: { id: user.id, email: user.email, role: user.role },
+    user: { id: user.id, email: user.email, role: user.role, language: user.language },
   });
 }

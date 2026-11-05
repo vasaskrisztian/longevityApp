@@ -19,7 +19,9 @@ import { Card } from '@/src/components/ui/Card';
 import { InfoLabel } from '@/src/components/ui/InfoLabel';
 import type { GlossaryKey } from '@/src/content/glossary';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { locale, t, useT } from '@/src/i18n';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
+import { enumLabel } from '@/src/validation/schemas';
 
 /**
  * Real data, phase 17 — replaces the ScreenStub. Phase 22's follow-up (see
@@ -36,27 +38,25 @@ import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
  */
 
 function describeDevice(name: string, connection: ConnectionSummary): string {
-  return `${name}: connected${connection.lastSyncAt ? ` · last synced ${new Date(connection.lastSyncAt).toLocaleString()}` : ''}`;
+  return connection.lastSyncAt
+    ? t('dashboard.device.connectedSynced', { name, time: new Date(connection.lastSyncAt).toLocaleString(locale()) })
+    : t('dashboard.device.connected', { name });
 }
 
 function formatSleepDuration(totalMinutes: number | null): string | null {
   if (totalMinutes === null) return null;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${hours}h ${minutes}m`;
+  return t('dashboard.duration', { hours, minutes });
 }
 
 /** Renders under a target-bearing card's value, e.g. "Target: 85" — never
  * rendered at all when the active protocol doesn't set that target, same
  * as the web app's TargetLine. */
 function TargetLine({ target, unit }: { target: number | null | undefined; unit?: string }) {
+  const { t } = useT();
   if (target === null || target === undefined) return null;
-  return (
-    <Text style={styles.targetText}>
-      Target: {target}
-      {unit ? ` ${unit}` : ''}
-    </Text>
-  );
+  return <Text style={styles.targetText}>{t('dashboard.target', { target: unit ? `${target} ${unit}` : target })}</Text>;
 }
 
 function ScoreCard({
@@ -73,6 +73,7 @@ function ScoreCard({
   unit?: string;
   target?: number | null;
 }) {
+  const { t } = useT();
   return (
     <Card style={styles.scoreCard}>
       <InfoLabel term={term} textStyle={styles.scoreLabel}>
@@ -85,7 +86,7 @@ function ScoreCard({
       {target != null ? (
         <TargetLine target={target} unit={unit} />
       ) : value === null ? (
-        <Text style={styles.scoreHint}>No data yet</Text>
+        <Text style={styles.scoreHint}>{t('dashboard.noDataYet')}</Text>
       ) : null}
     </Card>
   );
@@ -102,11 +103,12 @@ interface DashboardState {
 }
 
 export default function DashboardScreen() {
+  const { t } = useT();
   const isDesktop = useIsDesktop();
   const [state, setState] = useState<DashboardState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   // Goes up when the login-time device sync (health/useDeviceAutoSync) has brought in new data.
   const deviceDataVersion = useDeviceDataVersion();
   const deviceSyncing = useDeviceSyncing();
@@ -119,7 +121,7 @@ export default function DashboardScreen() {
     } else {
       setLoading(true);
     }
-    setError(null);
+    setError(false);
     try {
       const [snapshot, connections, profileBundle, protocolOverlay, insights] = await Promise.all([
         getDashboardSnapshot(),
@@ -138,7 +140,7 @@ export default function DashboardScreen() {
         insights,
       });
     } catch {
-      setError('Could not load your dashboard. Pull down to try again.');
+      setError(true);
     } finally {
       if (silent) {
         // nothing to reset
@@ -177,20 +179,20 @@ export default function DashboardScreen() {
 
   const protocolCard = activeProtocol ? (
       <Card style={styles.protocolCard}>
-        <Text style={styles.protocolTitle}>Following: {activeProtocol.name}</Text>
+        <Text style={styles.protocolTitle}>{t('dashboard.protocol.following', { name: activeProtocol.name })}</Text>
         <Text style={styles.protocolDescription}>
-          {activeProtocol.description || "Today's actuals above are compared against this protocol's targets."}
+          {activeProtocol.description || t('dashboard.protocol.defaultDescription')}
         </Text>
         {activeProtocol.supplements.length > 0 ? (
           <View style={styles.protocolSupplements}>
-            <Text style={styles.protocolSupplementsLabel}>Supplements on this protocol</Text>
+            <Text style={styles.protocolSupplementsLabel}>{t('dashboard.protocol.supplements')}</Text>
             {activeProtocol.supplements.map((s, i) => (
               <Text key={`${s.name}-${i}`} style={styles.protocolSupplementItem}>
                 •{' '}
                 {[
                   s.name,
                   s.dosage ? `— ${s.dosage}${s.unit ? ` ${s.unit}` : ''}` : null,
-                  s.frequency ? `(${s.frequency.replaceAll('_', ' ').toLowerCase()})` : null,
+                  s.frequency ? `(${enumLabel(s.frequency).toLowerCase()})` : null,
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -204,25 +206,25 @@ export default function DashboardScreen() {
   const sleepDurationCard = (
     <Card style={styles.scoreCard}>
       <InfoLabel term="sleepDuration" textStyle={styles.scoreLabel}>
-        Sleep duration
+        {t('dashboard.card.sleepDuration')}
       </InfoLabel>
       <Text style={styles.scoreValue}>{sleepDuration ?? '—'}</Text>
       {targetSleepDuration ? (
-        <Text style={styles.targetText}>Target: {targetSleepDuration}</Text>
+        <Text style={styles.targetText}>{t('dashboard.target', { target: targetSleepDuration })}</Text>
       ) : !sleepDuration ? (
-        <Text style={styles.scoreHint}>No data yet</Text>
+        <Text style={styles.scoreHint}>{t('dashboard.noDataYet')}</Text>
       ) : null}
     </Card>
   );
-  const sleepCard = <ScoreCard label="Sleep" term="sleepScore" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />;
-  const readinessCard = <ScoreCard label="Readiness" term="readinessScore" value={snapshot?.readinessScore ?? null} />;
-  const activityCard = <ScoreCard label="Activity" term="activityScore" value={snapshot?.activityScore ?? null} />;
-  const hrvCard = <ScoreCard label="HRV" term="hrv" value={snapshot?.averageHrv ?? null} unit="ms" />;
-  const restingHrCard = <ScoreCard label="Resting HR" term="restingHr" value={snapshot?.restingHeartRate ?? null} unit="bpm" />;
-  const stepsCard = <ScoreCard label="Steps" term="steps" value={snapshot?.steps ?? null} />;
+  const sleepCard = <ScoreCard label={t('dashboard.card.sleep')} term="sleepScore" value={snapshot?.sleepScore ?? null} target={activeProtocol?.targetSleepScore} />;
+  const readinessCard = <ScoreCard label={t('dashboard.card.readiness')} term="readinessScore" value={snapshot?.readinessScore ?? null} />;
+  const activityCard = <ScoreCard label={t('dashboard.card.activity')} term="activityScore" value={snapshot?.activityScore ?? null} />;
+  const hrvCard = <ScoreCard label={t('dashboard.card.hrv')} term="hrv" value={snapshot?.averageHrv ?? null} unit="ms" />;
+  const restingHrCard = <ScoreCard label={t('dashboard.card.restingHr')} term="restingHr" value={snapshot?.restingHeartRate ?? null} unit="bpm" />;
+  const stepsCard = <ScoreCard label={t('dashboard.card.steps')} term="steps" value={snapshot?.steps ?? null} />;
   const caloriesCard = (
     <ScoreCard
-      label="Active calories (today)"
+      label={t('dashboard.card.activeCalories')}
       term="activeCalories"
       value={snapshot?.activeCalories ?? null}
       unit="kcal"
@@ -230,7 +232,12 @@ export default function DashboardScreen() {
     />
   );
   const workoutsCard = (
-    <ScoreCard label="Workouts (last 7 days)" term="workouts" value={weeklyWorkoutCount} target={activeProtocol?.targetWeeklyWorkouts} />
+    <ScoreCard
+      label={t('dashboard.card.workouts')}
+      term="workouts"
+      value={weeklyWorkoutCount}
+      target={activeProtocol?.targetWeeklyWorkouts}
+    />
   );
   // Phone: 3 / 2 / 2 / 2 cards per row. Desktop (wide main column): three rows of three, grouped by theme.
   const rows = isDesktop
@@ -262,24 +269,23 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <View>
-        <Text style={styles.title}>{state?.firstName ? `Hi, ${state.firstName}` : 'Dashboard'}</Text>
+        <Text style={styles.title}>{state?.firstName ? t('dashboard.greeting', { name: state.firstName }) : t('dashboard.title')}</Text>
         <Text style={styles.subtitle}>
-          {deviceLines.length > 0 ? deviceLines.join('\n') : 'No wearable connected yet.'}
+          {deviceLines.length > 0 ? deviceLines.join('\n') : t('dashboard.noWearable')}
         </Text>
-        {deviceSyncing ? <Text style={styles.scoreHint}>Syncing your devices…</Text> : null}
+        {deviceSyncing ? <Text style={styles.scoreHint}>{t('dashboard.syncing')}</Text> : null}
       </View>
 
       {error ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{t('dashboard.loadFailed')}</Text>
         </View>
       ) : null}
 
       {snapshot && !snapshot.isToday ? (
         <View style={styles.infoBanner}>
           <Text style={styles.infoText}>
-            No data has synced for today yet — showing the most recent day available (
-            {new Date(snapshot.date).toLocaleDateString()}).
+            {t('dashboard.staleBanner', { date: new Date(snapshot.date).toLocaleDateString(locale()) })}
           </Text>
         </View>
       ) : null}
@@ -300,21 +306,20 @@ export default function DashboardScreen() {
 
       {!snapshot ? (
         <Card>
-          <Text style={styles.emptyTitle}>No wellness data yet</Text>
+          <Text style={styles.emptyTitle}>{t('dashboard.empty.title')}</Text>
           <Text style={styles.emptyBody}>
             {connection?.status === 'CONNECTED'
-              ? 'Your Oura Ring is connected — the first sync populates this dashboard once it runs.'
-              : 'Connect your Oura Ring or Apple Health to start seeing Sleep, Readiness and Activity scores here.'}
+              ? t('dashboard.empty.connected')
+              : t('dashboard.empty.notConnected')}
           </Text>
           {connection?.status === 'CONNECTED' ? null : (
-            <Button title="Connect a device" size="sm" style={styles.emptyButton} onPress={() => router.navigate('/devices')} />
+            <Button title={t('dashboard.empty.connect')} size="sm" style={styles.emptyButton} onPress={() => router.navigate('/devices')} />
           )}
         </Card>
       ) : null}
 
       <Text style={styles.disclaimer}>
-        This platform provides wellness information and does not provide medical diagnoses or
-        medical advice.
+        {t('dashboard.disclaimer')}
       </Text>
     </ScrollView>
   );

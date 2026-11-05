@@ -10,12 +10,14 @@ import { Button } from '@/src/components/ui/Button';
 import { Checkbox } from '@/src/components/ui/Checkbox';
 import { TextField } from '@/src/components/ui/TextField';
 import { RegisterFormSchema } from '@/src/validation/schemas';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 type FieldErrors = Partial<Record<'fullName' | 'email' | 'password' | 'passwordConfirmation' | 'termsAccepted' | 'privacyAccepted', string>>;
 
-/** Mirrors src/app/(auth)/register/page.tsx. */
+/** Mirrors src/app/(auth)/register/page.tsx. The language switch on top (AuthLayout) sets the new account's language. */
 export default function RegisterScreen() {
+  const { t } = useT();
   const { status } = useSession();
   const router = useRouter();
   const [fullName, setFullName] = useState('');
@@ -45,13 +47,14 @@ export default function RegisterScreen() {
     });
     if (!parsed.success) {
       const flat = parsed.error.flatten().fieldErrors;
+      const text = (message?: string) => (message ? tDynamic(message) : undefined);
       setErrors({
-        fullName: flat.fullName?.[0],
-        email: flat.email?.[0],
-        password: flat.password?.[0],
-        passwordConfirmation: flat.passwordConfirmation?.[0],
-        termsAccepted: flat.termsAccepted?.[0],
-        privacyAccepted: flat.privacyAccepted?.[0],
+        fullName: text(flat.fullName?.[0]),
+        email: text(flat.email?.[0]),
+        password: text(flat.password?.[0]),
+        passwordConfirmation: text(flat.passwordConfirmation?.[0]),
+        termsAccepted: text(flat.termsAccepted?.[0]),
+        privacyAccepted: text(flat.privacyAccepted?.[0]),
       });
       return;
     }
@@ -62,9 +65,7 @@ export default function RegisterScreen() {
     setSubmitting(false);
     if (!result.ok) {
       setServerError(
-        result.reason === 'rate_limited'
-          ? 'Too many requests. Try again later.'
-          : 'Something went wrong. Please try again.',
+        result.reason === 'rate_limited' ? t('common.error.rateLimited') : t('common.error.generic'),
       );
       return;
     }
@@ -73,22 +74,20 @@ export default function RegisterScreen() {
 
   if (submitted) {
     return (
-      <AuthLayout title="Check your email">
-        <Text style={styles.body}>
-          If your email is valid, we’ve sent a verification link. You need to verify your email before you can log in.
-        </Text>
-        <Button title="Back to log in" variant="outline" onPress={() => router.replace('/login')} />
+      <AuthLayout title={t('auth.register.checkEmailTitle')}>
+        <Text style={styles.body}>{t('auth.register.checkEmailBody')}</Text>
+        <Button title={t('auth.register.backToLogin')} variant="outline" onPress={() => router.replace('/login')} />
       </AuthLayout>
     );
   }
 
   return (
-    <AuthLayout title="Create your account">
+    <AuthLayout title={t('auth.register.title')}>
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
 
-      <TextField label="Full name" autoComplete="name" value={fullName} onChangeText={setFullName} error={errors.fullName} />
+      <TextField label={t('auth.field.fullName')} autoComplete="name" value={fullName} onChangeText={setFullName} error={errors.fullName} />
       <TextField
-        label="Email"
+        label={t('auth.field.email')}
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
@@ -98,17 +97,17 @@ export default function RegisterScreen() {
       />
       <View style={styles.passwordBlock}>
         <TextField
-          label="Password"
+          label={t('auth.field.password')}
           secureTextEntry
           autoComplete="new-password"
           value={password}
           onChangeText={setPassword}
           error={errors.password}
         />
-        <Text style={styles.hint}>At least 10 characters, with an uppercase letter, a lowercase letter and a digit.</Text>
+        <Text style={styles.hint}>{t('auth.register.passwordHint')}</Text>
       </View>
       <TextField
-        label="Confirm password"
+        label={t('auth.field.confirmPassword')}
         secureTextEntry
         autoComplete="new-password"
         value={passwordConfirmation}
@@ -116,19 +115,19 @@ export default function RegisterScreen() {
         error={errors.passwordConfirmation}
       />
 
-      <Checkbox label="I accept the Terms of Service" checked={termsAccepted} onChange={setTermsAccepted} error={errors.termsAccepted} />
+      <Checkbox label={t('auth.register.terms')} checked={termsAccepted} onChange={setTermsAccepted} error={errors.termsAccepted} />
       <Checkbox
-        label="I accept the Privacy Policy"
+        label={t('auth.register.privacy')}
         checked={privacyAccepted}
         onChange={setPrivacyAccepted}
         error={errors.privacyAccepted}
       />
 
-      <Button title={submitting ? 'Creating account…' : 'Create account'} onPress={handleSubmit} loading={submitting} />
+      <Button title={submitting ? t('auth.register.submitting') : t('auth.register.submit')} onPress={handleSubmit} loading={submitting} />
 
       <Pressable onPress={() => router.replace('/login')} accessibilityRole="link" style={styles.linkRow}>
         <Text style={styles.hint}>
-          Already have an account? <Text style={styles.link}>Log in</Text>
+          {t('auth.register.haveAccount')} <Text style={styles.link}>{t('auth.register.logIn')}</Text>
         </Text>
       </Pressable>
     </AuthLayout>

@@ -1,5 +1,6 @@
 import { getValidAccessToken } from '@/src/auth/sessionStore';
 import { API_BASE_URL } from '@/src/config/env';
+import { t } from '@/src/i18n';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -34,7 +35,7 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
   const response = await apiFetch(path, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(response.status, body?.error ?? `Request failed (${response.status}).`);
+    throw new ApiError(response.status, body?.error ?? t('ui.error.requestFailed', { status: response.status }));
   }
   return response.json() as Promise<T>;
 }

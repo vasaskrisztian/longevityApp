@@ -3,18 +3,20 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { useT } from '@/src/i18n';
 import { useUnreadCount } from '@/src/notifications/unreadStore';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /** The notifications bell with its unread badge — in every header, replacing the old "Alerts" tab. */
 export function BellButton() {
+  const { t } = useT();
   const unread = useUnreadCount();
   // The desktop sidebar already has a Notifications entry with the same badge.
   if (useIsDesktop()) return null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+      accessibilityLabel={unread > 0 ? t('notif.bellUnread', { count: unread }) : t('notif.title')}
       onPress={() => router.navigate('/notifications')}
       hitSlop={10}
       style={styles.button}

@@ -8,10 +8,11 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { TeamChart } from '@/src/components/wellbeing/TeamChart';
 import { CollectiveBar, ContributionLine, ProgressBar, ProgressLine, StatusBadge } from '@/src/components/wellbeing/parts';
+import { useT } from '@/src/i18n';
 import { formatVideoDuration } from '@/src/wellbeing/challengeForm';
 import { colors, fontFamily, screenBackground } from '@/src/theme/tokens';
 import { confirmDestructive } from '@/src/utils/confirm';
-import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/src/wellbeing/format';
+import { challengeTargetText, daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/src/wellbeing/format';
 
 /**
  * Corporate wellbeing — admin: where everyone stands in one group
@@ -20,6 +21,7 @@ import { daysLeftLabel, displayName, formatDateRange, teamStatusLine } from '@/s
  * summaries use.
  */
 export default function AdminGroupChallengeScreen() {
+  const { t } = useT();
   const { id, challengeId } = useLocalSearchParams<{ id: string; challengeId: string }>();
   const [detail, setDetail] = useState<AdminChallengeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,17 +34,17 @@ export default function AdminGroupChallengeScreen() {
         setDetail(result);
         setError(null);
       })
-      .catch(() => setError('Could not load this challenge.'));
-  }, [id, challengeId]);
+      .catch(() => setError(t('admin.challenge.loadFailed')));
+  }, [id, challengeId, t]);
 
   useFocusEffect(load);
 
   async function handleDelete() {
     if (!id || !challengeId || !detail) return;
     const ok = await confirmDestructive(
-      `Delete “${detail.challenge.name}”?`,
-      'The challenge and everyone’s progress in it are removed. No result notification will be sent.',
-      'Delete challenge',
+      t('admin.challenge.deleteTitle', { name: detail.challenge.name }),
+      t('admin.challenge.deleteMessage'),
+      t('admin.challenge.deleteConfirm'),
     );
     if (!ok) return;
     setDeleting(true);
@@ -50,7 +52,7 @@ export default function AdminGroupChallengeScreen() {
       await deleteAdminGroupChallenge(id, challengeId);
       router.back();
     } catch {
-      setError('Could not delete the challenge.');
+      setError(t('admin.challenge.deleteFailed'));
       setDeleting(false);
     }
   }
@@ -80,7 +82,7 @@ export default function AdminGroupChallengeScreen() {
         <Text style={styles.title}>{challenge.name}</Text>
         <StatusBadge status={challenge.status} />
       </View>
-      <Text style={styles.body}>{challenge.target}</Text>
+      <Text style={styles.body}>{challengeTargetText(challenge)}</Text>
       <Text style={styles.muted}>
         {formatDateRange(challenge.startDate, challenge.endDate)}
         {left ? ` · ${left}` : ''}
@@ -88,12 +90,16 @@ export default function AdminGroupChallengeScreen() {
       {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
       {challenge.video ? (
         <Text style={styles.muted}>
-          Video: {challenge.video.title} ({formatVideoDuration(challenge.video.durationSec)}) · youtu.be/{challenge.video.videoId}
+          {t('admin.challenge.video', {
+            title: challenge.video.title,
+            duration: formatVideoDuration(challenge.video.durationSec),
+            videoId: challenge.video.videoId,
+          })}
         </Text>
       ) : null}
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Team</Text>
+        <Text style={styles.cardTitle}>{t('admin.challenge.team')}</Text>
         {collective ? (
           <>
             <CollectiveBar type={challenge.type} collective={collective} />
@@ -106,15 +112,17 @@ export default function AdminGroupChallengeScreen() {
           </>
         )}
         <Text style={styles.muted}>
-          {team.participants} of {team.members} group members joined
+          {t('admin.challenge.groupJoined', { participants: team.participants, members: team.members })}
         </Text>
       </Card>
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>
-          {collective ? 'Contributions' : 'Participants'} ({participants.length})
+          {collective
+            ? t('admin.challenge.contributions', { count: participants.length })
+            : t('admin.challenge.participants', { count: participants.length })}
         </Text>
-        {participants.length === 0 ? <Text style={styles.muted}>Nobody has joined yet.</Text> : null}
+        {participants.length === 0 ? <Text style={styles.muted}>{t('admin.challenge.nobodyJoined')}</Text> : null}
         {participants.map((participant) => (
           <Pressable
             key={participant.userId}
@@ -134,7 +142,7 @@ export default function AdminGroupChallengeScreen() {
 
       {notJoined.length > 0 ? (
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Not joined ({notJoined.length})</Text>
+          <Text style={styles.cardTitle}>{t('admin.challenge.notJoined', { count: notJoined.length })}</Text>
           {notJoined.map((member) => (
             <Text key={member.userId} style={styles.body}>
               {displayName(member)}
@@ -143,7 +151,7 @@ export default function AdminGroupChallengeScreen() {
         </Card>
       ) : null}
 
-      <Button title="Delete this challenge" variant="destructive" loading={deleting} onPress={handleDelete} />
+      <Button title={t('admin.challenge.delete')} variant="destructive" loading={deleting} onPress={handleDelete} />
     </ScrollView>
   );
 }

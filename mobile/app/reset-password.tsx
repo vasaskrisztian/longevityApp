@@ -8,6 +8,7 @@ import { Alert } from '@/src/components/ui/Alert';
 import { Button } from '@/src/components/ui/Button';
 import { TextField } from '@/src/components/ui/TextField';
 import { RequestPasswordResetFormSchema, ResetPasswordFormSchema } from '@/src/validation/schemas';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, fontFamily } from '@/src/theme/tokens';
 
 /**
@@ -23,15 +24,17 @@ export default function ResetPasswordScreen() {
 }
 
 function BackToLogin() {
+  const { t } = useT();
   const router = useRouter();
   return (
     <Pressable onPress={() => router.replace('/login')} accessibilityRole="link" style={styles.linkRow}>
-      <Text style={styles.link}>Back to log in</Text>
+      <Text style={styles.link}>{t('auth.reset.backToLogin')}</Text>
     </Pressable>
   );
 }
 
 function RequestResetForm() {
+  const { t } = useT();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +43,7 @@ function RequestResetForm() {
   async function handleSubmit() {
     const parsed = RequestPasswordResetFormSchema.safeParse({ email });
     if (!parsed.success) {
-      setError(parsed.error.errors[0]?.message ?? 'Enter a valid email address');
+      setError(tDynamic(parsed.error.errors[0]?.message ?? 'validation.emailInvalid'));
       return;
     }
     setError(null);
@@ -50,21 +53,21 @@ function RequestResetForm() {
     // Like the web page: any non-rate-limit outcome shows the same generic
     // confirmation, so the screen never reveals whether the account exists.
     if (!result.ok && result.reason === 'rate_limited') {
-      setError('Too many requests. Try again later.');
+      setError(t('common.error.rateLimited'));
       return;
     }
     setSubmitted(true);
   }
 
   return (
-    <AuthLayout title="Reset your password">
+    <AuthLayout title={t('auth.reset.requestTitle')}>
       {submitted ? (
-        <Alert variant="success">If that email is registered, a reset link has been sent to it.</Alert>
+        <Alert variant="success">{t('auth.reset.sent')}</Alert>
       ) : (
         <>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <TextField
-            label="Email"
+            label={t('auth.field.email')}
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
@@ -72,7 +75,7 @@ function RequestResetForm() {
             onChangeText={setEmail}
             onSubmitEditing={handleSubmit}
           />
-          <Button title={submitting ? 'Sending…' : 'Send reset link'} onPress={handleSubmit} loading={submitting} />
+          <Button title={submitting ? t('auth.reset.sending') : t('auth.reset.send')} onPress={handleSubmit} loading={submitting} />
         </>
       )}
       <BackToLogin />
@@ -81,6 +84,7 @@ function RequestResetForm() {
 }
 
 function ConfirmResetForm({ token }: { token: string }) {
+  const { t } = useT();
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
@@ -94,7 +98,10 @@ function ConfirmResetForm({ token }: { token: string }) {
     const parsed = ResetPasswordFormSchema.safeParse({ password, passwordConfirmation });
     if (!parsed.success) {
       const flat = parsed.error.flatten().fieldErrors;
-      setErrors({ password: flat.password?.[0], passwordConfirmation: flat.passwordConfirmation?.[0] });
+      setErrors({
+        password: flat.password?.[0] ? tDynamic(flat.password[0]) : undefined,
+        passwordConfirmation: flat.passwordConfirmation?.[0] ? tDynamic(flat.passwordConfirmation[0]) : undefined,
+      });
       return;
     }
     setErrors({});
@@ -104,10 +111,10 @@ function ConfirmResetForm({ token }: { token: string }) {
     if (!result.ok) {
       setServerError(
         result.reason === 'rate_limited'
-          ? 'Too many requests. Try again later.'
+          ? t('common.error.rateLimited')
           : result.reason === 'invalid'
-            ? 'This reset link is invalid or has expired.'
-            : 'Something went wrong. Please try again.',
+            ? t('auth.reset.linkInvalid')
+            : t('common.error.generic'),
       );
       return;
     }
@@ -116,18 +123,18 @@ function ConfirmResetForm({ token }: { token: string }) {
 
   if (done) {
     return (
-      <AuthLayout title="Choose a new password">
-        <Alert variant="success">Password updated. You can now log in.</Alert>
-        <Button title="Log in" onPress={() => router.replace('/login')} />
+      <AuthLayout title={t('auth.reset.confirmTitle')}>
+        <Alert variant="success">{t('auth.reset.done')}</Alert>
+        <Button title={t('auth.reset.logIn')} onPress={() => router.replace('/login')} />
       </AuthLayout>
     );
   }
 
   return (
-    <AuthLayout title="Choose a new password">
+    <AuthLayout title={t('auth.reset.confirmTitle')}>
       {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
       <TextField
-        label="New password"
+        label={t('auth.reset.newPassword')}
         secureTextEntry
         autoComplete="new-password"
         value={password}
@@ -135,7 +142,7 @@ function ConfirmResetForm({ token }: { token: string }) {
         error={errors.password}
       />
       <TextField
-        label="Confirm new password"
+        label={t('auth.reset.confirmNewPassword')}
         secureTextEntry
         autoComplete="new-password"
         value={passwordConfirmation}
@@ -143,7 +150,7 @@ function ConfirmResetForm({ token }: { token: string }) {
         error={errors.passwordConfirmation}
         onSubmitEditing={handleSubmit}
       />
-      <Button title={submitting ? 'Updating…' : 'Update password'} onPress={handleSubmit} loading={submitting} />
+      <Button title={submitting ? t('auth.reset.updating') : t('auth.reset.update')} onPress={handleSubmit} loading={submitting} />
       <BackToLogin />
     </AuthLayout>
   );

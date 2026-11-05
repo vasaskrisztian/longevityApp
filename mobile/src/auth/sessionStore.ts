@@ -1,5 +1,6 @@
 import { secureStorage } from '@/src/auth/secureStorage';
 import { API_BASE_URL } from '@/src/config/env';
+import { isLanguage, setLanguage } from '@/src/i18n';
 
 /**
  * Plain (non-React) session store — both the API client (a bare function,
@@ -13,6 +14,8 @@ export interface SessionUser {
   id: string;
   email: string;
   role: string;
+  /** The account's preferred language; applied to the app on login / refresh. */
+  language?: string;
 }
 
 interface Session {
@@ -69,6 +72,12 @@ function applyLoginResponse(data: LoginResponse) {
     user: data.user,
   };
   status = 'signedIn';
+  applyAccountLanguage(data.user.language);
+}
+
+/** The account's language wins over whatever the device had (remembered on the device too). */
+function applyAccountLanguage(language: unknown) {
+  if (isLanguage(language)) setLanguage(language);
 }
 
 /**
@@ -178,7 +187,7 @@ async function refreshWithToken(refreshToken: string): Promise<boolean> {
       return false;
     }
 
-    const data = (await response.json()) as { accessToken: string; refreshToken: string; expiresIn: number };
+    const data = (await response.json()) as { accessToken: string; refreshToken: string; expiresIn: number; language?: string };
     // The refresh endpoint doesn't echo the user back (it has no need to
     // re-verify who they are — the old session object already has it).
     const existingUser = session?.user ?? (await readPersistedUser());
@@ -189,9 +198,10 @@ async function refreshWithToken(refreshToken: string): Promise<boolean> {
       accessToken: data.accessToken,
       accessTokenExpiresAt: Date.now() + data.expiresIn * 1000,
       refreshToken: data.refreshToken,
-      user: existingUser,
+      user: isLanguage(data.language) ? { ...existingUser, language: data.language } : existingUser,
     };
     status = 'signedIn';
+    applyAccountLanguage(data.language);
     await persist();
     return true;
   } catch {

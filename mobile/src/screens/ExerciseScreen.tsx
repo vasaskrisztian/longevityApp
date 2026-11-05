@@ -7,6 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { ChipMultiSelect, ChipSingleSelect, type ChipOption } from '@/src/components/ui/ChipSelect';
 import { TextField } from '@/src/components/ui/TextField';
+import { tDynamic, useT } from '@/src/i18n';
 import { colors, screenBackground } from '@/src/theme/tokens';
 import {
   ActivityLevelEnum,
@@ -20,14 +21,10 @@ import { formatTagList, parseTagList } from '@/src/utils/tagList';
 /** Single edit form mirroring the web app's profile/lifestyle/exercise-form.tsx
  * (phase 18) — same one-record-per-user pattern as nutrition.tsx. */
 
-const ACTIVITY_LEVEL_OPTIONS: ChipOption[] = ActivityLevelEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
-const ACTIVITY_TYPE_OPTIONS: ChipOption[] = ActivityTypeEnum.options.map((v) => ({
-  value: v,
-  label: enumLabel(v),
-}));
+// Built at render time: the labels follow the current language.
+function enumOptions(values: readonly string[]): ChipOption[] {
+  return values.map((v) => ({ value: v, label: enumLabel(v) }));
+}
 
 interface LifestyleFormState {
   activityLevel: string;
@@ -46,12 +43,13 @@ const DEFAULT_FORM: LifestyleFormState = {
 };
 
 export default function ExerciseScreen() {
+  const { t } = useT();
   const [form, setForm] = useState<LifestyleFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<'load' | 'save' | null>(null);
 
   useEffect(() => {
     getProfileBundle()
@@ -65,7 +63,7 @@ export default function ExerciseScreen() {
           customActivities: formatTagList(e?.customActivities),
         });
       })
-      .catch(() => setServerError('Could not load your lifestyle profile.'))
+      .catch(() => setServerError('load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -77,7 +75,7 @@ export default function ExerciseScreen() {
     });
     if (!parsed.success) {
       setErrors(Object.fromEntries(
-        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']),
+        Object.entries(parsed.error.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ? tDynamic(v[0]) : '']),
       ));
       return;
     }
@@ -89,7 +87,7 @@ export default function ExerciseScreen() {
       await updateExerciseProfile(parsed.data as ExerciseProfileInput);
       setSaved(true);
     } catch {
-      setServerError('Could not save your changes. Please try again.');
+      setServerError('save');
     } finally {
       setSaving(false);
     }
@@ -106,18 +104,22 @@ export default function ExerciseScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.card}>
-        {serverError ? <Alert variant="destructive">{serverError}</Alert> : null}
-        {saved ? <Alert variant="success">Saved.</Alert> : null}
+        {serverError ? (
+          <Alert variant="destructive">
+            {serverError === 'load' ? t('profile.exercise.loadFailed') : t('profile.saveFailed')}
+          </Alert>
+        ) : null}
+        {saved ? <Alert variant="success">{t('profile.saved')}</Alert> : null}
 
         <ChipSingleSelect
-          label="Activity level"
-          options={ACTIVITY_LEVEL_OPTIONS}
+          label={t('profile.field.activityLevel')}
+          options={enumOptions(ActivityLevelEnum.options)}
           value={form.activityLevel}
           onChange={(v) => setForm({ ...form, activityLevel: v })}
         />
         <View style={styles.row}>
           <TextField
-            label="Workouts / week (optional)"
+            label={t('profile.field.workoutsPerWeek')}
             keyboardType="numeric"
             style={styles.flex1}
             value={form.weeklyWorkoutCount}
@@ -125,7 +127,7 @@ export default function ExerciseScreen() {
             error={errors.weeklyWorkoutCount}
           />
           <TextField
-            label="Avg duration (min, optional)"
+            label={t('profile.field.avgDuration')}
             keyboardType="numeric"
             style={styles.flex1}
             value={form.avgWorkoutDurationMin}
@@ -134,17 +136,17 @@ export default function ExerciseScreen() {
           />
         </View>
         <ChipMultiSelect
-          label="Activity types"
-          options={ACTIVITY_TYPE_OPTIONS}
+          label={t('profile.field.activityTypes')}
+          options={enumOptions(ActivityTypeEnum.options)}
           values={form.activityTypes}
           onChange={(v) => setForm({ ...form, activityTypes: v })}
         />
         <TextField
-          label="Custom activities (comma-separated, optional)"
+          label={t('profile.field.customActivities')}
           value={form.customActivities}
           onChangeText={(v) => setForm({ ...form, customActivities: v })}
         />
-        <Button title={saving ? 'Saving…' : 'Save changes'} onPress={save} loading={saving} />
+        <Button title={saving ? t('common.saving') : t('profile.saveChanges')} onPress={save} loading={saving} />
       </Card>
     </ScrollView>
   );

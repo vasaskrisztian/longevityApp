@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { SegmentedControl } from '@/src/components/ui/SegmentedControl';
+import { useT } from '@/src/i18n';
 import { useTabParam } from '@/src/navigation/useTabParam';
 import ExerciseScreen from '@/src/screens/ExerciseScreen';
 import NutritionScreen from '@/src/screens/NutritionScreen';
@@ -12,6 +13,7 @@ const SEGMENTS = ['personal', 'exercise', 'nutrition'] as const;
 
 /** About me: the three profile forms (formerly Profile, Lifestyle and Nutrition) in one place. */
 export default function AboutMeScreen() {
+  const { t } = useT();
   const [segment, setSegment] = useTabParam(SEGMENTS, 'personal');
   return (
     <View style={styles.container}>
@@ -19,9 +21,9 @@ export default function AboutMeScreen() {
       <View style={styles.segments}>
         <SegmentedControl
           options={[
-            { value: 'personal', label: 'Personal' },
-            { value: 'exercise', label: 'Exercise' },
-            { value: 'nutrition', label: 'Nutrition' },
+            { value: 'personal', label: t('nav.segment.personal') },
+            { value: 'exercise', label: t('nav.segment.exercise') },
+            { value: 'nutrition', label: t('nav.segment.nutrition') },
           ]}
           value={segment}
           onChange={setSegment}

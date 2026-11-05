@@ -1,3 +1,5 @@
+import { t } from '@/src/i18n';
+
 /**
  * Pure rules of watching a challenge video in the app: how much of it really
  * played, when it counts as watched, and the small page the phone's WebView
@@ -83,7 +85,7 @@ export class WatchTracker {
 
 /** "1:23 of 5:00" */
 export function watchedLabel(watchedSeconds: number, durationSec: number, format: (seconds: number) => string): string {
-  return `${format(Math.min(watchedSeconds, durationSec))} of ${format(durationSec)}`;
+  return t('video.watchedOf', { watched: format(Math.min(watchedSeconds, durationSec)), total: format(durationSec) });
 }
 
 /** A plain YouTube video id (11 characters) — the only thing ever put into the player page. */
@@ -93,9 +95,9 @@ export function isVideoId(value: string): boolean {
 
 /** Embed errors the player can report, as a sentence for the person. */
 export function playerErrorMessage(code: number): string {
-  if (code === 101 || code === 150 || code === 153) return 'This video cannot be played inside the app. Ask the administrator to use a video that allows embedding.';
-  if (code === 100) return 'This video is not available any more.';
-  return 'The video could not be played. Check your connection and try again.';
+  if (code === 101 || code === 150 || code === 153) return t('video.player.embed');
+  if (code === 100) return t('video.player.unavailable');
+  return t('video.player.generic');
 }
 
 /**

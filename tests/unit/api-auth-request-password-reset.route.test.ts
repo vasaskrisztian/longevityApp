@@ -9,9 +9,13 @@ vi.mock('@/lib/auth/rate-limit', () => ({
 }));
 
 const requestPasswordResetMock = vi.fn();
+const getLanguageByEmailMock = vi.fn();
 vi.mock('@/modules/auth/auth.service', () => ({
   requestPasswordReset: requestPasswordResetMock,
+  getLanguageByEmail: getLanguageByEmailMock,
 }));
+const sendEmailMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/email/mailer', () => ({ sendEmail: sendEmailMock }));
 
 vi.mock('@/lib/logging/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -31,6 +35,8 @@ beforeEach(() => {
   checkRateLimitMock.mockReset().mockReturnValue({ allowed: true, remaining: 4, resetAt: 0 });
   getClientIdentifierMock.mockReset().mockReturnValue('127.0.0.1');
   requestPasswordResetMock.mockReset();
+  getLanguageByEmailMock.mockReset().mockResolvedValue('en');
+  sendEmailMock.mockClear();
 });
 
 describe('POST /api/auth/request-password-reset', () => {
@@ -69,6 +75,17 @@ describe('POST /api/auth/request-password-reset', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.message).toMatch(/password reset link/i);
+  });
+
+  it('writes the reset email in the language of the account', async () => {
+    requestPasswordResetMock.mockResolvedValue('raw-token-123');
+    getLanguageByEmailMock.mockResolvedValue('hu');
+
+    await POST(postRequest({ email: 'jane@example.com' }));
+
+    const mail = sendEmailMock.mock.calls[0]![0];
+    expect(mail.subject).toBe('Jelszó visszaállítása — Longevity Klub');
+    expect(mail.text).toContain('raw-token-123');
   });
 
   it('returns the same generic 200 message for an unknown email (no enumeration)', async () => {
