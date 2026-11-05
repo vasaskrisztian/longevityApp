@@ -33,29 +33,38 @@ export type PlayerEvent =
 
 /** Share of the video that has to really play (matches the server's rule). */
 export const WATCH_RATIO = 0.9;
-/** Between two ticks the position may advance by at most this much and still count as normal playing. */
-const MAX_STEP_SECONDS = 3;
+/** A step counts when the video moved at most this many times the real time that passed (normal speed = 1) … */
+const SPEED_TOLERANCE = 1.25;
+/** … plus this much slack in seconds (timer jitter, the player's position granularity). */
+const SLACK_SECONDS = 1;
 
 /**
- * Adds up the time the video genuinely played: only the steps between two
- * consecutive "playing" reports at normal speed whose position advanced a little
- * count. Jumping ahead, pausing, buffering and fast playback add nothing.
+ * Adds up the time the video genuinely played. A step from a "playing" (or
+ * "buffering", a short stall mid-video) report to the next "playing" one at normal speed counts when the video advanced by about as
+ * much as the real clock did — so a browser that slows the page's timers in a
+ * background tab (fewer, later reports) still counts honestly, while jumping
+ * ahead (the video moves far more than the clock), going back, pausing,
+ * buffering and fast playback add nothing.
  */
 export class WatchTracker {
   watchedSeconds = 0;
   ended = false;
   private lastPosition: number | null = null;
   private lastState: PlayerState | null = null;
+  private lastAt = 0;
 
-  update(tick: PlayerTick): void {
+  update(tick: PlayerTick, nowMs: number = Date.now()): void {
     if (tick.state === 'ended') this.ended = true;
     const normalSpeed = Math.abs(tick.rate - 1) < 0.01;
-    if (tick.state === 'playing' && this.lastState === 'playing' && this.lastPosition !== null && normalSpeed) {
+    const continuing = this.lastState === 'playing' || this.lastState === 'buffering';
+    if (tick.state === 'playing' && continuing && this.lastPosition !== null && normalSpeed) {
       const step = tick.position - this.lastPosition;
-      if (step > 0 && step <= MAX_STEP_SECONDS) this.watchedSeconds += step;
+      const real = Math.max(0, (nowMs - this.lastAt) / 1000);
+      if (step > 0 && step <= real * SPEED_TOLERANCE + SLACK_SECONDS) this.watchedSeconds += step;
     }
     this.lastPosition = tick.position;
     this.lastState = tick.state;
+    this.lastAt = nowMs;
   }
 
   /** The video reached its end and enough of it really played. */
@@ -68,6 +77,7 @@ export class WatchTracker {
     this.ended = false;
     this.lastPosition = null;
     this.lastState = null;
+    this.lastAt = 0;
   }
 }
 

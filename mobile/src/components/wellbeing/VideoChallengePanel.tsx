@@ -73,7 +73,10 @@ export function VideoChallengePanel({
       if (event.state === 'ended') {
         if (tracker.current.isComplete(video.durationSec)) void finish();
         else {
-          setError('The video has to be watched to the end without skipping ahead. Start it again to try once more.');
+          setError(
+            `Only ${formatVideoDuration(tracker.current.watchedSeconds)} of ${formatVideoDuration(video.durationSec)} counted as watched. ` +
+              'Only continuous playing at normal speed counts — skipping ahead, going back and pausing do not. Start the video again to try once more.',
+          );
           setPhase('idle');
         }
       }

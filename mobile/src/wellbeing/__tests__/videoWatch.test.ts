@@ -5,46 +5,58 @@ import { collectiveAmountLabel, collectiveLine } from '../format';
 const play = (position: number, state: PlayerTick['state'] = 'playing', rate = 1): PlayerTick => ({ state, position, rate });
 
 describe('WatchTracker', () => {
+  // Reports arrive `position` seconds into the video at `t` seconds of real time.
+  const feed = (t: WatchTracker, steps: [number, number, PlayerTick['state']?, number?][]) =>
+    steps.forEach(([sec, position, state, rate]) => t.update(play(position, state ?? 'playing', rate ?? 1), sec * 1000));
+
   it('adds up the seconds of normal playing', () => {
     const t = new WatchTracker();
-    [0, 1, 2, 3, 4, 5].forEach((p) => t.update(play(p)));
+    feed(t, [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]);
     expect(t.watchedSeconds).toBe(5);
     expect(t.ended).toBe(false);
   });
 
+  it('still counts honestly when the browser delays the reports (background tab: one report every 20 s)', () => {
+    const t = new WatchTracker();
+    feed(t, [[0, 0], [20, 20], [40, 40], [60, 60], [80, 80]]);
+    expect(t.watchedSeconds).toBe(80);
+  });
+
   it('does not count a jump ahead, and counts nothing for the first report', () => {
     const t = new WatchTracker();
-    t.update(play(0));
-    t.update(play(1));
-    t.update(play(120)); // seek
-    t.update(play(121));
+    feed(t, [[0, 0], [1, 1], [2, 120], [3, 121]]); // seek forward 118 s in 1 s of real time
     expect(t.watchedSeconds).toBe(2);
+  });
+
+  it('does not count a jump ahead after a long delayed report either', () => {
+    const t = new WatchTracker();
+    feed(t, [[0, 0], [10, 10], [20, 200]]); // 190 s of video in 10 s of real time
+    expect(t.watchedSeconds).toBe(10);
   });
 
   it('does not count pauses, buffering or going back', () => {
     const t = new WatchTracker();
-    t.update(play(10));
-    t.update(play(11));
-    t.update(play(11, 'paused'));
-    t.update(play(11, 'paused'));
-    t.update(play(11, 'playing')); // resumed — the step from "paused" is not counted
-    t.update(play(12));
-    t.update(play(5)); // backwards
-    t.update(play(6));
+    feed(t, [[0, 10], [1, 11], [2, 11, 'paused'], [3, 11, 'paused'], [4, 11], [5, 12], [6, 5], [7, 6]]);
     expect(t.watchedSeconds).toBe(3);
+  });
+
+  it('a short buffering stall in the middle does not lose the playing time around it', () => {
+    const t = new WatchTracker();
+    feed(t, [[0, 10], [1, 11], [2, 11.2, 'buffering'], [3, 11.2, 'buffering'], [4, 12], [5, 13]]);
+    expect(t.watchedSeconds).toBeCloseTo(2.8, 5); // 1 (before) + 0.8 (out of the stall) + 1 (after)
   });
 
   it('counts nothing at another speed', () => {
     const t = new WatchTracker();
-    [0, 2, 4, 6].forEach((p) => t.update(play(p, 'playing', 2)));
+    feed(t, [[0, 0, 'playing', 2], [1, 2, 'playing', 2], [2, 4, 'playing', 2], [3, 6, 'playing', 2]]);
     expect(t.watchedSeconds).toBe(0);
   });
 
   it('is complete only when the end was reached and about 90% really played', () => {
     const t = new WatchTracker();
-    for (let p = 0; p <= 270; p += 1) t.update(play(p));
+    for (let p = 0; p <= 270; p += 1) t.update(play(p), p * 1000);
     expect(t.isComplete(300)).toBe(false); // not ended yet
-    t.update(play(271, 'ended'));
+    t.update(play(271, 'ended'), 271_000);
     expect(t.watchedSeconds).toBe(270);
     expect(t.isComplete(300)).toBe(true);
     expect(t.isComplete(400)).toBe(false);
@@ -53,21 +65,17 @@ describe('WatchTracker', () => {
 
   it('skipping to the end gives no completion', () => {
     const t = new WatchTracker();
-    t.update(play(0));
-    t.update(play(1));
-    t.update(play(299, 'ended'));
+    feed(t, [[0, 0], [1, 1], [2, 299, 'ended']]);
     expect(t.ended).toBe(true);
     expect(t.isComplete(300)).toBe(false);
   });
 
   it('can be reset for another viewing', () => {
     const t = new WatchTracker();
-    t.update(play(0));
-    t.update(play(1));
+    feed(t, [[0, 0], [1, 1]]);
     t.reset();
     expect(t).toMatchObject({ watchedSeconds: 0, ended: false });
-    t.update(play(2));
-    t.update(play(3));
+    feed(t, [[2, 2], [3, 3]]);
     expect(t.watchedSeconds).toBe(1);
   });
 });
