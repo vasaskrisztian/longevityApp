@@ -109,4 +109,38 @@ export const body: Catalog<typeof en> = {
   'health.apple.unavailable': 'Az Apple Health nem érhető el ezen az eszközön.',
   'health.apple.syncFailed': 'Nem sikerült szinkronizálni az Apple Health-et. Próbáld újra.',
   'health.apple.rateLimited': 'Túl sok Apple Health-szinkronizálási kérés. Próbáld újra egy perc múlva.',
+
+  // Health Connect (Android)
+  'devices.hc.androidOnly': 'Csak Android',
+  'devices.hc.notOnThisDevice':
+    'A Health Connect adatai az Android-telefonodon találhatók. A csatlakoztatáshoz nyisd meg a Longevity Klub alkalmazást az Android-telefonodon — a lépések, a kalóriák, az alvás, a nyugalmi pulzus és a HRV (például egy Samsung órából a Samsung Health-en át) ezután automatikusan szinkronizálódnak ide.',
+  'devices.hc.connectedElsewhere':
+    'Az Android-telefonodról csatlakoztatva. Az adataid onnan szinkronizálódnak, a legfrissebb napok megjelennek az irányítópulton.',
+  'devices.hc.connectedDescription':
+    'A Health Connect adataid automatikusan szinkronizálódnak, valahányszor megnyitod az alkalmazást, és háttérben is, ha engedélyezted.',
+  'devices.hc.connectDescription':
+    'Oszd meg a Health Connect lépés-, kalória-, alvás-, nyugalmi pulzus- és HRV-adataidat. Csak olvasási hozzáférés — a Longevity Klub soha nem ír a Health Connectbe. Samsung órád van? Engedd, hogy a Samsung Health megossza az adatait a Health Connecttel.',
+  'devices.hc.connectedAt': 'Csatlakoztatva: {date}',
+  'devices.hc.lastSync': 'Legutóbbi szinkronizálás: {date}',
+  'devices.hc.neverSynced': 'Még nem érkezett szinkronizált adat.',
+  'devices.hc.connect': 'Health Connect csatlakoztatása',
+  'devices.hc.manage': 'Hozzáférés kezelése a Health Connectben',
+  'devices.hc.unavailable':
+    'A Health Connect nem érhető el ezen a telefonon. Android 13 vagy régebbi rendszeren előbb telepítsd a „Health Connect” alkalmazást a Google Play-ből.',
+  'devices.hc.updateRequired':
+    'A Health Connect frissítésre szorul. Frissítsd a „Health Connect” alkalmazást a Google Play-ben, aztán próbáld újra.',
+  'devices.hc.backgroundOn': 'A háttérszinkron be van kapcsolva: az adataid időnként akkor is feltöltődnek, amikor az alkalmazás zárva van.',
+  'devices.hc.backgroundOff':
+    'A háttérszinkron ki van kapcsolva, ezért az adatok az alkalmazás megnyitásakor szinkronizálódnak. A bekapcsolásához engedélyezd a Health Connectben, hogy a Longevity Klub a háttérben is olvashasson.',
+  'devices.hc.stopHint': 'A megosztás leállításához vond vissza a Longevity Klub hozzáférését a Health Connectben (a fenti gomb).',
+
+  // Health Connect sync outcomes
+  'health.hc.synced_one': 'A Health Connect adataiból {count} nap szinkronizálva.',
+  'health.hc.synced_other': 'A Health Connect adataiból {count} nap szinkronizálva.',
+  'health.hc.noData':
+    'Nem található Health Connect-adat. Ellenőrizd, hogy az órád vagy az alkalmazásod (például a Samsung Health) ír-e a Health Connectbe, és hogy a Longevity Klub olvashatja-e.',
+  'health.hc.noPermission': 'A Longevity Klub még nem olvashatja a Health Connectet. Koppints a Csatlakoztatásra, és engedélyezd a hozzáférést.',
+  'health.hc.unavailable': 'A Health Connect nem érhető el ezen az eszközön.',
+  'health.hc.syncFailed': 'Nem sikerült szinkronizálni a Health Connectet. Próbáld újra.',
+  'health.hc.rateLimited': 'Túl sok Health Connect-szinkronizálási kérés. Próbáld újra egy perc múlva.',
 };

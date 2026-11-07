@@ -15,6 +15,11 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import appleHealthNative from '@/src/health/native';
 import { AppleHealthRateLimitedError } from '@/src/api/appleHealth';
+import { HealthConnectRateLimitedError } from '@/src/api/healthConnect';
+import { registerHealthConnectBackgroundSync } from '@/src/health/healthConnectBackground';
+import healthConnectNative from '@/src/health/healthConnectNative';
+import { syncHealthConnect } from '@/src/health/healthConnectSync';
+import type { HealthConnectAvailability } from '@/src/health/healthConnectTypes';
 import { syncAppleHealth } from '@/src/health/sync';
 import { locale, useT, type TextKey } from '@/src/i18n';
 import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens';
@@ -32,6 +37,11 @@ import { colors, fontFamily, radii, screenBackground } from '@/src/theme/tokens'
  * HealthKit (src/health/*, iOS native build only) and pushes daily summaries to
  * /api/integrations/apple-health/ingest. The card below connects/syncs it on
  * an iPhone and explains where it works on web/Android.
+ *
+ * Health Connect (Android) works the same way: the phone reads it and pushes
+ * daily summaries to /api/integrations/health-connect/ingest. The card connects
+ * and syncs it on an Android phone; on the web (and iPhone) it shows the
+ * connection the Android app made — when it connected and when it last synced.
  */
 
 const STATUS_LABEL_KEY: Record<string, TextKey> = {
@@ -73,6 +83,14 @@ export default function DevicesScreen() {
   const [appleSupported, setAppleSupported] = useState<boolean | null>(null);
   const [appleSyncing, setAppleSyncing] = useState(false);
   const [appleMessage, setAppleMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [hcConnection, setHcConnection] = useState<ConnectionSummary | null>(null);
+  // Only an Android phone can ever have Health Connect, so everywhere else the answer is known up front.
+  const [hcAvailability, setHcAvailability] = useState<HealthConnectAvailability | null>(
+    Platform.OS === 'android' ? null : 'unsupported',
+  );
+  const [hcBackground, setHcBackground] = useState(false);
+  const [hcSyncing, setHcSyncing] = useState(false);
+  const [hcMessage, setHcMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -95,6 +113,7 @@ export default function DevicesScreen() {
       const connections = await getConnections();
       setConnection(connections.find((c) => c.provider === 'OURA') ?? null);
       setAppleConnection(connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null);
+      setHcConnection(connections.find((c) => c.provider === 'HEALTH_CONNECT') ?? null);
     } catch {
       setLoadError(true);
     } finally {
@@ -133,6 +152,54 @@ export default function DevicesScreen() {
       cancelled = true;
     };
   }, []);
+
+  const refreshHealthConnect = useCallback(async () => {
+    const availability = await healthConnectNative.availability();
+    setHcAvailability(availability);
+    if (availability === 'available') {
+      setHcBackground((await healthConnectNative.getAccess()).background);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshHealthConnect();
+    // Returning from the Health Connect screens (permissions, settings) changes what is granted.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshHealthConnect();
+    });
+    return () => subscription.remove();
+  }, [refreshHealthConnect]);
+
+  async function handleHealthConnectSync() {
+    setHcSyncing(true);
+    setHcMessage(null);
+    try {
+      const outcome = await syncHealthConnect(hcConnection?.lastSyncAt, { interactive: true });
+      if (outcome.status === 'synced') {
+        setHcMessage({ ok: true, text: t('health.hc.synced', { count: outcome.days }) });
+      } else if (outcome.status === 'no_data') {
+        setHcMessage({ ok: false, text: t('health.hc.noData') });
+      } else if (outcome.status === 'no_permission') {
+        setHcMessage({ ok: false, text: t('health.hc.noPermission') });
+      } else {
+        setHcMessage({ ok: false, text: t('health.hc.unavailable') });
+      }
+      if (outcome.status === 'synced' || outcome.status === 'no_data') {
+        // Background reads only work when the person granted them in Health Connect.
+        const access = await healthConnectNative.getAccess();
+        setHcBackground(access.background);
+        if (access.background) await registerHealthConnectBackgroundSync();
+      }
+      await load(true);
+    } catch (error) {
+      setHcMessage({
+        ok: false,
+        text: error instanceof HealthConnectRateLimitedError ? error.message : t('health.hc.syncFailed'),
+      });
+    } finally {
+      setHcSyncing(false);
+    }
+  }
 
   async function handleAppleSync() {
     setAppleSyncing(true);
@@ -341,6 +408,95 @@ export default function DevicesScreen() {
             />
             {appleConnection?.status === 'CONNECTED' ? (
               <Text style={styles.hintText}>{t('devices.apple.stopHint')}</Text>
+            ) : null}
+          </>
+        )}
+      </Card>
+
+      <Card style={styles.cardGap}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Health Connect</Text>
+          {hcAvailability === 'unsupported' && hcConnection?.status !== 'CONNECTED' ? (
+            <View style={[styles.badge, { backgroundColor: colors.muted.default }]}>
+              <Text style={[styles.badgeText, { color: colors.muted.foreground }]}>{t('devices.hc.androidOnly')}</Text>
+            </View>
+          ) : (
+            <StatusBadge status={hcConnection?.status ?? 'DISCONNECTED'} />
+          )}
+        </View>
+
+        {hcAvailability === 'unsupported' ? (
+          // Web / iPhone: only shows what the Android app has set up.
+          hcConnection?.status === 'CONNECTED' ? (
+            <>
+              <Text style={styles.cardDescription}>{t('devices.hc.connectedElsewhere')}</Text>
+              {hcConnection.connectedAt ? (
+                <Text style={styles.metaText}>
+                  {t('devices.hc.connectedAt', { date: new Date(hcConnection.connectedAt).toLocaleString(locale()) })}
+                </Text>
+              ) : null}
+              <Text style={styles.metaText}>
+                {hcConnection.lastSyncAt
+                  ? t('devices.hc.lastSync', { date: new Date(hcConnection.lastSyncAt).toLocaleString(locale()) })
+                  : t('devices.hc.neverSynced')}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.cardDescription}>{t('devices.hc.notOnThisDevice')}</Text>
+          )
+        ) : (
+          <>
+            <Text style={styles.cardDescription}>
+              {hcConnection?.status === 'CONNECTED' ? t('devices.hc.connectedDescription') : t('devices.hc.connectDescription')}
+            </Text>
+            {hcAvailability === 'unavailable' ? <Alert variant="destructive">{t('devices.hc.unavailable')}</Alert> : null}
+            {hcAvailability === 'update_required' ? (
+              <Alert variant="destructive">{t('devices.hc.updateRequired')}</Alert>
+            ) : null}
+            {hcConnection?.status === 'CONNECTED' ? (
+              <>
+                {hcConnection.connectedAt ? (
+                  <Text style={styles.metaText}>
+                    {t('devices.hc.connectedAt', { date: new Date(hcConnection.connectedAt).toLocaleString(locale()) })}
+                  </Text>
+                ) : null}
+                <Text style={styles.metaText}>
+                  {hcConnection.lastSyncAt
+                    ? t('devices.hc.lastSync', { date: new Date(hcConnection.lastSyncAt).toLocaleString(locale()) })
+                    : t('devices.hc.neverSynced')}
+                </Text>
+              </>
+            ) : null}
+            {hcMessage ? <Alert variant={hcMessage.ok ? 'success' : 'destructive'}>{hcMessage.text}</Alert> : null}
+            <Button
+              title={
+                hcSyncing
+                  ? t('devices.syncing')
+                  : hcConnection?.status === 'CONNECTED'
+                    ? t('devices.syncNow')
+                    : t('devices.hc.connect')
+              }
+              variant={hcConnection?.status === 'CONNECTED' ? 'outline' : 'primary'}
+              size="sm"
+              onPress={handleHealthConnectSync}
+              loading={hcSyncing}
+              disabled={hcAvailability !== 'available'}
+            />
+            {hcAvailability === 'available' ? (
+              <Button
+                title={t('devices.hc.manage')}
+                variant="outline"
+                size="sm"
+                onPress={() => healthConnectNative.openSettings()}
+              />
+            ) : null}
+            {hcConnection?.status === 'CONNECTED' ? (
+              <>
+                <Text style={styles.hintText}>
+                  {hcBackground ? t('devices.hc.backgroundOn') : t('devices.hc.backgroundOff')}
+                </Text>
+                <Text style={styles.hintText}>{t('devices.hc.stopHint')}</Text>
+              </>
             ) : null}
           </>
         )}

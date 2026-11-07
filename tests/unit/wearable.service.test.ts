@@ -77,6 +77,16 @@ describe('listConnectionsForUser', () => {
         lastSyncAt: null,
         lastSyncStatus: null,
       },
+      {
+        id: null,
+        provider: 'HEALTH_CONNECT',
+        status: 'DISCONNECTED',
+        connectedAt: null,
+        disconnectedAt: null,
+        grantedScopes: [],
+        lastSyncAt: null,
+        lastSyncStatus: null,
+      },
     ]);
   });
 
@@ -99,6 +109,16 @@ describe('listConnectionsForUser', () => {
       {
         id: null,
         provider: 'APPLE_HEALTH',
+        status: 'DISCONNECTED',
+        connectedAt: null,
+        disconnectedAt: null,
+        grantedScopes: [],
+        lastSyncAt: null,
+        lastSyncStatus: null,
+      },
+      {
+        id: null,
+        provider: 'HEALTH_CONNECT',
         status: 'DISCONNECTED',
         connectedAt: null,
         disconnectedAt: null,
@@ -130,6 +150,30 @@ describe('listConnectionsForUser', () => {
     expect(result.find((c) => c.provider === 'OURA')?.id).toBeNull();
   });
 
+  it('reports a pushed Health Connect (Android) connection with its connect time and last sync', async () => {
+    const synced = new Date('2026-11-06T07:00:00Z');
+    const connected = new Date('2026-11-05T18:00:00Z');
+    const hc = {
+      ...OURA_ROW,
+      id: 'conn-hc',
+      provider: 'HEALTH_CONNECT',
+      grantedScopes: [],
+      connectedAt: connected,
+      lastSyncAt: synced,
+    };
+    prismaMock.wearableConnection.findMany.mockResolvedValue([hc]);
+
+    const result = await listConnectionsForUser('u1');
+
+    expect(result.find((c) => c.provider === 'HEALTH_CONNECT')).toMatchObject({
+      id: 'conn-hc',
+      status: 'CONNECTED',
+      connectedAt: connected,
+      lastSyncAt: synced,
+    });
+    expect(result.find((c) => c.provider === 'APPLE_HEALTH')?.id).toBeNull();
+  });
+
   it('defaults grantedScopes to an empty array when a row has none set', async () => {
     const rowWithoutScopes = { ...OURA_ROW, grantedScopes: null };
     prismaMock.wearableConnection.findMany.mockResolvedValue([rowWithoutScopes]);
@@ -147,7 +191,7 @@ describe('listConnectionsForUser', () => {
 
     const result = await listConnectionsForUser('u1');
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(3);
     expect(result[0]?.id).toBe('conn-new');
     expect(result[0]?.status).toBe('CONNECTED');
   });
@@ -185,6 +229,38 @@ describe('getConnectionForUserAndProvider', () => {
 });
 
 describe('upsertConnectionAsConnected', () => {
+  it('keeps the original connect time when a device-pushed provider (Health Connect) pushes again while already CONNECTED', async () => {
+    prismaMock.wearableConnection.findFirst.mockResolvedValue({
+      id: 'conn-hc',
+      status: 'CONNECTED',
+      connectedAt: new Date('2026-11-05T18:00:00Z'),
+    });
+    prismaMock.wearableConnection.update.mockResolvedValue({ id: 'conn-hc' });
+
+    await upsertConnectionAsConnected({ userId: 'u1', provider: 'HEALTH_CONNECT', grantedScopes: [] });
+
+    expect(prismaMock.wearableConnection.update).toHaveBeenCalledWith({
+      where: { id: 'conn-hc' },
+      data: { status: 'CONNECTED', disconnectedAt: null, grantedScopes: [] },
+    });
+  });
+
+  it('sets a new connect time when a device-pushed provider comes back after being disconnected', async () => {
+    prismaMock.wearableConnection.findFirst.mockResolvedValue({
+      id: 'conn-hc',
+      status: 'DISCONNECTED',
+      connectedAt: new Date('2026-11-05T18:00:00Z'),
+    });
+    prismaMock.wearableConnection.update.mockResolvedValue({ id: 'conn-hc' });
+
+    await upsertConnectionAsConnected({ userId: 'u1', provider: 'HEALTH_CONNECT', grantedScopes: [] });
+
+    expect(prismaMock.wearableConnection.update).toHaveBeenCalledWith({
+      where: { id: 'conn-hc' },
+      data: { status: 'CONNECTED', connectedAt: expect.any(Date), disconnectedAt: null, grantedScopes: [] },
+    });
+  });
+
   it('creates a new CONNECTED row when the user has never attempted this provider', async () => {
     prismaMock.wearableConnection.findFirst.mockResolvedValue(null);
     prismaMock.wearableConnection.create.mockResolvedValue({ id: 'conn-new' });

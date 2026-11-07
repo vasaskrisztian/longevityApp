@@ -96,6 +96,7 @@ interface DashboardState {
   snapshot: DashboardSnapshot | null;
   ouraConnection: ConnectionSummary | null;
   appleHealthConnection: ConnectionSummary | null;
+  healthConnectConnection: ConnectionSummary | null;
   firstName: string | null;
   protocolOverlay: ProtocolOverlay | null;
   /** null when the summary could not be loaded — the rest of the dashboard still renders. */
@@ -135,6 +136,7 @@ export default function DashboardScreen() {
         snapshot,
         ouraConnection: connections.find((c) => c.provider === 'OURA') ?? null,
         appleHealthConnection: connections.find((c) => c.provider === 'APPLE_HEALTH') ?? null,
+        healthConnectConnection: connections.find((c) => c.provider === 'HEALTH_CONNECT') ?? null,
         firstName: profileBundle.profile?.fullName?.split(' ')[0] ?? null,
         protocolOverlay,
         insights,
@@ -168,9 +170,11 @@ export default function DashboardScreen() {
   const snapshot = state?.snapshot ?? null;
   const connection = state?.ouraConnection ?? null;
   const appleConnection = state?.appleHealthConnection ?? null;
+  const healthConnectConnection = state?.healthConnectConnection ?? null;
   const deviceLines = [
     connection?.status === 'CONNECTED' ? describeDevice('Oura', connection) : null,
     appleConnection?.status === 'CONNECTED' ? describeDevice('Apple Health', appleConnection) : null,
+    healthConnectConnection?.status === 'CONNECTED' ? describeDevice('Health Connect', healthConnectConnection) : null,
   ].filter((line): line is string => line !== null);
   const activeProtocol = state?.protocolOverlay?.activeProtocol ?? null;
   const weeklyWorkoutCount = state?.protocolOverlay?.weeklyWorkoutCount ?? null;

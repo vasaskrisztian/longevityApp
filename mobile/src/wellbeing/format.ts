@@ -135,6 +135,7 @@ export function niceAxisMax(value: number): number {
 const PROVIDER_LABEL: Record<string, string> = {
   OURA: 'Oura',
   APPLE_HEALTH: 'Apple Health',
+  HEALTH_CONNECT: 'Health Connect',
 };
 export const providerLabel = (provider: string): string => PROVIDER_LABEL[provider] ?? provider;
 

@@ -109,4 +109,38 @@ export const body: Catalog<typeof en> = {
   'health.apple.unavailable': 'Apple Health ist auf diesem Gerät nicht verfügbar.',
   'health.apple.syncFailed': 'Apple Health konnte nicht synchronisiert werden. Bitte versuche es erneut.',
   'health.apple.rateLimited': 'Zu viele Apple-Health-Synchronisierungsanfragen. Bitte versuche es in einer Minute erneut.',
+
+  // Health Connect (Android)
+  'devices.hc.androidOnly': 'Nur Android',
+  'devices.hc.notOnThisDevice':
+    'Health-Connect-Daten liegen auf deinem Android-Telefon. Öffne die Longevity Klub App auf deinem Android-Telefon, um sie zu verbinden — Schritte, Kalorien, Schlaf, Ruhepuls und HRV (zum Beispiel von einer Samsung-Uhr über Samsung Health) werden dann automatisch hierher synchronisiert.',
+  'devices.hc.connectedElsewhere':
+    'Von deinem Android-Telefon verbunden. Deine Daten werden von dort synchronisiert, und die neuesten Tage erscheinen auf der Übersicht.',
+  'devices.hc.connectedDescription':
+    'Deine Health-Connect-Daten werden automatisch synchronisiert, sobald du die App öffnest, und im Hintergrund, wenn du das erlaubt hast.',
+  'devices.hc.connectDescription':
+    'Teile Schritte, Kalorien, Schlaf, Ruhepuls und HRV aus Health Connect. Nur lesend — Longevity Klub schreibt niemals in Health Connect. Du hast eine Samsung-Uhr? Erlaube der Samsung-Health-App, ihre Daten mit Health Connect zu teilen.',
+  'devices.hc.connectedAt': 'Verbunden: {date}',
+  'devices.hc.lastSync': 'Letzte Synchronisierung: {date}',
+  'devices.hc.neverSynced': 'Noch keine Daten synchronisiert.',
+  'devices.hc.connect': 'Health Connect verbinden',
+  'devices.hc.manage': 'Zugriff in Health Connect verwalten',
+  'devices.hc.unavailable':
+    'Health Connect ist auf diesem Telefon nicht verfügbar. Installiere unter Android 13 oder älter zuerst die App „Health Connect“ aus dem Google Play Store.',
+  'devices.hc.updateRequired':
+    'Health Connect muss aktualisiert werden. Aktualisiere die App „Health Connect“ im Google Play Store und versuche es dann erneut.',
+  'devices.hc.backgroundOn': 'Die Hintergrundsynchronisierung ist aktiv: Deine Daten werden von Zeit zu Zeit auch bei geschlossener App hochgeladen.',
+  'devices.hc.backgroundOff':
+    'Die Hintergrundsynchronisierung ist aus, daher werden Daten beim Öffnen der App synchronisiert. Erlaube Longevity Klub in Health Connect, im Hintergrund zu lesen, um sie einzuschalten.',
+  'devices.hc.stopHint': 'Um die Freigabe zu beenden, entziehe Longevity Klub den Zugriff in Health Connect (Schaltfläche oben).',
+
+  // Health Connect sync outcomes
+  'health.hc.synced_one': '{count} Tag an Health-Connect-Daten synchronisiert.',
+  'health.hc.synced_other': '{count} Tage an Health-Connect-Daten synchronisiert.',
+  'health.hc.noData':
+    'Es wurden keine Health-Connect-Daten gefunden. Stelle sicher, dass deine Uhr oder App (zum Beispiel Samsung Health) in Health Connect schreibt und dass Longevity Klub sie lesen darf.',
+  'health.hc.noPermission': 'Longevity Klub darf Health Connect noch nicht lesen. Tippe auf Verbinden und erlaube den Zugriff.',
+  'health.hc.unavailable': 'Health Connect ist auf diesem Gerät nicht verfügbar.',
+  'health.hc.syncFailed': 'Health Connect konnte nicht synchronisiert werden. Bitte versuche es erneut.',
+  'health.hc.rateLimited': 'Zu viele Health-Connect-Synchronisierungsanfragen. Bitte versuche es in einer Minute erneut.',
 };

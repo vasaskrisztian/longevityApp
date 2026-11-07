@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import {
   SUPPORTED_WEARABLE_PROVIDERS,
+  isSupportedWearableProvider,
   type ConnectionSummary,
   type WearableProviderId,
 } from '../domain/wearable-provider.types';
@@ -45,13 +46,19 @@ function toSummary(row: any): ConnectionSummary {
 }
 
 /**
- * Providers shown in the connections list: the OAuth ones plus Apple Health,
- * which has no OAuth adapter (so it is deliberately NOT in
+ * Providers shown in the connections list: the OAuth ones plus the two
+ * device-pushed ones — Apple Health (iPhone) and Health Connect (Android).
+ * They have no OAuth adapter (so they are deliberately NOT in
  * SUPPORTED_WEARABLE_PROVIDERS — that list gates the OAuth routes) but still
- * has a WearableConnection row, created by the first device push to
- * /api/integrations/apple-health/ingest, that the mobile app needs to show.
+ * have a WearableConnection row, created by the first device push to
+ * /api/integrations/apple-health/ingest or /api/integrations/health-connect/ingest,
+ * that the app (mobile and web) needs to show.
  */
-const LISTED_PROVIDERS: readonly WearableProviderId[] = [...SUPPORTED_WEARABLE_PROVIDERS, 'APPLE_HEALTH'];
+const LISTED_PROVIDERS: readonly WearableProviderId[] = [
+  ...SUPPORTED_WEARABLE_PROVIDERS,
+  'APPLE_HEALTH',
+  'HEALTH_CONNECT',
+];
 
 /**
  * One entry per LISTED_PROVIDERS, always — a provider the user
@@ -115,11 +122,18 @@ export async function upsertConnectionAsConnected(params: {
   });
 
   if (existing) {
+    // A device-pushed provider (Apple Health, Health Connect) calls this on EVERY
+    // push, not once per OAuth consent — so for an already-CONNECTED row the
+    // original connect time must survive, or "connected at" would just mirror
+    // the last sync. A reconnect after a disconnect (any other status) is a new
+    // connection and gets a new time, and OAuth providers keep resetting it.
+    const keepConnectedAt =
+      !isSupportedWearableProvider(params.provider) && existing.status === 'CONNECTED' && existing.connectedAt;
     const updated = await prisma.wearableConnection.update({
       where: { id: existing.id },
       data: {
         status: 'CONNECTED',
-        connectedAt: new Date(),
+        ...(keepConnectedAt ? {} : { connectedAt: new Date() }),
         disconnectedAt: null,
         grantedScopes: params.grantedScopes,
       },

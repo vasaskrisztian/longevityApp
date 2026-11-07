@@ -110,6 +110,16 @@ describe('requestSessionSync', () => {
     expect(result.providers).toEqual([{ provider: 'APPLE_HEALTH', status: 'device_push', lastSyncAt: last.toISOString() }]);
   });
 
+  it('asks the device to push for a connected Health Connect (Android), without queueing anything', async () => {
+    const last = new Date('2026-11-06T08:00:00.000Z');
+    listConnectionsForUserMock.mockResolvedValue([connection({ id: 'conn-hc', provider: 'HEALTH_CONNECT', lastSyncAt: last })]);
+
+    const result = await requestSessionSync('u1', NOW);
+
+    expect(enqueueManualSyncJobMock).not.toHaveBeenCalled();
+    expect(result.providers).toEqual([{ provider: 'HEALTH_CONNECT', status: 'device_push', lastSyncAt: last.toISOString() }]);
+  });
+
   it('reports reconnect_required for AUTH_REQUIRED and ERROR connections and queues nothing', async () => {
     listConnectionsForUserMock.mockResolvedValue([connection({ status: 'AUTH_REQUIRED' })]);
     expect((await requestSessionSync('u1', NOW)).providers).toEqual([

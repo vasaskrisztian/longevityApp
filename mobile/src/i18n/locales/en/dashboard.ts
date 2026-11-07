@@ -30,7 +30,7 @@ export const dashboard = {
   'dashboard.empty.title': 'No wellness data yet',
   'dashboard.empty.connected': 'Your Oura Ring is connected — the first sync populates this dashboard once it runs.',
   'dashboard.empty.notConnected':
-    'Connect your Oura Ring or Apple Health to start seeing Sleep, Readiness and Activity scores here.',
+    'Connect your Oura Ring, Apple Health or Health Connect to start seeing Sleep, Readiness and Activity scores here.',
   'dashboard.empty.connect': 'Connect a device',
 
   'dashboard.disclaimer':

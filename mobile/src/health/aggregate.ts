@@ -222,6 +222,8 @@ export interface DailyInputs {
   steps?: DayValueMap;
   activeCalories?: DayValueMap;
   basalCalories?: DayValueMap;
+  /** A source that reports whole-day energy directly (Health Connect); used when active + basal is not available. */
+  totalCalories?: DayValueMap;
   restingHeartRate?: DayValueMap;
   hrv?: DayValueMap;
   sleep?: Map<string, Partial<AppleHealthDailySample>>;
@@ -232,7 +234,14 @@ const finite = (v: number | undefined): v is number => v !== undefined && Number
 /** Merges every metric into one summary per day; days with no data are dropped. Ascending by date. */
 export function buildDailySamples(inputs: DailyInputs, fromDay: string, toDay: string): AppleHealthDailySample[] {
   const days = new Set<string>();
-  for (const map of [inputs.steps, inputs.activeCalories, inputs.basalCalories, inputs.restingHeartRate, inputs.hrv]) {
+  for (const map of [
+    inputs.steps,
+    inputs.activeCalories,
+    inputs.basalCalories,
+    inputs.totalCalories,
+    inputs.restingHeartRate,
+    inputs.hrv,
+  ]) {
     map?.forEach((_, k) => days.add(k));
   }
   inputs.sleep?.forEach((_, k) => days.add(k));
@@ -243,6 +252,7 @@ export function buildDailySamples(inputs: DailyInputs, fromDay: string, toDay: s
     const steps = inputs.steps?.get(date);
     const active = inputs.activeCalories?.get(date);
     const basal = inputs.basalCalories?.get(date);
+    const total = inputs.totalCalories?.get(date);
     const rhr = inputs.restingHeartRate?.get(date);
     const hrv = inputs.hrv?.get(date);
     const sleep = inputs.sleep?.get(date);
@@ -252,6 +262,8 @@ export function buildDailySamples(inputs: DailyInputs, fromDay: string, toDay: s
     if (finite(active) && active >= 0) sample.activeCalories = Math.min(20_000, Math.round(active));
     if (finite(active) && finite(basal) && active >= 0 && basal >= 0) {
       sample.totalCalories = Math.min(20_000, Math.round(active + basal));
+    } else if (finite(total) && total >= 0) {
+      sample.totalCalories = Math.min(20_000, Math.round(total));
     }
     if (finite(rhr) && rhr >= 20 && rhr <= 250) sample.restingHeartRate = Math.round(rhr);
     if (finite(hrv) && hrv >= 0) sample.averageHrv = Math.min(500, Math.round(hrv * 10) / 10);

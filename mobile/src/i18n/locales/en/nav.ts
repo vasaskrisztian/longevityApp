@@ -21,7 +21,7 @@ export const nav = {
   'nav.me.aboutDescription': 'Personal details, exercise, nutrition',
   'nav.me.devices': 'Devices',
   'nav.me.devicesAndData': 'Devices and data',
-  'nav.me.devicesDescription': 'Oura, Apple Health and syncing',
+  'nav.me.devicesDescription': 'Oura, Apple Health, Health Connect and syncing',
   'nav.me.account': 'Account',
   'nav.me.accountDescription': 'Sign-in, public profile',
 

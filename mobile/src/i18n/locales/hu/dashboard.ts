@@ -32,7 +32,7 @@ export const dashboard: Catalog<typeof en> = {
   'dashboard.empty.title': 'Még nincs wellness-adat',
   'dashboard.empty.connected': 'Az Oura Ringed csatlakoztatva van — az első szinkronizálás után itt jelennek meg az adataid.',
   'dashboard.empty.notConnected':
-    'Csatlakoztasd az Oura Ringedet vagy az Apple Healthet, hogy itt láthasd az alvási, felkészültségi és aktivitási pontszámaidat.',
+    'Csatlakoztasd az Oura Ringedet, az Apple Healthet vagy a Health Connectet, hogy itt láthasd az alvási, felkészültségi és aktivitási pontszámaidat.',
   'dashboard.empty.connect': 'Eszköz csatlakoztatása',
 
   'dashboard.disclaimer':

@@ -25,7 +25,17 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "hu.longevityklub"
+      "package": "hu.longevityklub",
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_TOTAL_CALORIES_BURNED",
+        "android.permission.health.READ_RESTING_HEART_RATE",
+        "android.permission.health.READ_HEART_RATE_VARIABILITY",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
+        "android.permission.health.READ_HEALTH_DATA_HISTORY"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -47,6 +57,15 @@
           "NSHealthShareUsageDescription": "Longevity Klub reads your steps, calories, sleep, resting heart rate and HRV from Apple Health to show them next to your protocols and goals. It never writes to Apple Health.",
           "NSHealthUpdateUsageDescription": "Longevity Klub only reads from Apple Health and does not write any data to it. Apple requires this description whenever the Health capability is enabled.",
           "background": false
+        }
+      ],
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],

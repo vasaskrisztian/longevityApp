@@ -23,7 +23,7 @@ export const nav: Catalog<typeof en> = {
   'nav.me.aboutDescription': 'Persönliche Angaben, Training, Ernährung',
   'nav.me.devices': 'Geräte',
   'nav.me.devicesAndData': 'Geräte und Daten',
-  'nav.me.devicesDescription': 'Oura, Apple Health und Synchronisierung',
+  'nav.me.devicesDescription': 'Oura, Apple Health, Health Connect und Synchronisierung',
   'nav.me.account': 'Konto',
   'nav.me.accountDescription': 'Anmeldung, öffentliches Profil',
 

@@ -63,6 +63,9 @@ export const SESSION_SYNC_RATE_LIMIT = { windowMs: 60 * 1000, max: 10 };
 // Public invitation preview (token lookup) — generous for real use, tight enough to make guessing pointless.
 export const INVITATION_PREVIEW_RATE_LIMIT = { windowMs: 60 * 1000, max: 30 };
 export const APPLE_HEALTH_INGEST_RATE_LIMIT = { windowMs: 60 * 1000, max: 2 };
+// Health Connect (Android) pushes the same way; a foreground sync can overlap a
+// background one, so one more request per minute than Apple Health.
+export const HEALTH_CONNECT_INGEST_RATE_LIMIT = { windowMs: 60 * 1000, max: 3 };
 
 export function getClientIdentifier(request: Request): string {
   const forwardedFor = request.headers.get('x-forwarded-for');

@@ -107,4 +107,38 @@ export const body = {
   'health.apple.unavailable': 'Apple Health is not available on this device.',
   'health.apple.syncFailed': 'Could not sync Apple Health. Please try again.',
   'health.apple.rateLimited': 'Too many Apple Health sync requests. Please try again in a minute.',
+
+  // Health Connect (Android)
+  'devices.hc.androidOnly': 'Android only',
+  'devices.hc.notOnThisDevice':
+    'Health Connect data lives on your Android phone. Open the Longevity Klub app on your Android phone to connect it — steps, calories, sleep, resting heart rate and HRV (for example from a Samsung watch via Samsung Health) are then synced here automatically.',
+  'devices.hc.connectedElsewhere':
+    'Connected from your Android phone. Your data syncs from there, and the latest days show up on the dashboard.',
+  'devices.hc.connectedDescription':
+    'Your Health Connect data syncs automatically whenever you open the app, and in the background if you allowed it.',
+  'devices.hc.connectDescription':
+    'Share steps, calories, sleep, resting heart rate and HRV from Health Connect. Read-only — Longevity Klub never writes to Health Connect. Using a Samsung watch? Let the Samsung Health app share its data with Health Connect.',
+  'devices.hc.connectedAt': 'Connected: {date}',
+  'devices.hc.lastSync': 'Last sync: {date}',
+  'devices.hc.neverSynced': 'No data synced yet.',
+  'devices.hc.connect': 'Connect Health Connect',
+  'devices.hc.manage': 'Manage access in Health Connect',
+  'devices.hc.unavailable':
+    'Health Connect is not available on this phone. On Android 13 or older, install the "Health Connect" app from Google Play first.',
+  'devices.hc.updateRequired':
+    'Health Connect needs an update. Update the "Health Connect" app in Google Play, then try again.',
+  'devices.hc.backgroundOn': 'Background sync is on: your data is also uploaded from time to time while the app is closed.',
+  'devices.hc.backgroundOff':
+    'Background sync is off, so data syncs when you open the app. To turn it on, allow Longevity Klub to read in the background in Health Connect.',
+  'devices.hc.stopHint': 'To stop sharing, remove Longevity Klub\'s access in Health Connect (button above).',
+
+  // Health Connect sync outcomes
+  'health.hc.synced_one': 'Synced {count} day of Health Connect data.',
+  'health.hc.synced_other': 'Synced {count} days of Health Connect data.',
+  'health.hc.noData':
+    'No Health Connect data was found. Make sure your watch or app (for example Samsung Health) writes to Health Connect and that Longevity Klub is allowed to read it.',
+  'health.hc.noPermission': 'Longevity Klub is not allowed to read Health Connect yet. Tap Connect and allow access.',
+  'health.hc.unavailable': 'Health Connect is not available on this device.',
+  'health.hc.syncFailed': 'Could not sync Health Connect. Please try again.',
+  'health.hc.rateLimited': 'Too many Health Connect sync requests. Please try again in a minute.',
 } as const;

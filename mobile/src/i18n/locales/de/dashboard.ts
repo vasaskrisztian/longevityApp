@@ -32,7 +32,7 @@ export const dashboard: Catalog<typeof en> = {
   'dashboard.empty.title': 'Noch keine Wellness-Daten',
   'dashboard.empty.connected': 'Dein Oura Ring ist verbunden — nach der ersten Synchronisierung erscheinen hier deine Daten.',
   'dashboard.empty.notConnected':
-    'Verbinde deinen Oura Ring oder Apple Health, um hier deine Schlaf-, Bereitschafts- und Aktivitätswerte zu sehen.',
+    'Verbinde deinen Oura Ring, Apple Health oder Health Connect, um hier deine Schlaf-, Bereitschafts- und Aktivitätswerte zu sehen.',
   'dashboard.empty.connect': 'Gerät verbinden',
 
   'dashboard.disclaimer':

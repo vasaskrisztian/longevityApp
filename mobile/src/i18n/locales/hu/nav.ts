@@ -23,7 +23,7 @@ export const nav: Catalog<typeof en> = {
   'nav.me.aboutDescription': 'Személyes adatok, mozgás, táplálkozás',
   'nav.me.devices': 'Eszközök',
   'nav.me.devicesAndData': 'Eszközök és adatok',
-  'nav.me.devicesDescription': 'Oura, Apple Health és szinkronizálás',
+  'nav.me.devicesDescription': 'Oura, Apple Health, Health Connect és szinkronizálás',
   'nav.me.account': 'Fiók',
   'nav.me.accountDescription': 'Bejelentkezés, nyilvános profil',
 

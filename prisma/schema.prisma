@@ -201,6 +201,7 @@ enum WearableProvider {
   APPLE_HEALTH
   SAMSUNG_HEALTH
   WITHINGS
+  HEALTH_CONNECT
   OTHER
 }
 
